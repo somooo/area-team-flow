@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cellFor, monthDays, toISODate, LEGEND, type RosterShift } from "@/lib/roster";
@@ -89,8 +89,8 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
           </thead>
           <tbody>
             {grouped.map(([dept, members]) => (
-              <>
-                <tr key={`dept-${dept}`}>
+              <Fragment key={`dept-${dept}`}>
+                <tr>
                   <td colSpan={days.length + 1} className="bg-teal-100/60 text-teal-900 text-[11px] font-semibold px-3 py-1 sticky left-0 z-10">
                     {dept}
                   </td>
@@ -131,7 +131,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                     </tr>
                   );
                 })}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
