@@ -227,7 +227,7 @@ function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { s
       ot_type: isWorking ? ot : "None" as OtType,
       is_overtime: isWorking && ot !== "None",
       hours: Number(hours) || 0,
-      shift_type: duty === "Night" ? "Night" : duty === "Off" ? "Off" : duty === "Day" ? "Morning" : "Off",
+      shift_type: (duty === "Night" ? "Night" : duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
     };
     const { error } = shift
       ? await supabase.from("shifts").update(payload).eq("id", shift.id)
