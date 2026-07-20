@@ -13,32 +13,39 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
-import { Trash2 } from "lucide-react";
+import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
+import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
+import type { RosterShift, Duty, OtType } from "@/lib/roster";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
   head: () => ({ meta: [{ title: "Supervisor — Shift & Leave Manager" }] }),
   component: SupervisorPage,
 });
 
-type ShiftType = "Morning" | "Evening" | "Night" | "Off";
-type Shift = { id: string; staff_email: string; staff_name: string; area: string; date: string; shift_type: ShiftType; hours: number; is_overtime: boolean; notes: string | null };
-type Staff = { id: string; name: string; email: string; role: string; area: string | null; supervisor_email: string | null; delegated_to_email: string | null; delegation_active: boolean };
+type Shift = RosterShift;
+type Staff = { id: string; name: string; email: string; role: string; area: string | null; department: string | null; supervisor_email: string | null; delegated_to_email: string | null; delegation_active: boolean };
 type LeaveReq = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null };
 type ChangeReq = { id: string; requester_email: string; requester_name: string; area: string; change_type: string; source_shift_id: string; target_staff_email: string; target_staff_name: string; target_shift_id: string | null; details: string | null; staff_response: string; supervisor_response: string; status: string; approver_email: string | null };
 
 function SupervisorPage() {
   const { me, reload } = useMe();
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth());
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [leaves, setLeaves] = useState<LeaveReq[]>([]);
   const [changes, setChanges] = useState<ChangeReq[]>([]);
   const [supervisors, setSupervisors] = useState<Staff[]>([]);
+  const [editor, setEditor] = useState<{ staff: StaffLite; date: string; shift?: Shift } | null>(null);
 
   const load = async () => {
     if (!me?.staff || me.staff.role !== "supervisor") return;
     const area = me.staff.area!;
+    const start = new Date(year, month, 1).toISOString().slice(0, 10);
+    const end = new Date(year, month + 1, 0).toISOString().slice(0, 10);
     const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }] = await Promise.all([
-      supabase.from("shifts").select("*").eq("area", area).order("date"),
+      supabase.from("shifts").select("*").eq("area", area).gte("date", start).lte("date", end).order("date"),
       supabase.from("staff").select("*").eq("area", area).order("name"),
       supabase.from("leave_requests").select("*").eq("area", area).order("created_at", { ascending: false }),
       supabase.from("schedule_change_requests").select("*").eq("area", area).order("created_at", { ascending: false }),
@@ -50,7 +57,7 @@ function SupervisorPage() {
     setChanges((ch as ChangeReq[]) ?? []);
     setSupervisors(((sup as Staff[]) ?? []).filter(s => s.email !== me.staff!.email));
   };
-  useEffect(() => { void load(); }, [me?.staff?.email]);
+  useEffect(() => { void load(); }, [me?.staff?.email, year, month]);
 
   if (!me?.staff || me.staff.role !== "supervisor") return <p>Supervisor access only.</p>;
   const meStaff = me.staff;
@@ -98,6 +105,8 @@ function SupervisorPage() {
         <p className="text-sm text-muted-foreground">Manage your area's schedule and approvals.</p>
       </div>
 
+      <div className="flex justify-end"><BookingLeaveDialog me={meStaff} onDone={load} /></div>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Pending inbox</CardTitle>
@@ -141,19 +150,14 @@ function SupervisorPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Area schedule</CardTitle>
-          <AddShiftDialog area={meStaff.area!} staff={staff} onDone={load} />
         </CardHeader>
         <CardContent>
-          {shifts.length === 0 ? <p className="text-sm text-muted-foreground">No shifts.</p> : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="text-left border-b"><th className="p-2">Date</th><th className="p-2">Staff</th><th className="p-2">Shift</th><th className="p-2">Hours</th><th className="p-2">OT</th><th className="p-2"></th></tr></thead>
-                <tbody>
-                  {shifts.map(s => <ShiftEditRow key={s.id} shift={s} onDone={load} />)}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <MonthGrid
+            year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
+            staff={staff} shifts={shifts} meEmail={meStaff.email}
+            areaLabel={meStaff.area ?? undefined}
+            onCellClick={({ staff: s, date, shift }) => setEditor({ staff: s, date, shift })}
+          />
         </CardContent>
       </Card>
 
@@ -195,111 +199,95 @@ function SupervisorPage() {
           </div>
         </CardContent>
       </Card>
+
+      {editor && (
+        <CellEditor
+          area={meStaff.area!}
+          entry={editor}
+          onClose={() => setEditor(null)}
+          onDone={() => { setEditor(null); load(); }}
+        />
+      )}
     </div>
   );
 }
 
-function ShiftEditRow({ shift, onDone }: { shift: Shift; onDone: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(shift);
+function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { staff: StaffLite; date: string; shift?: Shift }; onClose: () => void; onDone: () => void }) {
+  const { staff: s, date, shift } = entry;
+  const [duty, setDuty] = useState<Duty>(shift?.duty ?? "Day");
+  const [unitCode, setUnitCode] = useState(shift?.unit_code ?? "");
+  const [ot, setOt] = useState<OtType>(shift?.ot_type ?? "None");
+  const [hours, setHours] = useState<string>(String(shift?.hours ?? 8));
+  const isWorking = duty === "Day" || duty === "Night";
 
   const save = async () => {
-    const { error } = await supabase.from("shifts").update({
-      date: form.date, shift_type: form.shift_type as Shift["shift_type"], hours: Number(form.hours), is_overtime: form.is_overtime, notes: form.notes,
-    }).eq("id", shift.id);
+    const payload = {
+      staff_email: s.email, staff_name: s.name, area, date,
+      duty, unit_code: isWorking ? (unitCode || null) : null,
+      ot_type: isWorking ? ot : "None" as OtType,
+      is_overtime: isWorking && ot !== "None",
+      hours: Number(hours) || 0,
+      shift_type: (duty === "Night" ? "Night" : duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
+    };
+    const { error } = shift
+      ? await supabase.from("shifts").update(payload).eq("id", shift.id)
+      : await supabase.from("shifts").insert(payload);
     if (error) { toast.error(error.message); return; }
-    await notify({ data: { event: "schedule_changed", staff_name: shift.staff_name, staff_email: shift.staff_email, date: form.date, shift_type: form.shift_type } });
-    setEditing(false); onDone();
+    await notify({ data: { event: "schedule_changed", staff_name: s.name, staff_email: s.email, date, shift_type: payload.shift_type } });
+    toast.success("Shift saved");
+    onDone();
   };
   const del = async () => {
+    if (!shift) return;
     const { error } = await supabase.from("shifts").delete().eq("id", shift.id);
     if (error) { toast.error(error.message); return; }
+    toast.success("Shift removed");
     onDone();
   };
 
-  if (!editing) return (
-    <tr className="border-b">
-      <td className="p-2">{shift.date}</td>
-      <td className="p-2">{shift.staff_name}</td>
-      <td className="p-2">{shift.shift_type}</td>
-      <td className="p-2">{shift.hours}</td>
-      <td className="p-2">{shift.is_overtime ? "Yes" : "—"}</td>
-      <td className="p-2 text-right">
-        <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>Edit</Button>
-        <Button size="sm" variant="ghost" onClick={del}><Trash2 className="h-4 w-4" /></Button>
-      </td>
-    </tr>
-  );
   return (
-    <tr className="border-b bg-muted/40">
-      <td className="p-2"><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></td>
-      <td className="p-2">{shift.staff_name}</td>
-      <td className="p-2">
-        <Select value={form.shift_type} onValueChange={(v) => setForm({ ...form, shift_type: v as Shift["shift_type"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {["Morning", "Evening", "Night", "Off"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </td>
-      <td className="p-2"><Input type="number" value={form.hours} onChange={(e) => setForm({ ...form, hours: Number(e.target.value) })} /></td>
-      <td className="p-2"><Switch checked={form.is_overtime} onCheckedChange={(v) => setForm({ ...form, is_overtime: v })} /></td>
-      <td className="p-2 text-right">
-        <Button size="sm" onClick={save}>Save</Button>
-        <Button size="sm" variant="ghost" onClick={() => { setForm(shift); setEditing(false); }}>Cancel</Button>
-      </td>
-    </tr>
-  );
-}
-
-function AddShiftDialog({ area, staff, onDone }: { area: string; staff: Staff[]; onDone: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const [date, setDate] = useState("");
-  const [type, setType] = useState<"Morning" | "Evening" | "Night" | "Off">("Morning");
-  const [hours, setHours] = useState("8");
-  const [ot, setOt] = useState(false);
-  const submit = async () => {
-    const s = staff.find(x => x.email === email);
-    if (!s || !date) { toast.error("Missing fields"); return; }
-    const { error } = await supabase.from("shifts").insert({
-      staff_email: s.email, staff_name: s.name, area, date, shift_type: type, hours: Number(hours), is_overtime: ot,
-    });
-    if (error) { toast.error(error.message); return; }
-    await notify({ data: { event: "schedule_changed", staff_name: s.name, staff_email: s.email, date, shift_type: type } });
-    setOpen(false); onDone();
-  };
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button size="sm">Add shift</Button></DialogTrigger>
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Add shift</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{s.name} · {date}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>Staff</Label>
-            <Select value={email} onValueChange={setEmail}>
-              <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
+            <Label>Duty</Label>
+            <Select value={duty} onValueChange={(v) => setDuty(v as Duty)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {staff.map(s => <SelectItem key={s.id} value={s.email}>{s.name}</SelectItem>)}
+                {["Day","Night","Off","Vacation","Sick","Paternity"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-            <div>
-              <Label>Shift</Label>
-              <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["Morning", "Evening", "Night", "Off"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          {isWorking && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Unit code</Label>
+                <Input value={unitCode} onChange={(e) => setUnitCode(e.target.value)} placeholder="e.g. 6" />
+              </div>
+              <div>
+                <Label>OT type</Label>
+                <Select value={ot} onValueChange={(v) => setOt(v as OtType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["None","BuiltIn","Additional","MedEvac"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Hours</Label>
+                <Input type="number" value={hours} onChange={(e) => setHours(e.target.value)} />
+              </div>
             </div>
-            <div><Label>Hours</Label><Input type="number" value={hours} onChange={(e) => setHours(e.target.value)} /></div>
-            <div className="flex items-end gap-2"><Switch checked={ot} onCheckedChange={setOt} /><Label>Overtime</Label></div>
-          </div>
+          )}
         </div>
-        <DialogFooter><Button onClick={submit}>Add</Button></DialogFooter>
+        <DialogFooter className="justify-between">
+          {shift ? <Button variant="destructive" onClick={del}>Delete</Button> : <span />}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={save}>Save</Button>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
