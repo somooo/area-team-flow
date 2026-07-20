@@ -115,37 +115,46 @@ export type Database = {
           area: string
           created_at: string
           date: string
+          duty: Database["public"]["Enums"]["duty_type"]
           hours: number
           id: string
           is_overtime: boolean
           notes: string | null
+          ot_type: Database["public"]["Enums"]["ot_type"]
           shift_type: Database["public"]["Enums"]["shift_type"]
           staff_email: string
           staff_name: string
+          unit_code: string | null
         }
         Insert: {
           area: string
           created_at?: string
           date: string
+          duty?: Database["public"]["Enums"]["duty_type"]
           hours?: number
           id?: string
           is_overtime?: boolean
           notes?: string | null
+          ot_type?: Database["public"]["Enums"]["ot_type"]
           shift_type: Database["public"]["Enums"]["shift_type"]
           staff_email: string
           staff_name: string
+          unit_code?: string | null
         }
         Update: {
           area?: string
           created_at?: string
           date?: string
+          duty?: Database["public"]["Enums"]["duty_type"]
           hours?: number
           id?: string
           is_overtime?: boolean
           notes?: string | null
+          ot_type?: Database["public"]["Enums"]["ot_type"]
           shift_type?: Database["public"]["Enums"]["shift_type"]
           staff_email?: string
           staff_name?: string
+          unit_code?: string | null
         }
         Relationships: []
       }
@@ -207,8 +216,10 @@ export type Database = {
         | "Approved"
         | "Rejected"
       change_type: "give_ot" | "switch_area" | "switch_date"
+      duty_type: "Day" | "Night" | "Off" | "Vacation" | "Sick" | "Paternity"
       leave_status: "Pending" | "Approved" | "Rejected"
       leave_type: "Vacation" | "Sick"
+      ot_type: "None" | "BuiltIn" | "Additional" | "MedEvac"
       shift_type: "Morning" | "Evening" | "Night" | "Off"
       staff_response: "Pending" | "Accepted" | "Declined"
       supervisor_response: "Pending" | "Approved" | "Rejected"
@@ -347,8 +358,10 @@ export const Constants = {
         "Rejected",
       ],
       change_type: ["give_ot", "switch_area", "switch_date"],
+      duty_type: ["Day", "Night", "Off", "Vacation", "Sick", "Paternity"],
       leave_status: ["Pending", "Approved", "Rejected"],
       leave_type: ["Vacation", "Sick"],
+      ot_type: ["None", "BuiltIn", "Additional", "MedEvac"],
       shift_type: ["Morning", "Evening", "Night", "Off"],
       staff_response: ["Pending", "Accepted", "Declined"],
       supervisor_response: ["Pending", "Approved", "Rejected"],
