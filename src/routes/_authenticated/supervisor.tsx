@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
-import { MonthGrid } from "@/components/MonthGrid";
+import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import type { RosterShift, Duty, OtType } from "@/lib/roster";
 
@@ -37,7 +37,7 @@ function SupervisorPage() {
   const [leaves, setLeaves] = useState<LeaveReq[]>([]);
   const [changes, setChanges] = useState<ChangeReq[]>([]);
   const [supervisors, setSupervisors] = useState<Staff[]>([]);
-  const [editor, setEditor] = useState<{ staff: Staff; date: string; shift?: Shift } | null>(null);
+  const [editor, setEditor] = useState<{ staff: StaffLite; date: string; shift?: Shift } | null>(null);
 
   const load = async () => {
     if (!me?.staff || me.staff.role !== "supervisor") return;
@@ -212,7 +212,7 @@ function SupervisorPage() {
   );
 }
 
-function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { staff: Staff; date: string; shift?: Shift }; onClose: () => void; onDone: () => void }) {
+function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { staff: StaffLite; date: string; shift?: Shift }; onClose: () => void; onDone: () => void }) {
   const { staff: s, date, shift } = entry;
   const [duty, setDuty] = useState<Duty>(shift?.duty ?? "Day");
   const [unitCode, setUnitCode] = useState(shift?.unit_code ?? "");
