@@ -86,6 +86,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
     ],
+    // App-level title/desc set here; leaf routes override where useful.
+    ...({} as Record<string, never>),
     links: [
       {
         rel: "stylesheet",
