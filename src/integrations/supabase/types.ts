@@ -14,16 +14,204 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      leave_requests: {
+        Row: {
+          approver_email: string | null
+          area: string
+          created_at: string
+          end_date: string
+          id: string
+          leave_type: Database["public"]["Enums"]["leave_type"]
+          reason: string | null
+          staff_email: string
+          staff_name: string
+          start_date: string
+          status: Database["public"]["Enums"]["leave_status"]
+        }
+        Insert: {
+          approver_email?: string | null
+          area: string
+          created_at?: string
+          end_date: string
+          id?: string
+          leave_type: Database["public"]["Enums"]["leave_type"]
+          reason?: string | null
+          staff_email: string
+          staff_name: string
+          start_date: string
+          status?: Database["public"]["Enums"]["leave_status"]
+        }
+        Update: {
+          approver_email?: string | null
+          area?: string
+          created_at?: string
+          end_date?: string
+          id?: string
+          leave_type?: Database["public"]["Enums"]["leave_type"]
+          reason?: string | null
+          staff_email?: string
+          staff_name?: string
+          start_date?: string
+          status?: Database["public"]["Enums"]["leave_status"]
+        }
+        Relationships: []
+      }
+      schedule_change_requests: {
+        Row: {
+          approver_email: string | null
+          area: string
+          change_type: Database["public"]["Enums"]["change_type"]
+          created_at: string
+          details: string | null
+          id: string
+          requester_email: string
+          requester_name: string
+          source_shift_id: string
+          staff_response: Database["public"]["Enums"]["staff_response"]
+          status: Database["public"]["Enums"]["change_status"]
+          supervisor_response: Database["public"]["Enums"]["supervisor_response"]
+          target_shift_id: string | null
+          target_staff_email: string
+          target_staff_name: string
+        }
+        Insert: {
+          approver_email?: string | null
+          area: string
+          change_type: Database["public"]["Enums"]["change_type"]
+          created_at?: string
+          details?: string | null
+          id?: string
+          requester_email: string
+          requester_name: string
+          source_shift_id: string
+          staff_response?: Database["public"]["Enums"]["staff_response"]
+          status?: Database["public"]["Enums"]["change_status"]
+          supervisor_response?: Database["public"]["Enums"]["supervisor_response"]
+          target_shift_id?: string | null
+          target_staff_email: string
+          target_staff_name: string
+        }
+        Update: {
+          approver_email?: string | null
+          area?: string
+          change_type?: Database["public"]["Enums"]["change_type"]
+          created_at?: string
+          details?: string | null
+          id?: string
+          requester_email?: string
+          requester_name?: string
+          source_shift_id?: string
+          staff_response?: Database["public"]["Enums"]["staff_response"]
+          status?: Database["public"]["Enums"]["change_status"]
+          supervisor_response?: Database["public"]["Enums"]["supervisor_response"]
+          target_shift_id?: string | null
+          target_staff_email?: string
+          target_staff_name?: string
+        }
+        Relationships: []
+      }
+      shifts: {
+        Row: {
+          area: string
+          created_at: string
+          date: string
+          hours: number
+          id: string
+          is_overtime: boolean
+          notes: string | null
+          shift_type: Database["public"]["Enums"]["shift_type"]
+          staff_email: string
+          staff_name: string
+        }
+        Insert: {
+          area: string
+          created_at?: string
+          date: string
+          hours?: number
+          id?: string
+          is_overtime?: boolean
+          notes?: string | null
+          shift_type: Database["public"]["Enums"]["shift_type"]
+          staff_email: string
+          staff_name: string
+        }
+        Update: {
+          area?: string
+          created_at?: string
+          date?: string
+          hours?: number
+          id?: string
+          is_overtime?: boolean
+          notes?: string | null
+          shift_type?: Database["public"]["Enums"]["shift_type"]
+          staff_email?: string
+          staff_name?: string
+        }
+        Relationships: []
+      }
+      staff: {
+        Row: {
+          area: string | null
+          created_at: string
+          delegated_to_email: string | null
+          delegation_active: boolean
+          department: string | null
+          email: string
+          id: string
+          name: string
+          role: Database["public"]["Enums"]["app_role"]
+          supervisor_email: string | null
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          delegated_to_email?: string | null
+          delegation_active?: boolean
+          department?: string | null
+          email: string
+          id?: string
+          name: string
+          role?: Database["public"]["Enums"]["app_role"]
+          supervisor_email?: string | null
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          delegated_to_email?: string | null
+          delegation_active?: boolean
+          department?: string | null
+          email?: string
+          id?: string
+          name?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          supervisor_email?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_email: { Args: never; Returns: string }
+      is_admin: { Args: never; Returns: boolean }
+      is_supervisor_of: { Args: { _area: string }; Returns: boolean }
+      my_area: { Args: never; Returns: string }
+      my_role: { Args: never; Returns: Database["public"]["Enums"]["app_role"] }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "staff" | "supervisor" | "admin"
+      change_status:
+        | "Pending Staff"
+        | "Pending Supervisor"
+        | "Approved"
+        | "Rejected"
+      change_type: "give_ot" | "switch_area" | "switch_date"
+      leave_status: "Pending" | "Approved" | "Rejected"
+      leave_type: "Vacation" | "Sick"
+      shift_type: "Morning" | "Evening" | "Night" | "Off"
+      staff_response: "Pending" | "Accepted" | "Declined"
+      supervisor_response: "Pending" | "Approved" | "Rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +338,20 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["staff", "supervisor", "admin"],
+      change_status: [
+        "Pending Staff",
+        "Pending Supervisor",
+        "Approved",
+        "Rejected",
+      ],
+      change_type: ["give_ot", "switch_area", "switch_date"],
+      leave_status: ["Pending", "Approved", "Rejected"],
+      leave_type: ["Vacation", "Sick"],
+      shift_type: ["Morning", "Evening", "Night", "Off"],
+      staff_response: ["Pending", "Accepted", "Declined"],
+      supervisor_response: ["Pending", "Approved", "Rejected"],
+    },
   },
 } as const
