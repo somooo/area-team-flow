@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_authenticated/")({
     if (!email) throw redirect({ to: "/auth" });
     const { data: staff } = await supabase
       .from("staff").select("role").ilike("email", email).maybeSingle();
-    if (staff?.role === "admin") throw redirect({ to: "/reports" });
+    if (staff?.role === "admin") throw redirect({ to: "/dashboard" });
     if (staff?.role === "supervisor") throw redirect({ to: "/supervisor" });
     throw redirect({ to: "/dashboard" });
   },
