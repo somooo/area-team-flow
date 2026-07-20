@@ -20,7 +20,8 @@ export const Route = createFileRoute("/_authenticated/supervisor")({
   component: SupervisorPage,
 });
 
-type Shift = { id: string; staff_email: string; staff_name: string; area: string; date: string; shift_type: string; hours: number; is_overtime: boolean; notes: string | null };
+type ShiftType = "Morning" | "Evening" | "Night" | "Off";
+type Shift = { id: string; staff_email: string; staff_name: string; area: string; date: string; shift_type: ShiftType; hours: number; is_overtime: boolean; notes: string | null };
 type Staff = { id: string; name: string; email: string; role: string; area: string | null; supervisor_email: string | null; delegated_to_email: string | null; delegation_active: boolean };
 type LeaveReq = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null };
 type ChangeReq = { id: string; requester_email: string; requester_name: string; area: string; change_type: string; source_shift_id: string; target_staff_email: string; target_staff_name: string; target_shift_id: string | null; details: string | null; staff_response: string; supervisor_response: string; status: string; approver_email: string | null };
