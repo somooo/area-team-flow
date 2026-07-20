@@ -92,14 +92,8 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
               selected={range}
               onSelect={setRange}
               disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
-              initialFocus
+              autoFocus
               className="pointer-events-auto"
-              classNames={{
-                day_range_middle: "!bg-teal-100 !text-teal-900 rounded-none",
-                day_range_start: "!bg-teal-600 !text-white rounded-l-full",
-                day_range_end: "!bg-teal-600 !text-white rounded-r-full",
-                day_selected: "!bg-teal-600 !text-white",
-              }}
             />
           </div>
           <div className="rounded-lg border p-4 space-y-3 bg-slate-50">
