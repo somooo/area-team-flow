@@ -234,7 +234,7 @@ function ShiftEditRow({ shift, onDone }: { shift: Shift; onDone: () => void }) {
       <td className="p-2"><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></td>
       <td className="p-2">{shift.staff_name}</td>
       <td className="p-2">
-        <Select value={form.shift_type} onValueChange={(v) => setForm({ ...form, shift_type: v })}>
+        <Select value={form.shift_type} onValueChange={(v) => setForm({ ...form, shift_type: v as Shift["shift_type"] })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {["Morning", "Evening", "Night", "Off"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
