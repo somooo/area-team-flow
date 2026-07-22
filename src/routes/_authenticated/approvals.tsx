@@ -25,7 +25,7 @@ function ApprovalsPage() {
   const [changes, setChanges] = useState<Change[]>([]);
   const [pre, setPre] = useState<Pre[]>([]);
 
-  const role = me?.staff?.role;
+  const role = me?.staff?.role as string | undefined;
   const canApprove = role === "supervisor" || role === "admin" || role === "team_leader";
 
   const load = async () => {
