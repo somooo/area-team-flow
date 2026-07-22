@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSupervisorRouteImport } from './routes/_authenticated/supervisor'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
+import { Route as AuthenticatedPrescheduleRouteImport } from './routes/_authenticated/preschedule'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
@@ -48,6 +49,12 @@ const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPrescheduleRoute =
+  AuthenticatedPrescheduleRouteImport.update({
+    id: '/preschedule',
+    path: '/preschedule',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -71,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/preschedule': typeof AuthenticatedPrescheduleRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/supervisor': typeof AuthenticatedSupervisorRoute
 }
@@ -80,6 +88,7 @@ export interface FileRoutesByTo {
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/preschedule': typeof AuthenticatedPrescheduleRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/supervisor': typeof AuthenticatedSupervisorRoute
   '/': typeof AuthenticatedIndexRoute
@@ -92,6 +101,7 @@ export interface FileRoutesById {
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
+  '/_authenticated/preschedule': typeof AuthenticatedPrescheduleRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/supervisor': typeof AuthenticatedSupervisorRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/dashboard'
     | '/history'
+    | '/preschedule'
     | '/reports'
     | '/supervisor'
   fileRoutesByTo: FileRoutesByTo
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/dashboard'
     | '/history'
+    | '/preschedule'
     | '/reports'
     | '/supervisor'
     | '/'
@@ -125,6 +137,7 @@ export interface FileRouteTypes {
     | '/_authenticated/approvals'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
+    | '/_authenticated/preschedule'
     | '/_authenticated/reports'
     | '/_authenticated/supervisor'
     | '/_authenticated/'
@@ -180,6 +193,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/preschedule': {
+      id: '/_authenticated/preschedule'
+      path: '/preschedule'
+      fullPath: '/preschedule'
+      preLoaderRoute: typeof AuthenticatedPrescheduleRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/history': {
       id: '/_authenticated/history'
       path: '/history'
@@ -208,6 +228,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
+  AuthenticatedPrescheduleRoute: typeof AuthenticatedPrescheduleRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSupervisorRoute: typeof AuthenticatedSupervisorRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
@@ -217,6 +238,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
+  AuthenticatedPrescheduleRoute: AuthenticatedPrescheduleRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSupervisorRoute: AuthenticatedSupervisorRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
