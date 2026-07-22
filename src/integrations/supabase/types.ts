@@ -14,10 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          area: string | null
+          created_at: string
+          details: Json | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          area?: string | null
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          area?: string | null
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+        }
+        Relationships: []
+      }
       leave_requests: {
         Row: {
           approver_email: string | null
           area: string
+          auto_approve_at: string | null
           created_at: string
           end_date: string
           id: string
@@ -31,6 +68,7 @@ export type Database = {
         Insert: {
           approver_email?: string | null
           area: string
+          auto_approve_at?: string | null
           created_at?: string
           end_date: string
           id?: string
@@ -44,6 +82,7 @@ export type Database = {
         Update: {
           approver_email?: string | null
           area?: string
+          auto_approve_at?: string | null
           created_at?: string
           end_date?: string
           id?: string
@@ -56,10 +95,65 @@ export type Database = {
         }
         Relationships: []
       }
+      preschedule_requests: {
+        Row: {
+          approver_email: string | null
+          area: string
+          auto_approve_at: string | null
+          created_at: string
+          details: string | null
+          id: string
+          request_type: string
+          requested_dates: string[]
+          requester_email: string
+          requester_name: string
+          status: string
+          swap_with_email: string | null
+          swap_with_name: string | null
+          target_month: string
+          updated_at: string
+        }
+        Insert: {
+          approver_email?: string | null
+          area: string
+          auto_approve_at?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          request_type: string
+          requested_dates?: string[]
+          requester_email: string
+          requester_name: string
+          status?: string
+          swap_with_email?: string | null
+          swap_with_name?: string | null
+          target_month: string
+          updated_at?: string
+        }
+        Update: {
+          approver_email?: string | null
+          area?: string
+          auto_approve_at?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          request_type?: string
+          requested_dates?: string[]
+          requester_email?: string
+          requester_name?: string
+          status?: string
+          swap_with_email?: string | null
+          swap_with_name?: string | null
+          target_month?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       schedule_change_requests: {
         Row: {
           approver_email: string | null
           area: string
+          auto_approve_at: string | null
           change_type: Database["public"]["Enums"]["change_type"]
           created_at: string
           details: string | null
@@ -77,6 +171,7 @@ export type Database = {
         Insert: {
           approver_email?: string | null
           area: string
+          auto_approve_at?: string | null
           change_type: Database["public"]["Enums"]["change_type"]
           created_at?: string
           details?: string | null
@@ -94,6 +189,7 @@ export type Database = {
         Update: {
           approver_email?: string | null
           area?: string
+          auto_approve_at?: string | null
           change_type?: Database["public"]["Enums"]["change_type"]
           created_at?: string
           details?: string | null
@@ -161,6 +257,7 @@ export type Database = {
       staff: {
         Row: {
           area: string | null
+          badge_id: string | null
           created_at: string
           delegated_to_email: string | null
           delegation_active: boolean
@@ -168,11 +265,13 @@ export type Database = {
           email: string
           id: string
           name: string
+          password_hash: string | null
           role: Database["public"]["Enums"]["app_role"]
           supervisor_email: string | null
         }
         Insert: {
           area?: string | null
+          badge_id?: string | null
           created_at?: string
           delegated_to_email?: string | null
           delegation_active?: boolean
@@ -180,11 +279,13 @@ export type Database = {
           email: string
           id?: string
           name: string
+          password_hash?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           supervisor_email?: string | null
         }
         Update: {
           area?: string | null
+          badge_id?: string | null
           created_at?: string
           delegated_to_email?: string | null
           delegation_active?: boolean
@@ -192,8 +293,36 @@ export type Database = {
           email?: string
           id?: string
           name?: string
+          password_hash?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           supervisor_email?: string | null
+        }
+        Relationships: []
+      }
+      system_rules: {
+        Row: {
+          description: string | null
+          id: string
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
         }
         Relationships: []
       }
@@ -209,7 +338,7 @@ export type Database = {
       my_role: { Args: never; Returns: Database["public"]["Enums"]["app_role"] }
     }
     Enums: {
-      app_role: "staff" | "supervisor" | "admin"
+      app_role: "staff" | "supervisor" | "admin" | "team_leader"
       change_status:
         | "Pending Staff"
         | "Pending Supervisor"
@@ -350,7 +479,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["staff", "supervisor", "admin"],
+      app_role: ["staff", "supervisor", "admin", "team_leader"],
       change_status: [
         "Pending Staff",
         "Pending Supervisor",
