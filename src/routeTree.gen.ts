@@ -21,6 +21,7 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
+import { Route as ApiPublicAutoApproveRouteImport } from './routes/api/public/auto-approve'
 
 const ScheduleRoute = ScheduleRouteImport.update({
   id: '/schedule',
@@ -82,6 +83,11 @@ const AuthenticatedApprovalsRoute = AuthenticatedApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicAutoApproveRoute = ApiPublicAutoApproveRouteImport.update({
+  id: '/api/public/auto-approve',
+  path: '/api/public/auto-approve',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/supervisor': typeof AuthenticatedSupervisorRoute
+  '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/supervisor': typeof AuthenticatedSupervisorRoute
   '/': typeof AuthenticatedIndexRoute
+  '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/supervisor': typeof AuthenticatedSupervisorRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/settings'
     | '/supervisor'
+    | '/api/public/auto-approve'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/supervisor'
     | '/'
+    | '/api/public/auto-approve'
   id:
     | '__root__'
     | '/_authenticated'
@@ -165,12 +176,14 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/supervisor'
     | '/_authenticated/'
+    | '/api/public/auto-approve'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ScheduleRoute: typeof ScheduleRoute
+  ApiPublicAutoApproveRoute: typeof ApiPublicAutoApproveRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -259,6 +272,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedApprovalsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/auto-approve': {
+      id: '/api/public/auto-approve'
+      path: '/api/public/auto-approve'
+      fullPath: '/api/public/auto-approve'
+      preLoaderRoute: typeof ApiPublicAutoApproveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -293,6 +313,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ScheduleRoute: ScheduleRoute,
+  ApiPublicAutoApproveRoute: ApiPublicAutoApproveRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
