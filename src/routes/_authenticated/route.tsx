@@ -54,12 +54,16 @@ function Shell() {
     );
   }
 
-  const role = me?.staff?.role;
+  const role = me?.staff?.role as string | undefined;
   const links: { to: string; label: string; show: boolean }[] = [
-    { to: "/dashboard", label: "My shifts", show: role === "staff" || role === "supervisor" },
-    { to: "/supervisor", label: "Supervisor", show: role === "supervisor" },
+    { to: "/dashboard", label: "My shifts", show: role === "staff" || role === "supervisor" || role === "team_leader" },
+    { to: "/supervisor", label: "Supervisor", show: role === "supervisor" || role === "team_leader" },
+    { to: "/approvals", label: "Approvals", show: role === "supervisor" || role === "team_leader" || role === "admin" },
+    { to: "/preschedule", label: "Pre-schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" },
     { to: "/history", label: "Requests", show: true },
     { to: "/reports", label: "Reports", show: role === "admin" || role === "supervisor" },
+    { to: "/settings", label: "Settings", show: role === "admin" },
+    { to: "/audit", label: "Audit", show: role === "admin" },
   ];
 
   return (
