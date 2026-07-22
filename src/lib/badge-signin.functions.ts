@@ -1,0 +1,57 @@
+import { createServerFn } from "@tanstack/react-start";
+
+// PBKDF2 hashing helpers (workerd-safe via SubtleCrypto)
+async function pbkdf2(password: string, saltB64: string): Promise<string> {
+  const enc = new TextEncoder();
+  const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, key, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+
+function timingEq(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+export const setBadgePassword = createServerFn({ method: "POST" })
+  .inputValidator((d: { badgeId: string; password: string; email: string }) => d)
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const saltBytes = new Uint8Array(16);
+    crypto.getRandomValues(saltBytes);
+    const saltB64 = btoa(String.fromCharCode(...saltBytes));
+    const hash = await pbkdf2(data.password, saltB64);
+    const stored = `pbkdf2$100000$${saltB64}$${hash}`;
+    const { error } = await supabaseAdmin
+      .from("staff")
+      .update({ badge_id: data.badgeId, password_hash: stored })
+      .ilike("email", data.email);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+export const badgeSignIn = createServerFn({ method: "POST" })
+  .inputValidator((d: { badgeId: string; password: string }) => d)
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin
+      .from("staff")
+      .select("email,password_hash")
+      .eq("badge_id", data.badgeId)
+      .maybeSingle();
+    if (!row?.password_hash) return { ok: false as const, error: "Invalid badge or password" };
+    const parts = row.password_hash.split("$");
+    if (parts.length !== 4 || parts[0] !== "pbkdf2") return { ok: false as const, error: "Invalid credential format" };
+    const computed = await pbkdf2(data.password, parts[2]);
+    if (!timingEq(computed, parts[3])) return { ok: false as const, error: "Invalid badge or password" };
+    // Issue a magic link so the browser establishes a real Supabase session
+    const { data: link, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+      type: "magiclink",
+      email: row.email,
+    });
+    if (linkErr || !link?.properties?.action_link) return { ok: false as const, error: "Could not issue session link" };
+    return { ok: true as const, actionLink: link.properties.action_link };
+  });
