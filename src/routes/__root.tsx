@@ -84,6 +84,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Shift & Leave Manager" },
+      { name: "twitter:description", content: "Hospital staff scheduling, leave, and shift-change management." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/39fec4c2-0619-400c-9621-1f376f1b56d0/id-preview-2f84de96--25af96c3-1714-45b1-9a89-5980d5d232ba.lovable.app-1784726109547.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/39fec4c2-0619-400c-9621-1f376f1b56d0/id-preview-2f84de96--25af96c3-1714-45b1-9a89-5980d5d232ba.lovable.app-1784726109547.png" },
     ],
     links: [
       {
