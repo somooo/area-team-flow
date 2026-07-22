@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSupervisorRouteImport } from './routes/_authenticated/supervisor'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedPrescheduleRouteImport } from './routes/_authenticated/preschedule'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
@@ -42,6 +43,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
 const AuthenticatedSupervisorRoute = AuthenticatedSupervisorRouteImport.update({
   id: '/supervisor',
   path: '/supervisor',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
@@ -80,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AuthenticatedHistoryRoute
   '/preschedule': typeof AuthenticatedPrescheduleRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/supervisor': typeof AuthenticatedSupervisorRoute
 }
 export interface FileRoutesByTo {
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/history': typeof AuthenticatedHistoryRoute
   '/preschedule': typeof AuthenticatedPrescheduleRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/supervisor': typeof AuthenticatedSupervisorRoute
   '/': typeof AuthenticatedIndexRoute
 }
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/preschedule': typeof AuthenticatedPrescheduleRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/supervisor': typeof AuthenticatedSupervisorRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/preschedule'
     | '/reports'
+    | '/settings'
     | '/supervisor'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/preschedule'
     | '/reports'
+    | '/settings'
     | '/supervisor'
     | '/'
   id:
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/_authenticated/history'
     | '/_authenticated/preschedule'
     | '/_authenticated/reports'
+    | '/_authenticated/settings'
     | '/_authenticated/supervisor'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
@@ -186,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSupervisorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/reports': {
       id: '/_authenticated/reports'
       path: '/reports'
@@ -230,6 +249,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedPrescheduleRoute: typeof AuthenticatedPrescheduleRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSupervisorRoute: typeof AuthenticatedSupervisorRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
@@ -240,6 +260,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedPrescheduleRoute: AuthenticatedPrescheduleRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSupervisorRoute: AuthenticatedSupervisorRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
