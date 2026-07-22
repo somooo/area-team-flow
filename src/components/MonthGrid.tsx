@@ -22,9 +22,10 @@ export type MonthGridProps = {
   meEmail: string;
   areaLabel?: string;
   onCellClick?: (row: { staff: StaffLite; date: string; shift?: RosterShift }) => void;
+  layer?: "all" | "day" | "night";
 };
 
-export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, onCellClick }: MonthGridProps) {
+export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, onCellClick, layer = "all" }: MonthGridProps) {
   const days = useMemo(() => monthDays(year, month), [year, month]);
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
@@ -40,9 +41,15 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
 
   const shiftIdx = useMemo(() => {
     const map = new Map<string, RosterShift>();
-    for (const s of shifts) map.set(`${s.staff_email.toLowerCase()}|${s.date}`, s);
+    const filtered = layer === "all"
+      ? shifts
+      : shifts.filter(s => {
+          if (layer === "day") return s.duty !== "Night";
+          return s.duty === "Night";
+        });
+    for (const s of filtered) map.set(`${s.staff_email.toLowerCase()}|${s.date}`, s);
     return map;
-  }, [shifts]);
+  }, [shifts, layer]);
 
   const prev = () => {
     const d = new Date(year, month - 1, 1);
