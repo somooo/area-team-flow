@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
+import { createNotification } from "@/lib/notifications.functions";
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({ meta: [{ title: "Requests — Shift & Leave Manager" }] }),
@@ -39,8 +40,10 @@ function HistoryPage() {
     if (error) { toast.error(error.message); return; }
     if (accept) {
       await notify({ data: { event: "change_pending_supervisor", change_type: r.change_type, requester_name: r.requester_name, staff_email: "", details: r.details } });
+      // notify area supervisor via approver_email is unknown here; skip
     } else {
       await notify({ data: { event: "change_decided", change_type: r.change_type, status: "Rejected", staff_email: r.requester_email, staff_name: r.requester_name } });
+      await createNotification({ data: { recipient_email: r.requester_email, title: "Change declined by target", body: r.change_type, link: "/history" } });
     }
     toast.success(accept ? "Accepted — sent to supervisor" : "Declined");
     load();
