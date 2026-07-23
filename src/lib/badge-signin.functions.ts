@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // PBKDF2 hashing helpers (workerd-safe via SubtleCrypto)
 async function pbkdf2(password: string, saltB64: string): Promise<string> {
@@ -17,9 +18,20 @@ function timingEq(a: string, b: string): boolean {
 }
 
 export const setBadgePassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { badgeId: string; password: string; email: string }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Authorization: caller must be admin OR setting their own badge/password
+    const callerEmail = (context.claims?.email as string | undefined)?.toLowerCase() ?? "";
+    const target = data.email.toLowerCase();
+    let allowed = callerEmail === target;
+    if (!allowed) {
+      const { data: me } = await supabaseAdmin
+        .from("staff").select("role").eq("email", callerEmail).maybeSingle();
+      allowed = me?.role === "admin";
+    }
+    if (!allowed) throw new Error("Forbidden");
     const saltBytes = new Uint8Array(16);
     crypto.getRandomValues(saltBytes);
     const saltB64 = btoa(String.fromCharCode(...saltBytes));
@@ -37,21 +49,34 @@ export const badgeSignIn = createServerFn({ method: "POST" })
   .inputValidator((d: { badgeId: string; password: string }) => d)
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Throttle: 5 failed attempts / 15 min per badge_id
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: recent } = await supabaseAdmin
+      .from("badge_signin_attempts")
+      .select("succeeded, created_at")
+      .eq("badge_id", data.badgeId)
+      .gte("created_at", cutoff);
+    const fails = (recent ?? []).filter(r => !r.succeeded).length;
+    if (fails >= 5) return { ok: false as const, error: "Too many attempts. Try again later." };
+    const record = async (succeeded: boolean) => {
+      await supabaseAdmin.from("badge_signin_attempts").insert({ badge_id: data.badgeId, succeeded });
+    };
     const { data: row } = await supabaseAdmin
       .from("staff")
       .select("email,password_hash")
       .eq("badge_id", data.badgeId)
       .maybeSingle();
-    if (!row?.password_hash) return { ok: false as const, error: "Invalid badge or password" };
+    if (!row?.password_hash) { await record(false); return { ok: false as const, error: "Invalid badge or password" }; }
     const parts = row.password_hash.split("$");
-    if (parts.length !== 4 || parts[0] !== "pbkdf2") return { ok: false as const, error: "Invalid credential format" };
+    if (parts.length !== 4 || parts[0] !== "pbkdf2") { await record(false); return { ok: false as const, error: "Invalid credential format" }; }
     const computed = await pbkdf2(data.password, parts[2]);
-    if (!timingEq(computed, parts[3])) return { ok: false as const, error: "Invalid badge or password" };
+    if (!timingEq(computed, parts[3])) { await record(false); return { ok: false as const, error: "Invalid badge or password" }; }
     // Issue a magic link so the browser establishes a real Supabase session
     const { data: link, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
       type: "magiclink",
       email: row.email,
     });
-    if (linkErr || !link?.properties?.action_link) return { ok: false as const, error: "Could not issue session link" };
+    if (linkErr || !link?.properties?.action_link) { await record(false); return { ok: false as const, error: "Could not issue session link" }; }
+    await record(true);
     return { ok: true as const, actionLink: link.properties.action_link };
   });

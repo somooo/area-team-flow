@@ -7,7 +7,7 @@ export type Me = {
     id: string;
     name: string;
     email: string;
-    role: "staff" | "supervisor" | "admin";
+    role: "staff" | "supervisor" | "admin" | "team_leader";
     area: string | null;
     department: string | null;
     supervisor_email: string | null;

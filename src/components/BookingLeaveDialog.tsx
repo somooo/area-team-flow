@@ -54,8 +54,13 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
 
   const days = useMemo(() => {
     if (!range?.from || !range?.to) return 0;
-    const ms = range.to.getTime() - range.from.getTime();
-    return Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
+    // Count inclusive calendar days (DST-safe)
+    const a = new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate());
+    const b = new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate());
+    let n = 0;
+    const cur = new Date(a);
+    while (cur <= b) { n++; cur.setDate(cur.getDate() + 1); }
+    return n;
   }, [range]);
 
   const submit = async () => {
