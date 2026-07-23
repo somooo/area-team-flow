@@ -40,14 +40,15 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
 
   useEffect(() => {
     if (!open || !me.area) return;
+    const area = me.area;
     void (async () => {
       const year = new Date().getFullYear();
       const yStart = `${year}-01-01`;
       const yEnd = `${year}-12-31`;
       const [{ count: hc }, { data: approvedArea }, { data: mine }] = await Promise.all([
-        supabase.from("staff").select("id", { count: "exact", head: true }).eq("area", me.area),
+        supabase.from("staff").select("id", { count: "exact", head: true }).eq("area", area),
         supabase.from("leave_requests").select("start_date,end_date")
-          .eq("area", me.area).eq("leave_type", "Vacation").eq("status", "Approved"),
+          .eq("area", area).eq("leave_type", "Vacation").eq("status", "Approved"),
         supabase.from("leave_requests").select("start_date,end_date,status,leave_type")
           .ilike("staff_email", me.email).eq("leave_type", "Vacation")
           .gte("start_date", yStart).lte("end_date", yEnd),
