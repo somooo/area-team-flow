@@ -50,6 +50,27 @@ export type Database = {
         }
         Relationships: []
       }
+      badge_signin_attempts: {
+        Row: {
+          badge_id: string
+          created_at: string
+          id: string
+          succeeded: boolean
+        }
+        Insert: {
+          badge_id: string
+          created_at?: string
+          id?: string
+          succeeded: boolean
+        }
+        Update: {
+          badge_id?: string
+          created_at?: string
+          id?: string
+          succeeded?: boolean
+        }
+        Relationships: []
+      }
       leave_requests: {
         Row: {
           approver_email: string | null
@@ -61,6 +82,7 @@ export type Database = {
           leave_type: Database["public"]["Enums"]["leave_type"]
           reason: string | null
           staff_email: string
+          staff_id: string | null
           staff_name: string
           start_date: string
           status: Database["public"]["Enums"]["leave_status"]
@@ -75,6 +97,7 @@ export type Database = {
           leave_type: Database["public"]["Enums"]["leave_type"]
           reason?: string | null
           staff_email: string
+          staff_id?: string | null
           staff_name: string
           start_date: string
           status?: Database["public"]["Enums"]["leave_status"]
@@ -89,11 +112,58 @@ export type Database = {
           leave_type?: Database["public"]["Enums"]["leave_type"]
           reason?: string | null
           staff_email?: string
+          staff_id?: string | null
           staff_name?: string
           start_date?: string
           status?: Database["public"]["Enums"]["leave_status"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leave_requests_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          link: string | null
+          read_at: string | null
+          recipient_staff_id: string
+          title: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          recipient_staff_id: string
+          title: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          recipient_staff_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_recipient_staff_id_fkey"
+            columns: ["recipient_staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       preschedule_requests: {
         Row: {
@@ -107,6 +177,7 @@ export type Database = {
           requested_dates: string[]
           requester_email: string
           requester_name: string
+          staff_id: string | null
           status: string
           swap_with_email: string | null
           swap_with_name: string | null
@@ -124,6 +195,7 @@ export type Database = {
           requested_dates?: string[]
           requester_email: string
           requester_name: string
+          staff_id?: string | null
           status?: string
           swap_with_email?: string | null
           swap_with_name?: string | null
@@ -141,13 +213,22 @@ export type Database = {
           requested_dates?: string[]
           requester_email?: string
           requester_name?: string
+          staff_id?: string | null
           status?: string
           swap_with_email?: string | null
           swap_with_name?: string | null
           target_month?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "preschedule_requests_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       schedule_change_requests: {
         Row: {
@@ -160,12 +241,14 @@ export type Database = {
           id: string
           requester_email: string
           requester_name: string
+          requester_staff_id: string | null
           source_shift_id: string
           staff_response: Database["public"]["Enums"]["staff_response"]
           status: Database["public"]["Enums"]["change_status"]
           supervisor_response: Database["public"]["Enums"]["supervisor_response"]
           target_shift_id: string | null
           target_staff_email: string
+          target_staff_id: string | null
           target_staff_name: string
         }
         Insert: {
@@ -178,12 +261,14 @@ export type Database = {
           id?: string
           requester_email: string
           requester_name: string
+          requester_staff_id?: string | null
           source_shift_id: string
           staff_response?: Database["public"]["Enums"]["staff_response"]
           status?: Database["public"]["Enums"]["change_status"]
           supervisor_response?: Database["public"]["Enums"]["supervisor_response"]
           target_shift_id?: string | null
           target_staff_email: string
+          target_staff_id?: string | null
           target_staff_name: string
         }
         Update: {
@@ -196,15 +281,32 @@ export type Database = {
           id?: string
           requester_email?: string
           requester_name?: string
+          requester_staff_id?: string | null
           source_shift_id?: string
           staff_response?: Database["public"]["Enums"]["staff_response"]
           status?: Database["public"]["Enums"]["change_status"]
           supervisor_response?: Database["public"]["Enums"]["supervisor_response"]
           target_shift_id?: string | null
           target_staff_email?: string
+          target_staff_id?: string | null
           target_staff_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "schedule_change_requests_requester_staff_id_fkey"
+            columns: ["requester_staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_change_requests_target_staff_id_fkey"
+            columns: ["target_staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shifts: {
         Row: {
@@ -219,6 +321,7 @@ export type Database = {
           ot_type: Database["public"]["Enums"]["ot_type"]
           shift_type: Database["public"]["Enums"]["shift_type"]
           staff_email: string
+          staff_id: string | null
           staff_name: string
           unit_code: string | null
         }
@@ -234,6 +337,7 @@ export type Database = {
           ot_type?: Database["public"]["Enums"]["ot_type"]
           shift_type: Database["public"]["Enums"]["shift_type"]
           staff_email: string
+          staff_id?: string | null
           staff_name: string
           unit_code?: string | null
         }
@@ -249,10 +353,19 @@ export type Database = {
           ot_type?: Database["public"]["Enums"]["ot_type"]
           shift_type?: Database["public"]["Enums"]["shift_type"]
           staff_email?: string
+          staff_id?: string | null
           staff_name?: string
           unit_code?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shifts_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       staff: {
         Row: {
@@ -333,6 +446,7 @@ export type Database = {
     Functions: {
       current_email: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
+      is_area_manager_of: { Args: { _area: string }; Returns: boolean }
       is_supervisor_of: { Args: { _area: string }; Returns: boolean }
       my_area: { Args: never; Returns: string }
       my_role: { Args: never; Returns: Database["public"]["Enums"]["app_role"] }
