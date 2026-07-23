@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { HeartPulse, LogOut } from "lucide-react";
 import { useMe } from "@/lib/use-me";
+import { NotificationsBell } from "@/components/NotificationsBell";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -95,6 +96,7 @@ function Shell() {
             <Button variant="ghost" size="sm" onClick={signOut} disabled={signingOut}>
               <LogOut className="h-4 w-4" />
             </Button>
+            <NotificationsBell />
           </div>
         </div>
       </header>
