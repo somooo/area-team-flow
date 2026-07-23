@@ -15,6 +15,7 @@ import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
+import { toISODate } from "@/lib/roster";
 import type { RosterShift, Duty, OtType } from "@/lib/roster";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
@@ -40,10 +41,10 @@ function SupervisorPage() {
   const [editor, setEditor] = useState<{ staff: StaffLite; date: string; shift?: Shift } | null>(null);
 
   const load = async () => {
-    if (!me?.staff || me.staff.role !== "supervisor") return;
+    if (!me?.staff || (me.staff.role !== "supervisor" && me.staff.role !== "team_leader")) return;
     const area = me.staff.area!;
-    const start = new Date(year, month, 1).toISOString().slice(0, 10);
-    const end = new Date(year, month + 1, 0).toISOString().slice(0, 10);
+    const start = toISODate(new Date(year, month, 1));
+    const end = toISODate(new Date(year, month + 1, 0));
     const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }] = await Promise.all([
       supabase.from("shifts").select("*").eq("area", area).gte("date", start).lte("date", end).order("date"),
       supabase.from("staff").select("*").eq("area", area).order("name"),
@@ -59,7 +60,7 @@ function SupervisorPage() {
   };
   useEffect(() => { void load(); }, [me?.staff?.email, year, month]);
 
-  if (!me?.staff || me.staff.role !== "supervisor") return <p>Supervisor access only.</p>;
+  if (!me?.staff || (me.staff.role !== "supervisor" && me.staff.role !== "team_leader")) return <p>Supervisor / Team leader access only.</p>;
   const meStaff = me.staff;
 
   const decideLeave = async (r: LeaveReq, status: "Approved" | "Rejected") => {

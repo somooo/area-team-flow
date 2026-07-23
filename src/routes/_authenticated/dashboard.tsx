@@ -12,7 +12,10 @@ import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
+import { toISODate, monthDays } from "@/lib/roster";
 import type { RosterShift } from "@/lib/roster";
+import { exportExcel, exportPdf } from "@/lib/schedule-export";
+import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "My shifts — Shift & Leave Manager" }] }),
@@ -39,10 +42,8 @@ function Dashboard() {
   const load = async () => {
     if (!me?.staff) return;
     if (isAdmin && !viewArea) return;
-    const start = new Date(year, month, 1);
-    const end = new Date(year, month + 1, 0);
-    const startISO = start.toISOString().slice(0, 10);
-    const endISO = end.toISOString().slice(0, 10);
+    const startISO = toISODate(new Date(year, month, 1));
+    const endISO = toISODate(new Date(year, month + 1, 0));
     const [{ data: sh }, { data: st }] = await Promise.all([
       supabase.from("shifts").select("*").eq("area", activeArea).gte("date", startISO).lte("date", endISO).order("date"),
       supabase.from("staff").select("id,name,email,role,area,department").eq("area", activeArea).order("name"),
@@ -96,7 +97,13 @@ function Dashboard() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Monthly schedule</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Monthly schedule</CardTitle>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => exportExcel({ area: activeArea, year, month, staff: meRoster, shifts })}>Download Excel</Button>
+            <Button size="sm" variant="outline" onClick={() => exportPdf({ area: activeArea, year, month, staff: meRoster, shifts })}>Download PDF</Button>
+          </div>
+        </CardHeader>
         <CardContent>
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
@@ -108,6 +115,7 @@ function Dashboard() {
               setChangeShift(shift);
             }}
           />
+          <TotalsTable staff={meRoster} shifts={shifts} />
         </CardContent>
       </Card>
 
@@ -120,6 +128,40 @@ function Dashboard() {
           onDone={() => { setChangeShift(null); load(); }}
         />
       )}
+    </div>
+  );
+}
+
+function TotalsTable({ staff, shifts }: { staff: Staff[]; shifts: Shift[] }) {
+  const byStaff = groupByStaff(shifts);
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full text-xs border rounded-md">
+        <thead className="bg-teal-50">
+          <tr>
+            <th className="p-2 text-left">Staff</th>
+            <th className="p-2">Day</th><th className="p-2">Night</th>
+            <th className="p-2">Hours</th><th className="p-2">OT h</th>
+            <th className="p-2">Sick</th><th className="p-2">Vacation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {staff.map(s => {
+            const t = totalsForStaff(byStaff.get(s.email.toLowerCase()) ?? []);
+            return (
+              <tr key={s.id} className="border-t">
+                <td className="p-2 text-left">{s.name}</td>
+                <td className="p-2 text-center">{t.day}</td>
+                <td className="p-2 text-center">{t.night}</td>
+                <td className="p-2 text-center">{t.hours}</td>
+                <td className="p-2 text-center">{t.ot_hours}</td>
+                <td className="p-2 text-center">{t.sick}</td>
+                <td className="p-2 text-center">{t.vacation}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

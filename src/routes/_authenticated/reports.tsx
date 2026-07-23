@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toISODate } from "@/lib/roster";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({ meta: [{ title: "Reports — Shift & Leave Manager" }] }),
@@ -17,8 +18,8 @@ type Row = { email: string; name: string; area: string; shifts: number; hours: n
 
 function ReportsPage() {
   const { me } = useMe();
-  const today = new Date().toISOString().slice(0, 10);
-  const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const today = toISODate(new Date());
+  const monthAgo = toISODate(new Date(Date.now() - 30 * 86400000));
   const [start, setStart] = useState(monthAgo);
   const [end, setEnd] = useState(today);
   const [areaFilter, setAreaFilter] = useState<string>("all");
