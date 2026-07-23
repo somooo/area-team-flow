@@ -16,7 +16,7 @@ type MeStaff = {
   id: string;
   email: string;
   name: string;
-  role: "staff" | "supervisor" | "admin";
+  role: "staff" | "supervisor" | "admin" | "team_leader";
   area: string | null;
   supervisor_email: string | null;
   delegated_to_email: string | null;
