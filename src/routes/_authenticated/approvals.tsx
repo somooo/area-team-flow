@@ -48,7 +48,7 @@ function ApprovalsPage() {
     if (error) { toast.error(error.message); return; }
     await notify({ data: { event: "request_decided", staff_name: r.staff_name, staff_email: r.staff_email, status, start_date: r.start_date, end_date: r.end_date } });
     await logAudit({ action: `leave_${status.toLowerCase()}`, entity_type: "leave_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role, details: { leave_type: r.leave_type } });
-    await createNotification({ data: { recipient_email: r.staff_email, title: `Leave ${status.toLowerCase()}`, body: `${r.leave_type} ${r.start_date} → ${r.end_date}`, link: "/history" } });
+    await createNotification({ data: { recipient_email: r.staff_email, title: `Leave ${status.toLowerCase()}`, body: `${r.leave_type} ${r.start_date} → ${r.end_date}`, link: "/dashboard" } });
     toast.success(`Leave ${status.toLowerCase()}`);
     load();
   };
@@ -58,14 +58,14 @@ function ApprovalsPage() {
         await applyScheduleChange({ data: { requestId: r.id } });
         await notify({ data: { event: "change_decided", change_type: r.change_type, status: "Approved", staff_email: r.requester_email, staff_name: r.requester_name } });
         await logAudit({ action: "change_approved", entity_type: "schedule_change_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
-        await createNotification({ data: { recipient_email: r.requester_email, title: "Change request approved", body: r.change_type, link: "/history" } });
+        await createNotification({ data: { recipient_email: r.requester_email, title: "Change request approved", body: r.change_type, link: "/dashboard" } });
       } catch (e) { toast.error(String(e)); return; }
     } else {
       const { error } = await supabase.from("schedule_change_requests").update({ supervisor_response: "Rejected", status: "Rejected" }).eq("id", r.id);
       if (error) { toast.error(error.message); return; }
       await notify({ data: { event: "change_decided", change_type: r.change_type, status: "Rejected", staff_email: r.requester_email, staff_name: r.requester_name } });
       await logAudit({ action: "change_rejected", entity_type: "schedule_change_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
-      await createNotification({ data: { recipient_email: r.requester_email, title: "Change request rejected", body: r.change_type, link: "/history" } });
+      await createNotification({ data: { recipient_email: r.requester_email, title: "Change request rejected", body: r.change_type, link: "/dashboard" } });
     }
     load();
   };

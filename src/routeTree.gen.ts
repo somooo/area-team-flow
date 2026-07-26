@@ -12,11 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedVacationsRouteImport } from './routes/_authenticated/vacations'
 import { Route as AuthenticatedSupervisorRouteImport } from './routes/_authenticated/supervisor'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedPrescheduleRouteImport } from './routes/_authenticated/preschedule'
-import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
@@ -34,6 +34,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedVacationsRoute = AuthenticatedVacationsRouteImport.update({
+  id: '/vacations',
+  path: '/vacations',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSupervisorRoute = AuthenticatedSupervisorRouteImport.update({
@@ -57,11 +62,6 @@ const AuthenticatedPrescheduleRoute =
     path: '/preschedule',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -89,11 +89,11 @@ export interface FileRoutesByFullPath {
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/audit': typeof AuthenticatedAuditRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/history': typeof AuthenticatedHistoryRoute
   '/preschedule': typeof AuthenticatedPrescheduleRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/supervisor': typeof AuthenticatedSupervisorRoute
+  '/vacations': typeof AuthenticatedVacationsRoute
   '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
 }
 export interface FileRoutesByTo {
@@ -101,11 +101,11 @@ export interface FileRoutesByTo {
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/audit': typeof AuthenticatedAuditRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/history': typeof AuthenticatedHistoryRoute
   '/preschedule': typeof AuthenticatedPrescheduleRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/supervisor': typeof AuthenticatedSupervisorRoute
+  '/vacations': typeof AuthenticatedVacationsRoute
   '/': typeof AuthenticatedIndexRoute
   '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
 }
@@ -116,11 +116,11 @@ export interface FileRoutesById {
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
   '/_authenticated/audit': typeof AuthenticatedAuditRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/preschedule': typeof AuthenticatedPrescheduleRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/supervisor': typeof AuthenticatedSupervisorRoute
+  '/_authenticated/vacations': typeof AuthenticatedVacationsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
 }
@@ -132,11 +132,11 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/audit'
     | '/dashboard'
-    | '/history'
     | '/preschedule'
     | '/reports'
     | '/settings'
     | '/supervisor'
+    | '/vacations'
     | '/api/public/auto-approve'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -144,11 +144,11 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/audit'
     | '/dashboard'
-    | '/history'
     | '/preschedule'
     | '/reports'
     | '/settings'
     | '/supervisor'
+    | '/vacations'
     | '/'
     | '/api/public/auto-approve'
   id:
@@ -158,11 +158,11 @@ export interface FileRouteTypes {
     | '/_authenticated/approvals'
     | '/_authenticated/audit'
     | '/_authenticated/dashboard'
-    | '/_authenticated/history'
     | '/_authenticated/preschedule'
     | '/_authenticated/reports'
     | '/_authenticated/settings'
     | '/_authenticated/supervisor'
+    | '/_authenticated/vacations'
     | '/_authenticated/'
     | '/api/public/auto-approve'
   fileRoutesById: FileRoutesById
@@ -196,6 +196,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/vacations': {
+      id: '/_authenticated/vacations'
+      path: '/vacations'
+      fullPath: '/vacations'
+      preLoaderRoute: typeof AuthenticatedVacationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/supervisor': {
       id: '/_authenticated/supervisor'
       path: '/supervisor'
@@ -222,13 +229,6 @@ declare module '@tanstack/react-router' {
       path: '/preschedule'
       fullPath: '/preschedule'
       preLoaderRoute: typeof AuthenticatedPrescheduleRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/history': {
-      id: '/_authenticated/history'
-      path: '/history'
-      fullPath: '/history'
-      preLoaderRoute: typeof AuthenticatedHistoryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
@@ -266,11 +266,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
   AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedPrescheduleRoute: typeof AuthenticatedPrescheduleRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSupervisorRoute: typeof AuthenticatedSupervisorRoute
+  AuthenticatedVacationsRoute: typeof AuthenticatedVacationsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
@@ -278,11 +278,11 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
   AuthenticatedAuditRoute: AuthenticatedAuditRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedPrescheduleRoute: AuthenticatedPrescheduleRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSupervisorRoute: AuthenticatedSupervisorRoute,
+  AuthenticatedVacationsRoute: AuthenticatedVacationsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
 
@@ -297,13 +297,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

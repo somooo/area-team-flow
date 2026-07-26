@@ -7,7 +7,8 @@ export type RulesMap = Record<string, RuleValue>;
 export const RULE_DEFAULTS: RulesMap = {
   vacation_cap_pct: 30,
   vacation_yearly_days: 25,
-  preschedule_lead_days: 10,
+  preschedule_open_day: 10,
+  preschedule_close_day: 20,
   auto_approve_days: 3,
   ot_monthly_max_hours: 60,
   same_day_edit_roles: ["team_leader", "supervisor", "admin"],

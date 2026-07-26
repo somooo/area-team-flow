@@ -57,11 +57,11 @@ function Shell() {
 
   const role = me?.staff?.role as string | undefined;
   const links: { to: string; label: string; show: boolean }[] = [
-    { to: "/dashboard", label: "My shifts", show: role === "staff" || role === "supervisor" || role === "team_leader" },
+    { to: "/dashboard", label: "Schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" },
+    { to: "/vacations", label: "Vacations", show: role === "staff" || role === "supervisor" || role === "team_leader" },
+    { to: "/preschedule", label: "Pre-schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" },
     { to: "/supervisor", label: "Supervisor", show: role === "supervisor" || role === "team_leader" },
     { to: "/approvals", label: "Approvals", show: role === "supervisor" || role === "team_leader" || role === "admin" },
-    { to: "/preschedule", label: "Pre-schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" },
-    { to: "/history", label: "Requests", show: true },
     { to: "/reports", label: "Reports", show: role === "admin" || role === "supervisor" },
     { to: "/settings", label: "Settings", show: role === "admin" },
     { to: "/audit", label: "Audit", show: role === "admin" },
@@ -80,8 +80,10 @@ function Shell() {
               <Link
                 key={l.to}
                 to={l.to}
-                className={`px-3 py-1.5 rounded-md text-sm ${
-                  pathname === l.to ? "bg-primary text-primary-foreground" : "hover:bg-secondary"
+                className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                  pathname === l.to
+                    ? "bg-teal-600 text-white font-medium shadow-sm"
+                    : "text-slate-600 hover:bg-teal-50 hover:text-teal-700"
                 }`}
               >{l.label}</Link>
             ))}

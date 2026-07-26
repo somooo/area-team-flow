@@ -25,8 +25,11 @@ type MeStaff = {
   delegation_active: boolean;
 };
 
-export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => void }) {
+export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = false }: {
+  me: MeStaff; onDone: () => void; inline?: boolean; allowSick?: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  const active = inline || open;
   const [range, setRange] = useState<DateRange | undefined>();
   const [type, setType] = useState<"Vacation" | "Sick">("Vacation");
   const [reason, setReason] = useState("");
@@ -39,7 +42,7 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
   const [balance, setBalance] = useState<{ approved: number; pending: number } | null>(null);
 
   useEffect(() => {
-    if (!open || !me.area) return;
+    if (!active || !me.area) return;
     const area = me.area;
     void (async () => {
       const year = new Date().getFullYear();
@@ -81,7 +84,7 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
       }
       setBalance({ approved, pending });
     })();
-  }, [open, me.area, me.email]);
+  }, [active, me.area, me.email]);
 
   const cap = useMemo(() => Math.floor(headcount * ruleNumber(rules, "vacation_cap_pct", 30) / 100), [headcount, rules]);
   const fullDays = useMemo(() => {
@@ -93,7 +96,7 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
   }, [dailyUsed, cap]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     if (me.role === "supervisor" || me.role === "team_leader") {
       supabase.from("staff").select("id,name,email,area").eq("role", "supervisor").then(({ data }) => {
         setSupervisors((data ?? []).filter((s) => s.email !== me.email));
@@ -110,7 +113,7 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
           else setResolvedApprover(data?.email ?? me.supervisor_email!);
         });
     }
-  }, [open, me, approver]);
+  }, [active, me, approver]);
 
   const days = useMemo(() => {
     if (!range?.from || !range?.to) return 0;
@@ -143,14 +146,8 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
 
   const fmt = (d?: Date) => d ? d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : "—";
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="bg-teal-600 hover:bg-teal-700 text-white"><CalendarDays className="h-4 w-4 mr-2" />Request leave</Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader><DialogTitle>Book your leave</DialogTitle></DialogHeader>
-        <div className="grid md:grid-cols-[1fr_260px] gap-4">
+  const body = (
+    <div className="grid md:grid-cols-[1fr_260px] gap-4">
           <div className="rounded-lg border bg-white p-2">
             <Calendar
               mode="range"
@@ -190,16 +187,20 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
               <div className="text-sm">Total days</div>
               <div className="text-lg font-bold text-teal-700">{days}</div>
             </div>
-            <div>
-              <Label className="text-xs">Leave type</Label>
-              <Select value={type} onValueChange={(v) => setType(v as "Vacation" | "Sick")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Vacation">Vacation</SelectItem>
-                  <SelectItem value="Sick">Sick</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {allowSick ? (
+              <div>
+                <Label className="text-xs">Leave type</Label>
+                <Select value={type} onValueChange={(v) => setType(v as "Vacation" | "Sick")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Vacation">Vacation</SelectItem>
+                    <SelectItem value="Sick">Sick</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Leave type: <span className="font-medium text-slate-700">Vacation</span></div>
+            )}
             {me.role === "supervisor" ? (
               <div>
                 <Label className="text-xs">Approver (another supervisor)</Label>
@@ -231,7 +232,19 @@ export function BookingLeaveDialog({ me, onDone }: { me: MeStaff; onDone: () => 
               Submit request
             </Button>
           </div>
-        </div>
+    </div>
+  );
+
+  if (inline) return body;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="bg-teal-600 hover:bg-teal-700 text-white"><CalendarDays className="h-4 w-4 mr-2" />Request leave</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader><DialogTitle>Book your leave</DialogTitle></DialogHeader>
+        {body}
       </DialogContent>
     </Dialog>
   );

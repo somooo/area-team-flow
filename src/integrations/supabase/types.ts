@@ -170,9 +170,11 @@ export type Database = {
           approver_email: string | null
           area: string
           auto_approve_at: string | null
+          contacted_by: string | null
           created_at: string
           details: string | null
           id: string
+          missed_ot_date: string | null
           request_type: string
           requested_dates: string[]
           requester_email: string
@@ -182,15 +184,18 @@ export type Database = {
           swap_with_email: string | null
           swap_with_name: string | null
           target_month: string
+          unit_code: string | null
           updated_at: string
         }
         Insert: {
           approver_email?: string | null
           area: string
           auto_approve_at?: string | null
+          contacted_by?: string | null
           created_at?: string
           details?: string | null
           id?: string
+          missed_ot_date?: string | null
           request_type: string
           requested_dates?: string[]
           requester_email: string
@@ -200,15 +205,18 @@ export type Database = {
           swap_with_email?: string | null
           swap_with_name?: string | null
           target_month: string
+          unit_code?: string | null
           updated_at?: string
         }
         Update: {
           approver_email?: string | null
           area?: string
           auto_approve_at?: string | null
+          contacted_by?: string | null
           created_at?: string
           details?: string | null
           id?: string
+          missed_ot_date?: string | null
           request_type?: string
           requested_dates?: string[]
           requester_email?: string
@@ -218,6 +226,7 @@ export type Database = {
           swap_with_email?: string | null
           swap_with_name?: string | null
           target_month?: string
+          unit_code?: string | null
           updated_at?: string
         }
         Relationships: [

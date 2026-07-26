@@ -10,22 +10,34 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
+import { createNotification } from "@/lib/notifications.functions";
+import { logAudit } from "@/lib/audit";
+import { resolveApprover } from "@/lib/approver";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
-import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
-import { toISODate, monthDays } from "@/lib/roster";
+import { MyChangeRequests } from "@/components/MyChangeRequests";
+import { toISODate, cellFor } from "@/lib/roster";
 import type { RosterShift } from "@/lib/roster";
 import { exportExcel, exportPdf } from "@/lib/schedule-export";
 import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
+import { X } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "My shifts — Shift & Leave Manager" }] }),
-  component: Dashboard,
+  head: () => ({
+    meta: [
+      { title: "Schedule — Shift & Leave Manager" },
+      { name: "description", content: "Monthly duty roster by area with swap and overtime requests." },
+      { property: "og:title", content: "Schedule — Shift & Leave Manager" },
+      { property: "og:description", content: "Monthly duty roster by area with swap and overtime requests." },
+    ],
+  }),
+  component: SchedulePage,
 });
 
 type Shift = RosterShift;
 type Staff = StaffLite;
+type PickMode = null | { kind: "switch_date" | "switch_area"; source: Shift };
 
-function Dashboard() {
+function SchedulePage() {
   const { me } = useMe();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -34,106 +46,288 @@ function Dashboard() {
   const [roster, setRoster] = useState<Staff[]>([]);
   const [areas, setAreas] = useState<string[]>([]);
   const [viewArea, setViewArea] = useState<string>("");
-  const [changeShift, setChangeShift] = useState<Shift | null>(null);
+  const [menuShift, setMenuShift] = useState<Shift | null>(null);
+  const [pick, setPick] = useState<PickMode>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{ shift: Shift; staff: Staff } | null>(null);
+  const [otShift, setOtShift] = useState<Shift | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const isAdmin = me?.staff?.role === "admin";
-  const activeArea = isAdmin ? viewArea : (me?.staff?.area ?? "");
+  useEffect(() => {
+    supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
+      const uniq = Array.from(new Set((data ?? []).map((r) => r.area as string).filter(Boolean))).sort();
+      setAreas(uniq);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!viewArea && me?.staff?.area) setViewArea(me.staff.area);
+    else if (!viewArea && areas[0]) setViewArea(areas[0]);
+  }, [me?.staff?.area, areas]);
 
   const load = async () => {
-    if (!me?.staff) return;
-    if (isAdmin && !viewArea) return;
+    if (!viewArea) return;
     const startISO = toISODate(new Date(year, month, 1));
     const endISO = toISODate(new Date(year, month + 1, 0));
     const [{ data: sh }, { data: st }] = await Promise.all([
-      supabase.from("shifts").select("*").eq("area", activeArea).gte("date", startISO).lte("date", endISO).order("date"),
-      supabase.from("staff").select("id,name,email,role,area,department").eq("area", activeArea).order("name"),
+      supabase.from("shifts").select("*").eq("area", viewArea).gte("date", startISO).lte("date", endISO).order("date"),
+      supabase.from("staff").select("id,name,email,role,area,department").eq("area", viewArea).order("name"),
     ]);
     setShifts((sh as Shift[]) ?? []);
     setRoster((st as Staff[]) ?? []);
   };
 
+  useEffect(() => { void load(); }, [year, month, viewArea]);
+
   useEffect(() => {
-    if (!isAdmin) return;
-    supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
-      const uniq = Array.from(new Set((data ?? []).map((r) => r.area as string).filter(Boolean))).sort();
-      setAreas(uniq);
-      if (uniq[0] && !viewArea) setViewArea(uniq[0]);
-    });
-  }, [isAdmin]);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPick(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
-  useEffect(() => { void load(); }, [me?.staff?.email, year, month, activeArea]);
+  const isMyArea = me?.staff?.area === viewArea;
+  const meEmail = me?.staff?.email ?? "";
 
-  const meRoster = useMemo(() => roster, [roster]);
+  const handleCell = ({ staff, shift }: { staff: Staff; date: string; shift?: Shift }) => {
+    const isSelf = staff.email.toLowerCase() === meEmail.toLowerCase();
+    if (pick) {
+      if (isSelf) { toast.info("Pick another person's shift."); return; }
+      if (!shift) { toast.info("That day has no assignment."); return; }
+      if (pick.kind === "switch_date" && staff.area !== pick.source.area) {
+        toast.error("Switch day must stay within the same area.");
+        return;
+      }
+      setConfirmTarget({ shift, staff });
+      return;
+    }
+    if (!isSelf) return; // read-only for other people
+    if (!shift) { toast.info("No shift on that day."); return; }
+    setMenuShift(shift);
+  };
 
   if (!me?.staff) return null;
   const meStaff = me.staff;
-
-  const canClickCell = (email: string) => {
-    if (isAdmin) return false;
-    // Staff: only clicks their own cell; supervisor handled on /supervisor.
-    return email.toLowerCase() === meStaff.email.toLowerCase();
-  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Welcome, {meStaff.name}</h1>
+          <h1 className="text-2xl font-semibold">Schedule</h1>
           <p className="text-muted-foreground text-sm">
-            {meStaff.role === "admin" ? "Admin — org-wide view" : `${meStaff.area ?? "—"} · ${meStaff.department ?? ""}`}
+            {isMyArea ? `${meStaff.area ?? "—"} · your area` : `${viewArea} · read-only`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Select value={viewArea} onValueChange={setViewArea}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Area" /></SelectTrigger>
-              <SelectContent>
-                {areas.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-          {!isAdmin && <BookingLeaveDialog me={meStaff} onDone={load} />}
-        </div>
       </div>
+
+      {pick && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-teal-300 bg-teal-50 px-4 py-2 text-sm text-teal-900">
+          <span>
+            Select the shift to switch with
+            {pick.kind === "switch_area" ? " (you can change area above)" : " (same area)"} — Esc to cancel
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => setPick(null)}><X className="h-4 w-4" /></Button>
+        </div>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Monthly schedule</CardTitle>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => exportExcel({ area: activeArea, year, month, staff: meRoster, shifts })}>Download Excel</Button>
-            <Button size="sm" variant="outline" onClick={() => exportPdf({ area: activeArea, year, month, staff: meRoster, shifts })}>Download PDF</Button>
+            <Button size="sm" variant="outline" onClick={() => exportExcel({ area: viewArea, year, month, staff: roster, shifts })}>Download Excel</Button>
+            <Button size="sm" variant="outline" onClick={() => exportPdf({ area: viewArea, year, month, staff: roster, shifts })}>Download PDF</Button>
           </div>
         </CardHeader>
         <CardContent>
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
-            staff={meRoster} shifts={shifts} meEmail={meStaff.email}
-            areaLabel={activeArea}
-            onCellClick={({ staff, shift }) => {
-              if (!canClickCell(staff.email)) return;
-              if (!shift) { toast.info("No shift on that day."); return; }
-              setChangeShift(shift);
-            }}
+            staff={roster} shifts={shifts}
+            meEmail={isMyArea ? meStaff.email : ""}
+            headerRight={
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Area</span>
+                <Select value={viewArea} onValueChange={setViewArea}>
+                  <SelectTrigger className="w-40"><SelectValue placeholder="Area" /></SelectTrigger>
+                  <SelectContent>
+                    {areas.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            }
+            onCellClick={handleCell}
           />
-          <TotalsTable staff={meRoster} shifts={shifts} />
+          <TotalsTable staff={roster} shifts={shifts} />
         </CardContent>
       </Card>
 
-      {changeShift && (
-        <ChangeRequestDialog
-          shift={changeShift}
+      <MyChangeRequests meEmail={meStaff.email} refreshKey={refreshKey} />
+
+      {menuShift && (
+        <Dialog open onOpenChange={(v) => { if (!v) setMenuShift(null); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle>{menuShift.date} · {cellFor(menuShift, false).code || menuShift.duty}</DialogTitle></DialogHeader>
+            <div className="grid gap-2">
+              <Button variant="outline" onClick={() => { setPick({ kind: "switch_date", source: menuShift }); setMenuShift(null); }}>
+                Switch day with another staff
+              </Button>
+              <Button variant="outline" onClick={() => { setPick({ kind: "switch_area", source: menuShift }); setMenuShift(null); }}>
+                Switch area with another staff
+              </Button>
+              {(menuShift.is_overtime || menuShift.ot_type !== "None") && (
+                <Button variant="outline" onClick={() => { setOtShift(menuShift); setMenuShift(null); }}>
+                  Give away overtime
+                </Button>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {pick && confirmTarget && (
+        <ConfirmSwapDialog
           me={meStaff}
-          roster={roster}
-          onClose={() => setChangeShift(null)}
-          onDone={() => { setChangeShift(null); load(); }}
+          kind={pick.kind}
+          source={pick.source}
+          target={confirmTarget}
+          onClose={() => setConfirmTarget(null)}
+          onDone={() => { setConfirmTarget(null); setPick(null); setRefreshKey((k) => k + 1); }}
+        />
+      )}
+
+      {otShift && (
+        <GiveOtDialog
+          me={meStaff}
+          shift={otShift}
+          roster={roster.filter((s) => s.email.toLowerCase() !== meStaff.email.toLowerCase())}
+          onClose={() => setOtShift(null)}
+          onDone={() => { setOtShift(null); setRefreshKey((k) => k + 1); }}
         />
       )}
     </div>
   );
 }
 
+type MeStaff = NonNullable<NonNullable<ReturnType<typeof useMe>["me"]>["staff"]>;
+
+async function createChangeRequest(opts: {
+  me: MeStaff;
+  changeType: "give_ot" | "switch_area" | "switch_date";
+  sourceShift: Shift;
+  targetEmail: string;
+  targetName: string;
+  targetShiftId: string | null;
+  details: string;
+}) {
+  const approver = await resolveApprover(opts.me);
+  const { data: inserted, error } = await supabase
+    .from("schedule_change_requests")
+    .insert({
+      requester_email: opts.me.email,
+      requester_name: opts.me.name,
+      area: opts.me.area!,
+      change_type: opts.changeType,
+      source_shift_id: opts.sourceShift.id,
+      target_staff_email: opts.targetEmail,
+      target_staff_name: opts.targetName,
+      target_shift_id: opts.targetShiftId,
+      details: opts.details,
+      approver_email: approver,
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) { toast.error(error.message); return false; }
+  await notify({ data: { event: "change_requested", change_type: opts.changeType, requester_name: opts.me.name, staff_email: opts.targetEmail, staff_name: opts.targetName, details: opts.details } });
+  await createNotification({ data: { recipient_email: opts.targetEmail, title: "Schedule change request", body: `${opts.me.name} · ${opts.changeType}`, link: "/dashboard" } });
+  await logAudit({
+    action: "change_requested", entity_type: "schedule_change_request",
+    entity_id: inserted?.id ?? null, area: opts.me.area,
+    details: { change_type: opts.changeType, target: opts.targetEmail },
+  });
+  toast.success("Request sent — waiting for the other staff member");
+  return true;
+}
+
+function ConfirmSwapDialog({ me, kind, source, target, onClose, onDone }: {
+  me: MeStaff; kind: "switch_date" | "switch_area"; source: Shift;
+  target: { shift: Shift; staff: Staff }; onClose: () => void; onDone: () => void;
+}) {
+  const [details, setDetails] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    const ok = await createChangeRequest({
+      me, changeType: kind, sourceShift: source,
+      targetEmail: target.staff.email, targetName: target.staff.name,
+      targetShiftId: target.shift.id, details,
+    });
+    setBusy(false);
+    if (ok) onDone();
+  };
+  const Side = ({ title, name, shift }: { title: string; name: string; shift: Shift }) => (
+    <div className="rounded-md border p-3 bg-slate-50">
+      <div className="text-xs uppercase text-muted-foreground">{title}</div>
+      <div className="font-medium">{name}</div>
+      <div className="text-sm">{shift.date}</div>
+      <div className="text-sm font-semibold text-teal-700">{cellFor(shift, false).code || shift.duty} · {shift.area}</div>
+    </div>
+  );
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{kind === "switch_date" ? "Switch day" : "Switch area"}</DialogTitle></DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <Side title="Your shift" name={me.name} shift={source} />
+          <Side title="Their shift" name={target.staff.name} shift={target.shift} />
+        </div>
+        <div><Label>Details (optional)</Label><Textarea value={details} onChange={(e) => setDetails(e.target.value)} /></div>
+        <DialogFooter><Button onClick={submit} disabled={busy}>Send request</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GiveOtDialog({ me, shift, roster, onClose, onDone }: {
+  me: MeStaff; shift: Shift; roster: Staff[]; onClose: () => void; onDone: () => void;
+}) {
+  const [targetEmail, setTargetEmail] = useState("");
+  const [details, setDetails] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    const target = roster.find((s) => s.email === targetEmail);
+    if (!target) { toast.error("Pick who will take the shift"); return; }
+    setBusy(true);
+    const ok = await createChangeRequest({
+      me, changeType: "give_ot", sourceShift: shift,
+      targetEmail: target.email, targetName: target.name, targetShiftId: null, details,
+    });
+    setBusy(false);
+    if (ok) onDone();
+  };
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Give away overtime — {shift.date}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="rounded-md border p-3 bg-slate-50 text-sm">
+            {cellFor(shift, false).code || shift.duty} · {shift.area} · {shift.hours}h
+          </div>
+          <div>
+            <Label>Who will take it?</Label>
+            <Select value={targetEmail} onValueChange={setTargetEmail}>
+              <SelectTrigger><SelectValue placeholder="Choose a colleague" /></SelectTrigger>
+              <SelectContent>
+                {roster.map((s) => <SelectItem key={s.id} value={s.email}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label>Details (optional)</Label><Textarea value={details} onChange={(e) => setDetails(e.target.value)} /></div>
+        </div>
+        <DialogFooter><Button onClick={submit} disabled={busy}>Send request</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TotalsTable({ staff, shifts }: { staff: Staff[]; shifts: Shift[] }) {
-  const byStaff = groupByStaff(shifts);
+  const byStaff = useMemo(() => groupByStaff(shifts), [shifts]);
   return (
     <div className="mt-4 overflow-x-auto">
       <table className="w-full text-xs border rounded-md">
@@ -146,7 +340,7 @@ function TotalsTable({ staff, shifts }: { staff: Staff[]; shifts: Shift[] }) {
           </tr>
         </thead>
         <tbody>
-          {staff.map(s => {
+          {staff.map((s) => {
             const t = totalsForStaff(byStaff.get(s.email.toLowerCase()) ?? []);
             return (
               <tr key={s.id} className="border-t">
@@ -163,100 +357,5 @@ function TotalsTable({ staff, shifts }: { staff: Staff[]; shifts: Shift[] }) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-function ChangeRequestDialog({ shift, me, roster, onDone, onClose }: { shift: Shift; me: NonNullable<ReturnType<typeof useMe>["me"]>["staff"]; roster: Staff[]; onDone: () => void; onClose: () => void }) {
-  const [changeType, setChangeType] = useState<"give_ot" | "switch_area" | "switch_date">(shift.is_overtime ? "give_ot" : "switch_date");
-  const [targetEmail, setTargetEmail] = useState("");
-  const [targetShiftId, setTargetShiftId] = useState("");
-  const [details, setDetails] = useState("");
-  const [candidateShifts, setCandidateShifts] = useState<Shift[]>([]);
-  const [candidatesAllAreas, setCandidatesAllAreas] = useState<Staff[]>([]);
-
-  useEffect(() => {
-    if (changeType === "switch_area") {
-      supabase.from("staff").select("id,name,email,role,area,department").neq("email", me!.email).then(({ data }) => setCandidatesAllAreas((data as Staff[]) ?? []));
-    }
-  }, [changeType, me]);
-
-  useEffect(() => {
-    if (!targetEmail || changeType === "give_ot") { setCandidateShifts([]); return; }
-    supabase.from("shifts").select("*").ilike("staff_email", targetEmail).order("date")
-      .then(({ data }) => setCandidateShifts((data as Shift[]) ?? []));
-  }, [targetEmail, changeType]);
-
-  const submit = async () => {
-    if (!me || !targetEmail) { toast.error("Pick a colleague"); return; }
-    if (changeType === "give_ot" && !shift.is_overtime) { toast.error("Not an OT shift"); return; }
-    if (changeType !== "give_ot" && !targetShiftId) { toast.error("Pick their shift"); return; }
-    const targetPool = changeType === "switch_area" ? candidatesAllAreas : roster;
-    const target = targetPool.find(s => s.email === targetEmail);
-    if (!target) { toast.error("Target not found"); return; }
-    // approver = requester's area supervisor honoring delegation
-    let approver: string | null = null;
-    if (me.supervisor_email) {
-      const { data: sup } = await supabase.from("staff").select("email,delegated_to_email,delegation_active").ilike("email", me.supervisor_email).maybeSingle();
-      approver = sup?.delegation_active && sup.delegated_to_email ? sup.delegated_to_email : (sup?.email ?? me.supervisor_email);
-    } else if (me.role === "supervisor") {
-      // supervisor requesting: their own change routes to another supervisor of same area — none; leave null
-      approver = me.delegated_to_email && me.delegation_active ? me.delegated_to_email : null;
-    }
-    const { error } = await supabase.from("schedule_change_requests").insert({
-      requester_email: me.email, requester_name: me.name, area: me.area!,
-      change_type: changeType, source_shift_id: shift.id,
-      target_staff_email: target.email, target_staff_name: target.name,
-      target_shift_id: changeType === "give_ot" ? null : targetShiftId,
-      details, approver_email: approver,
-    });
-    if (error) { toast.error(error.message); return; }
-    await notify({ data: { event: "change_requested", change_type: changeType, requester_name: me.name, staff_email: target.email, staff_name: target.name, details } });
-    toast.success("Change request sent");
-    onDone();
-  };
-
-  return (
-    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Schedule change — {shift.date} {shift.duty}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label>Type</Label>
-            <Select value={changeType} onValueChange={(v) => { setChangeType(v as typeof changeType); setTargetShiftId(""); setTargetEmail(""); }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="give_ot" disabled={!shift.is_overtime}>Give away OT (this shift must be OT)</SelectItem>
-                <SelectItem value="switch_area">Switch area with another staff</SelectItem>
-                <SelectItem value="switch_date">Switch date with another staff</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Target staff</Label>
-            <Select value={targetEmail} onValueChange={setTargetEmail}>
-              <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
-              <SelectContent>
-                {(changeType === "switch_area" ? candidatesAllAreas : roster.filter(s => s.email !== me!.email)).map((s) => (
-                  <SelectItem key={s.id} value={s.email}>{s.name} ({s.area})</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {changeType !== "give_ot" && targetEmail && (
-            <div>
-              <Label>Their shift to swap</Label>
-              <Select value={targetShiftId} onValueChange={setTargetShiftId}>
-                <SelectTrigger><SelectValue placeholder="Choose their shift" /></SelectTrigger>
-                <SelectContent>
-                  {candidateShifts.map(s => <SelectItem key={s.id} value={s.id}>{s.date} · {s.shift_type} ({s.area})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div><Label>Details</Label><Textarea value={details} onChange={(e) => setDetails(e.target.value)} /></div>
-        </div>
-        <DialogFooter><Button onClick={submit}>Send request</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
