@@ -187,16 +187,20 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
               <div className="text-sm">Total days</div>
               <div className="text-lg font-bold text-teal-700">{days}</div>
             </div>
-            <div>
-              <Label className="text-xs">Leave type</Label>
-              <Select value={type} onValueChange={(v) => setType(v as "Vacation" | "Sick")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Vacation">Vacation</SelectItem>
-                  <SelectItem value="Sick">Sick</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {allowSick ? (
+              <div>
+                <Label className="text-xs">Leave type</Label>
+                <Select value={type} onValueChange={(v) => setType(v as "Vacation" | "Sick")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Vacation">Vacation</SelectItem>
+                    <SelectItem value="Sick">Sick</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Leave type: <span className="font-medium text-slate-700">Vacation</span></div>
+            )}
             {me.role === "supervisor" ? (
               <div>
                 <Label className="text-xs">Approver (another supervisor)</Label>
@@ -228,7 +232,19 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
               Submit request
             </Button>
           </div>
-        </div>
+    </div>
+  );
+
+  if (inline) return body;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="bg-teal-600 hover:bg-teal-700 text-white"><CalendarDays className="h-4 w-4 mr-2" />Request leave</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader><DialogTitle>Book your leave</DialogTitle></DialogHeader>
+        {body}
       </DialogContent>
     </Dialog>
   );
