@@ -71,7 +71,16 @@ function PreschedulePage() {
   if (!me?.staff) return null;
   const meStaff = me.staff;
 
-  const insertRequest = async (payload: Record<string, unknown>, label: string) => {
+  type Payload = {
+    request_type: string;
+    requested_dates: string[];
+    details: string;
+    missed_ot_date?: string | null;
+    unit_code?: string | null;
+    contacted_by?: string | null;
+  };
+
+  const insertRequest = async (payload: Payload, label: string) => {
     const approver = await resolveApprover(meStaff);
     const autoApprove = new Date();
     autoApprove.setDate(autoApprove.getDate() + ruleNumber(rules, "auto_approve_days", 3));
