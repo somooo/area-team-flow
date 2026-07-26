@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cellFor, monthDays, toISODate, LEGEND, type RosterShift } from "@/lib/roster";
@@ -21,11 +21,12 @@ export type MonthGridProps = {
   shifts: RosterShift[];
   meEmail: string;
   areaLabel?: string;
+  headerRight?: ReactNode;
   onCellClick?: (row: { staff: StaffLite; date: string; shift?: RosterShift }) => void;
   layer?: "all" | "day" | "night";
 };
 
-export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, onCellClick, layer = "all" }: MonthGridProps) {
+export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, layer = "all" }: MonthGridProps) {
   const days = useMemo(() => monthDays(year, month), [year, month]);
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
@@ -68,7 +69,10 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
           <h2 className="text-lg font-semibold min-w-40 text-center">{monthLabel}</h2>
           <Button variant="outline" size="icon" onClick={next} aria-label="Next month"><ChevronRight className="h-4 w-4" /></Button>
         </div>
-        {areaLabel && <div className="text-sm text-muted-foreground">Area: {areaLabel}</div>}
+        <div className="flex items-center gap-2">
+          {headerRight}
+          {!headerRight && areaLabel && <div className="text-sm text-muted-foreground">Area: {areaLabel}</div>}
+        </div>
       </div>
 
       <div className="border rounded-md overflow-auto max-h-[70vh] relative bg-white">
