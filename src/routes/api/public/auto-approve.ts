@@ -58,7 +58,7 @@ export const Route = createFileRoute("/api/public/auto-approve")({
               recipient_staff_id: r.staff_id,
               title: "Leave auto-approved",
               body: `${r.leave_type} ${r.start_date} → ${r.end_date}`,
-              link: "/history",
+              link: "/dashboard",
             });
           }
           results.leave++;
@@ -96,7 +96,7 @@ export const Route = createFileRoute("/api/public/auto-approve")({
               recipient_staff_id: c.requester_staff_id,
               title: "Schedule change auto-approved",
               body: `${c.change_type}`,
-              link: "/history",
+              link: "/dashboard",
             });
           }
           results.change++;

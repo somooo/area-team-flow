@@ -31,7 +31,7 @@ export function useMe() {
     }
     const { data: staff } = await supabase
       .from("staff")
-      .select("*")
+      .select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active")
       .ilike("email", email)
       .maybeSingle();
     setMe({ authEmail: email, staff: staff as Me["staff"] });
