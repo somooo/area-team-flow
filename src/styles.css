@@ -21,6 +21,7 @@
 @theme inline {
   --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Barlow", ui-sans-serif, sans-serif;
+  --font-arabic: "Reem Kufi", "Barlow", ui-sans-serif, sans-serif;
   --color-steel-50: oklch(0.9764 0.0072 244.72);
   --color-steel-100: oklch(0.9597 0.0144 244.72);
   --color-steel-200: oklch(0.9307 0.0352 246.88);
@@ -31,9 +32,12 @@
   --color-steel-700: oklch(0.4812 0.0627 248.48);
   --color-steel-800: oklch(0.4014 0.0530 245.50);
   --color-steel-900: oklch(0.2907 0.0364 249.17);
-  --color-ink: oklch(0.2907 0.0364 249.17);
-  --color-bone: oklch(0.9585 0.0098 87.47);
-  --color-copper: oklch(0.6652 0.0990 60.70);
+  --color-ink: oklch(0.2816 0.0340 255.80);
+  --color-ink-tile: oklch(0.3450 0.0360 255.80);
+  --color-bone: oklch(0.9528 0.0086 84.57);
+  --color-steel: oklch(0.6325 0.0765 255.80);
+  --color-copper: oklch(0.6420 0.1155 59.03);
+  --color-bronze: oklch(0.6420 0.1155 59.03);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -78,13 +82,13 @@
 
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.9585 0.0098 87.47);
-  --foreground: oklch(0.2907 0.0364 249.17);
+  --background: oklch(0.9528 0.0086 84.57);
+  --foreground: oklch(0.2816 0.0340 255.80);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2907 0.0364 249.17);
+  --card-foreground: oklch(0.2816 0.0340 255.80);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2907 0.0364 249.17);
-  --primary: oklch(0.5863 0.0732 248.54);
+  --popover-foreground: oklch(0.2816 0.0340 255.80);
+  --primary: oklch(0.6325 0.0765 255.80);
   --primary-foreground: oklch(0.9895 0.005 244);
   --secondary: oklch(0.9597 0.0144 244.72);
   --secondary-foreground: oklch(0.2907 0.0364 249.17);

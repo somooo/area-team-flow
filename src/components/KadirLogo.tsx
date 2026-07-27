@@ -25,28 +25,61 @@ export function KadirIcon({ className }: { className?: string }) {
   );
 }
 
+export function KadirIconTile({
+  className,
+  iconClassName,
+}: {
+  className?: string;
+  iconClassName?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-2xl bg-ink-tile",
+        className,
+      )}
+    >
+      <KadirIcon className={cn("text-steel", iconClassName)} />
+    </span>
+  );
+}
+
+export function KadirArabic({ className }: { className?: string }) {
+  return (
+    <span lang="ar" dir="rtl" className={cn("font-arabic text-steel leading-none", className)}>
+      كادر
+    </span>
+  );
+}
+
 export function KadirLogo({
   className,
   size = "md",
   showTagline = true,
+  showArabic = true,
 }: {
   className?: string;
   size?: "sm" | "md" | "lg";
   showTagline?: boolean;
+  showArabic?: boolean;
 }) {
-  const icon = size === "lg" ? "h-8 w-8" : size === "md" ? "h-6 w-6" : "h-5 w-5";
   const word = size === "lg" ? "text-3xl" : size === "md" ? "text-xl" : "text-base";
   const tag = size === "lg" ? "text-[11px]" : "text-[9px]";
+  const tile = size === "lg" ? "h-16 w-16" : size === "md" ? "h-8 w-8" : "h-7 w-7";
+  const icon = size === "lg" ? "h-8 w-8" : size === "md" ? "h-5 w-5" : "h-4 w-4";
 
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <KadirIcon className={cn(icon, "text-primary")} />
+      <KadirIconTile className={tile} iconClassName={icon} />
       <div className="leading-none">
-        <div className={cn("font-display font-semibold uppercase tracking-[0.22em] text-foreground", word)}>
-          Kadir
+        <div className="flex items-baseline gap-2">
+          <span className={cn("font-display font-bold uppercase tracking-[0.3em] text-foreground", word)}>
+            Kadir
+          </span>
+          {showArabic && <KadirArabic className={size === "lg" ? "text-2xl" : "text-base"} />}
         </div>
         {showTagline && (
-          <div className={cn("mt-1 uppercase tracking-[0.28em] text-muted-foreground", tag)}>
+          <div className={cn("mt-1 uppercase tracking-[0.28em] text-bronze", tag)}>
             Staff Management
           </div>
         )}
