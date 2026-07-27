@@ -151,6 +151,13 @@ function PreschedulePage() {
       </div>
 
       <Card>
+        <CardHeader>
+          <CardTitle>Missed Overtime</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Report missed overtime up to the 5th of the following month. Any request after this window will not be accepted.
+          </p>
+        </CardHeader>
+*** placeholder
         <CardHeader><CardTitle>Next month request</CardTitle></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           {!windowOpen && (
