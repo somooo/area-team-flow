@@ -123,6 +123,7 @@ function PreschedulePage() {
 
   const submitMissedOt = async () => {
     if (!otDate) { toast.error("Pick the date of the missed overtime"); return; }
+    if (!missedOtWindowOpen) { toast.error("The reporting window for this missed overtime has closed."); return; }
     const ok = await insertRequest(
       {
         request_type: "missed_ot", requested_dates: [otDate],
