@@ -62,6 +62,13 @@ function PreschedulePage() {
     };
   }, [openDay, closeDay]);
 
+  const missedOtDeadline = useMemo(() => {
+    if (!otDate) return null;
+    const [y, m, day] = otDate.split("-").map(Number);
+    return toISODate(new Date(y, m, 5));
+  }, [otDate]);
+  const missedOtWindowOpen = !missedOtDeadline || toISODate(new Date()) <= missedOtDeadline;
+
   const load = async () => {
     const { data } = await supabase.from("preschedule_requests").select("*").order("created_at", { ascending: false });
     setRows((data as Row[]) ?? []);
@@ -116,6 +123,7 @@ function PreschedulePage() {
 
   const submitMissedOt = async () => {
     if (!otDate) { toast.error("Pick the date of the missed overtime"); return; }
+    if (!missedOtWindowOpen) { toast.error("The reporting window for this missed overtime has closed."); return; }
     const ok = await insertRequest(
       {
         request_type: "missed_ot", requested_dates: [otDate],
@@ -177,8 +185,18 @@ function PreschedulePage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Missed overtime report</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Post schedule</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Report missed overtime up to the 5th of the following month. Any request after this window will not be accepted.
+          </p>
+        </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
+          {!missedOtWindowOpen && (
+            <div className="sm:col-span-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              The reporting window for this missed overtime has closed (deadline was {missedOtDeadline}).
+            </div>
+          )}
           <div>
             <Label>Date</Label>
             <Input type="date" value={otDate} max={toISODate(new Date())} onChange={(e) => setOtDate(e.target.value)} />
@@ -196,7 +214,7 @@ function PreschedulePage() {
             <Textarea value={otNotes} onChange={(e) => setOtNotes(e.target.value)} />
           </div>
           <div className="sm:col-span-2 flex justify-end">
-            <Button onClick={submitMissedOt}>Report missed overtime</Button>
+            <Button onClick={submitMissedOt} disabled={!missedOtWindowOpen}>Report missed overtime</Button>
           </div>
         </CardContent>
       </Card>
