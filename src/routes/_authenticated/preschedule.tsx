@@ -144,7 +144,7 @@ function PreschedulePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Pre-schedule</h1>
+        <h1 className="text-2xl font-semibold">Pre-Schedule</h1>
         <p className="text-sm text-muted-foreground">
           Requests for <strong>{targetMonth}</strong> · window open day {openDay}–{closeDay} of each month.
         </p>
@@ -188,7 +188,7 @@ function PreschedulePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Post schedule</CardTitle>
+          <CardTitle>Missed Overtime</CardTitle>
           <p className="text-sm text-muted-foreground">
             Report missed overtime up to the 5th of the following month. Any request after this window will not be accepted.
           </p>
