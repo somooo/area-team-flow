@@ -62,6 +62,13 @@ function PreschedulePage() {
     };
   }, [openDay, closeDay]);
 
+  const missedOtDeadline = useMemo(() => {
+    if (!otDate) return null;
+    const [y, m, day] = otDate.split("-").map(Number);
+    return toISODate(new Date(y, m, 5));
+  }, [otDate]);
+  const missedOtWindowOpen = !missedOtDeadline || toISODate(new Date()) <= missedOtDeadline;
+
   const load = async () => {
     const { data } = await supabase.from("preschedule_requests").select("*").order("created_at", { ascending: false });
     setRows((data as Row[]) ?? []);
