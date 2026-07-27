@@ -19,9 +19,9 @@ import { toISODate } from "@/lib/roster";
 export const Route = createFileRoute("/_authenticated/preschedule")({
   head: () => ({
     meta: [
-      { title: "Pre-schedule — Shift & Leave Manager" },
+      { title: "Pre-schedule — KADIR Staff Management" },
       { name: "description", content: "Submit OFF or switch requests for next month and report missed overtime." },
-      { property: "og:title", content: "Pre-schedule — Shift & Leave Manager" },
+      { property: "og:title", content: "Pre-schedule — KADIR Staff Management" },
       { property: "og:description", content: "Submit OFF or switch requests for next month and report missed overtime." },
     ],
   }),

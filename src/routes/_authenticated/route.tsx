@@ -2,7 +2,8 @@ import { createFileRoute, Outlet, Link, useNavigate, useRouterState, redirect } 
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { HeartPulse, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { KadirLogo } from "@/components/KadirLogo";
 import { useMe } from "@/lib/use-me";
 import { NotificationsBell } from "@/components/NotificationsBell";
 
@@ -43,8 +44,8 @@ function Shell() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="max-w-md text-center space-y-4">
-          <HeartPulse className="h-10 w-10 mx-auto text-primary" />
-          <h1 className="text-2xl font-semibold">No access yet</h1>
+          <KadirLogo size="lg" className="justify-center" />
+          <h1 className="font-display text-2xl uppercase tracking-[0.12em]">No access yet</h1>
           <p className="text-muted-foreground">
             Your Google account <strong>{me.authEmail}</strong> isn't on the staff roster.
             Please ask your area supervisor to add you.
@@ -71,10 +72,7 @@ function Shell() {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <HeartPulse className="h-6 w-6 text-primary" />
-            <span className="font-semibold">Shift & Leave</span>
-          </div>
+          <KadirLogo size="md" />
           <nav className="flex items-center gap-1 flex-wrap">
             {links.filter(l => l.show).map((l) => (
               <Link
@@ -82,8 +80,8 @@ function Shell() {
                 to={l.to}
                 className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
                   pathname === l.to
-                    ? "bg-teal-600 text-white font-medium shadow-sm"
-                    : "text-slate-600 hover:bg-teal-50 hover:text-teal-700"
+                    ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                    : "text-muted-foreground hover:bg-steel-100 hover:text-steel-700"
                 }`}
               >{l.label}</Link>
             ))}

@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "System rules — Shift & Leave Manager" }] }),
+  head: () => ({ meta: [{ title: "System rules — KADIR Staff Management" }] }),
   component: SettingsPage,
 });
 

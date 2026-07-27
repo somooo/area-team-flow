@@ -9,9 +9,9 @@ import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 export const Route = createFileRoute("/_authenticated/vacations")({
   head: () => ({
     meta: [
-      { title: "Vacations — Shift & Leave Manager" },
+      { title: "Vacations — KADIR Staff Management" },
       { name: "description", content: "Book vacation days on the availability calendar and track your requests." },
-      { property: "og:title", content: "Vacations — Shift & Leave Manager" },
+      { property: "og:title", content: "Vacations — KADIR Staff Management" },
       { property: "og:description", content: "Book vacation days on the availability calendar and track your requests." },
     ],
   }),
