@@ -43,6 +43,10 @@ function PreschedulePage() {
   const [type, setType] = useState<"off" | "switch">("off");
   const [dates, setDates] = useState("");
   const [details, setDetails] = useState("");
+  const [shiftFrom, setShiftFrom] = useState<"Day" | "Night">("Day");
+  const [shiftTo, setShiftTo] = useState<"Day" | "Night">("Night");
+  const [switchStaffName, setSwitchStaffName] = useState("");
+  const [switchStaffBadge, setSwitchStaffBadge] = useState("");
 
   // Missed OT form
   const [otDate, setOtDate] = useState("");
@@ -87,6 +91,7 @@ function PreschedulePage() {
     missed_ot_date?: string | null;
     unit_code?: string | null;
     contacted_by?: string | null;
+    swap_with_name?: string | null;
   };
 
   const insertRequest = async (payload: Payload, label: string) => {
@@ -114,10 +119,30 @@ function PreschedulePage() {
 
   const submit = async () => {
     if (!windowOpen) { toast.error(`The pre-schedule window is open from day ${openDay} to ${closeDay}.`); return; }
+    if (type === "switch") {
+      if (!switchStaffName.trim()) { toast.error("Enter the name of the staff you are switching with"); return; }
+      if (!switchStaffBadge.trim()) { toast.error("Enter their badge number"); return; }
+      const ok = await insertRequest(
+        {
+          request_type: "switch",
+          requested_dates: [],
+          swap_with_name: switchStaffName.trim(),
+          details: [
+            `Shift from: ${shiftFrom}`,
+            `Shift to: ${shiftTo}`,
+            `Switch with: ${switchStaffName.trim()} (badge ${switchStaffBadge.trim()})`,
+            details.trim() ? `Notes: ${details.trim()}` : "",
+          ].filter(Boolean).join(" · "),
+        },
+        "Pre-schedule request",
+      );
+      if (ok) { setSwitchStaffName(""); setSwitchStaffBadge(""); setDetails(""); }
+      return;
+    }
     const dateList = dates.split(",").map((s) => s.trim()).filter(Boolean);
     if (dateList.length === 0) { toast.error("Enter at least one date"); return; }
     const ok = await insertRequest(
-      { request_type: type, requested_dates: dateList, details },
+      { request_type: "off", requested_dates: dateList, details },
       "Pre-schedule request",
     );
     if (ok) { setDates(""); setDetails(""); }
@@ -172,12 +197,45 @@ function PreschedulePage() {
               </SelectContent>
             </Select>
           </div>
+          {type === "off" ? (
+            <div className="sm:col-span-2">
+              <Label>Requested dates (comma separated, YYYY-MM-DD)</Label>
+              <Input value={dates} onChange={(e) => setDates(e.target.value)} placeholder={`${targetMonth}-05, ${targetMonth}-06`} disabled={!windowOpen} />
+            </div>
+          ) : (
+            <>
+              <div>
+                <Label>Shift: From</Label>
+                <Select value={shiftFrom} onValueChange={(v) => setShiftFrom(v as "Day" | "Night")} disabled={!windowOpen}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Day">Day</SelectItem>
+                    <SelectItem value="Night">Night</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Shift: To</Label>
+                <Select value={shiftTo} onValueChange={(v) => setShiftTo(v as "Day" | "Night")} disabled={!windowOpen}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Day">Day</SelectItem>
+                    <SelectItem value="Night">Night</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Switch with (Staff name)</Label>
+                <Input value={switchStaffName} onChange={(e) => setSwitchStaffName(e.target.value)} disabled={!windowOpen} />
+              </div>
+              <div>
+                <Label>Switch with (Badge number)</Label>
+                <Input value={switchStaffBadge} onChange={(e) => setSwitchStaffBadge(e.target.value)} disabled={!windowOpen} />
+              </div>
+            </>
+          )}
           <div className="sm:col-span-2">
-            <Label>Requested dates (comma separated, YYYY-MM-DD)</Label>
-            <Input value={dates} onChange={(e) => setDates(e.target.value)} placeholder={`${targetMonth}-05, ${targetMonth}-06`} disabled={!windowOpen} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Details</Label>
+            <Label>Details{type === "switch" ? " (optional)" : ""}</Label>
             <Textarea value={details} onChange={(e) => setDetails(e.target.value)} disabled={!windowOpen} />
           </div>
           <div className="sm:col-span-2 flex justify-end">
