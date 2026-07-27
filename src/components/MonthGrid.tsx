@@ -66,7 +66,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={prev} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></Button>
-          <h2 className="text-lg font-semibold min-w-40 text-center">{monthLabel}</h2>
+          <h2 className="font-display text-xl uppercase tracking-[0.12em] min-w-40 text-center">{monthLabel}</h2>
           <Button variant="outline" size="icon" onClick={next} aria-label="Next month"><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="flex items-center gap-2">
@@ -75,11 +75,11 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
         </div>
       </div>
 
-      <div className="border rounded-md overflow-auto max-h-[70vh] relative bg-white">
+      <div className="border rounded-md overflow-auto max-h-[70vh] relative bg-card">
         <table className="text-xs border-separate border-spacing-0">
           <thead>
             <tr>
-              <th className="sticky top-0 left-0 z-30 bg-steel-100 border-b border-r px-3 py-2 text-left min-w-[180px]">Staff</th>
+              <th className="sticky top-0 left-0 z-30 bg-steel-100 border-b border-r px-3 py-2 text-left min-w-[180px] uppercase tracking-wider text-[11px] text-steel-800">Staff</th>
               {days.map((d) => {
                 const wd = d.toLocaleDateString(undefined, { weekday: "short" });
                 const isWknd = d.getDay() === 0 || d.getDay() === 6;
@@ -88,7 +88,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                     key={d.toISOString()}
                     className={cn(
                       "sticky top-0 z-20 border-b border-r px-1 py-1 text-center font-medium",
-                      isWknd ? "bg-slate-100" : "bg-steel-100"
+                      isWknd ? "bg-muted" : "bg-steel-100"
                     )}
                   >
                     <div className="leading-tight">{d.getDate()}</div>
@@ -102,7 +102,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
             {grouped.map(([dept, members]) => (
               <Fragment key={`dept-${dept}`}>
                 <tr>
-                  <td colSpan={days.length + 1} className="bg-steel-200/60 text-steel-900 text-[11px] font-semibold px-3 py-1 sticky left-0 z-10">
+                  <td colSpan={days.length + 1} className="bg-steel-200/70 text-steel-900 text-[11px] font-semibold uppercase tracking-[0.16em] px-3 py-1 sticky left-0 z-10">
                     {dept}
                   </td>
                 </tr>
@@ -110,7 +110,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                   const isMe = s.email.toLowerCase() === meEmail.toLowerCase();
                   return (
                     <tr key={s.id} className={cn(isMe && "bg-steel-100/40")}>
-                      <td className={cn("sticky left-0 z-10 border-b border-r px-3 py-2 min-w-[180px]", isMe ? "bg-steel-100" : "bg-white")}>
+                      <td className={cn("sticky left-0 z-10 border-b border-r px-3 py-2 min-w-[180px]", isMe ? "bg-steel-100" : "bg-card")}>
                         <div className="font-medium truncate">{s.name}</div>
                         <div className="text-[10px] text-muted-foreground truncate">
                           {s.role}{s.department ? ` · ${s.department}` : ""}
@@ -148,8 +148,8 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
         </table>
       </div>
 
-      <div className="rounded-md border p-3 bg-slate-50">
-        <div className="text-xs font-semibold mb-2 text-slate-700">Legend</div>
+      <div className="rounded-md border p-3 bg-secondary/60">
+        <div className="text-xs font-semibold mb-2 uppercase tracking-[0.16em] text-steel-800">Legend</div>
         <div className="flex flex-wrap gap-3">
           {LEGEND.map((l) => (
             <div key={l.label} className="flex items-center gap-2">
