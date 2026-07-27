@@ -77,6 +77,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [end, setEnd] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [approver, setApprover] = useState<string | null>(null);
+  const [approverName, setApproverName] = useState<string | null>(null);
   const [detail, setDetail] = useState<LeaveRow | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -90,7 +91,14 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     });
   }, [canSwitchArea]);
 
-  useEffect(() => { void resolveApprover(me).then(setApprover); }, [me.email]);
+  useEffect(() => {
+    void resolveApprover(me).then(async (email) => {
+      setApprover(email);
+      if (!email) { setApproverName(null); return; }
+      const { data } = await supabase.from("staff").select("name").ilike("email", email).maybeSingle();
+      setApproverName(data?.name ?? email);
+    });
+  }, [me.email]);
 
   const load = useCallback(async () => {
     if (!viewArea) return;
@@ -233,8 +241,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
             <PopoverContent className="w-80 space-y-3" align="end">
               <div className="text-sm space-y-1">
                 <div className="flex justify-between"><span className="text-muted-foreground">Total days</span><span className="font-semibold">{totalDays}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Balance after</span><span className="font-semibold">{Math.max(0, remaining - totalDays)}</span></div>
-                <div className="flex justify-between gap-2"><span className="text-muted-foreground">Routes to</span><span className="font-medium truncate">{approver ?? "—"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Remaining this year</span><span className="font-semibold">{remaining}</span></div>
+                <div className="flex justify-between gap-2"><span className="text-muted-foreground">Routes to</span><span className="font-medium truncate">{approverName ?? "—"}</span></div>
               </div>
               <div>
                 <Label className="text-xs">Reason (optional)</Label>
@@ -337,7 +345,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
             <div className="space-y-3 text-sm">
               <div><span className="text-muted-foreground">Dates: </span><span className="font-medium">{detail.start_date} → {detail.end_date}</span></div>
               <div><span className="text-muted-foreground">Days: </span><span className="font-medium">{countDays(detail.start_date, detail.end_date)}</span></div>
-              <div><span className="text-muted-foreground">Approver: </span><span className="font-medium">{detail.approver_email ?? "—"}</span></div>
+              <div><span className="text-muted-foreground">Approver: </span><span className="font-medium">{(detail.approver_email && detail.approver_email.toLowerCase() === approver?.toLowerCase() ? approverName : detail.approver_email) ?? "—"}</span></div>
               {detail.reason && <div><span className="text-muted-foreground">Reason: </span>{detail.reason}</div>}
               {detail.status === "Approved" ? (
                 <p className="text-xs text-muted-foreground">Approved vacations can only be changed by your supervisor.</p>

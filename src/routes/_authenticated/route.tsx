@@ -60,7 +60,7 @@ function Shell() {
   const links: { to: string; label: string; show: boolean }[] = [
     { to: "/dashboard", label: "Schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" },
     { to: "/vacations", label: "Vacations", show: role === "staff" || role === "supervisor" || role === "team_leader" },
-    { to: "/preschedule", label: "Pre-schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" },
+    { to: "/preschedule", label: "Requests", show: role === "staff" || role === "supervisor" || role === "team_leader" },
     { to: "/supervisor", label: "Supervisor", show: role === "supervisor" || role === "team_leader" },
     { to: "/approvals", label: "Approvals", show: role === "supervisor" || role === "team_leader" || role === "admin" },
     { to: "/reports", label: "Reports", show: role === "admin" || role === "supervisor" },

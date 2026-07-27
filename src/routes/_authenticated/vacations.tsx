@@ -26,6 +26,7 @@ type Leave = {
 function VacationsPage() {
   const { me } = useMe();
   const [rows, setRows] = useState<Leave[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
 
   const load = async () => {
     if (!me?.staff) return;
@@ -36,6 +37,13 @@ function VacationsPage() {
       .eq("leave_type", "Vacation")
       .order("created_at", { ascending: false });
     setRows((data as Leave[]) ?? []);
+    const emails = Array.from(new Set(((data as Leave[]) ?? []).map((r) => r.approver_email?.toLowerCase()).filter(Boolean) as string[]));
+    if (emails.length) {
+      const { data: staff } = await supabase.from("staff").select("email,name");
+      const map: Record<string, string> = {};
+      for (const s of staff ?? []) map[(s.email as string).toLowerCase()] = s.name as string;
+      setNames(map);
+    }
   };
   useEffect(() => { void load(); }, [me?.staff?.email]);
 
@@ -68,7 +76,7 @@ function VacationsPage() {
                       <td className="p-2">{new Date(r.created_at).toLocaleDateString()}</td>
                       <td className="p-2">{r.start_date} → {r.end_date}</td>
                       <td className="p-2">{r.reason || "—"}</td>
-                      <td className="p-2">{r.approver_email || "—"}</td>
+                      <td className="p-2">{(r.approver_email && names[r.approver_email.toLowerCase()]) || r.approver_email || "—"}</td>
                       <td className="p-2">
                         <Badge variant={r.status === "Approved" ? "default" : r.status === "Rejected" ? "destructive" : "secondary"}>{r.status}</Badge>
                       </td>
