@@ -42,7 +42,7 @@ function PreschedulePage() {
   const { rules } = useSystemRules();
   const [rows, setRows] = useState<Row[]>([]);
   const [type, setType] = useState<"off" | "switch">("off");
-  const [dates, setDates] = useState("");
+  const [dates, setDates] = useState<Date[]>([]);
   const [details, setDetails] = useState("");
   const [shiftFrom, setShiftFrom] = useState<"Day" | "Night">("Day");
   const [shiftTo, setShiftTo] = useState<"Day" | "Night">("Night");
@@ -140,13 +140,13 @@ function PreschedulePage() {
       if (ok) { setSwitchStaffName(""); setSwitchStaffBadge(""); setDetails(""); }
       return;
     }
-    const dateList = dates.split(",").map((s) => s.trim()).filter(Boolean);
+    const dateList = [...dates].sort((a, b) => a.getTime() - b.getTime()).map(toISODate);
     if (dateList.length === 0) { toast.error("Enter at least one date"); return; }
     const ok = await insertRequest(
       { request_type: "off", requested_dates: dateList, details },
       "Pre-schedule request",
     );
-    if (ok) { setDates(""); setDetails(""); }
+    if (ok) { setDates([]); setDetails(""); }
   };
 
   const submitMissedOt = async () => {
@@ -200,8 +200,25 @@ function PreschedulePage() {
           </div>
           {type === "off" ? (
             <div className="sm:col-span-2">
-              <Label>Requested dates (comma separated, YYYY-MM-DD)</Label>
-              <Input value={dates} onChange={(e) => setDates(e.target.value)} placeholder={`${targetMonth}-05, ${targetMonth}-06`} disabled={!windowOpen} />
+              <Label>Requested dates</Label>
+              <div className="rounded-md border p-2 pointer-events-auto inline-block">
+                <Calendar
+                  mode="multiple"
+                  selected={dates}
+                  onSelect={(d) => setDates(d ?? [])}
+                  month={monthStart}
+                  startMonth={monthStart}
+                  endMonth={monthStart}
+                  disableNavigation
+                  disabled={!windowOpen ? true : { before: monthStart, after: monthEnd }}
+                  className="p-3 pointer-events-auto"
+                />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {dates.length > 0
+                  ? `Selected: ${[...dates].sort((a, b) => a.getTime() - b.getTime()).map(toISODate).join(", ")}`
+                  : `Tap the days you want off in ${targetMonth}.`}
+              </p>
             </div>
           ) : (
             <>
