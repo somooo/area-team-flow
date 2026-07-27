@@ -16,7 +16,7 @@ export function KadirLogo({
 
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <Users className={cn(icon, "text-primary")} strokeWidth={1.75} aria-hidden />
+      <UsersRound className={cn(icon, "text-primary")} strokeWidth={1.75} aria-hidden />
       <div className="leading-none">
         <div className={cn("font-display font-semibold uppercase tracking-[0.22em] text-foreground", word)}>
           Kadir
