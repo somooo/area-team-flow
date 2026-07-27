@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 import { resolveApprover } from "@/lib/approver";
@@ -48,6 +49,7 @@ function PreschedulePage() {
   const [otUnit, setOtUnit] = useState("");
   const [otContact, setOtContact] = useState("");
   const [otNotes, setOtNotes] = useState("");
+  const [detail, setDetail] = useState<Row | null>(null);
 
   const openDay = ruleNumber(rules, "preschedule_open_day", 10);
   const closeDay = ruleNumber(rules, "preschedule_close_day", 20);
