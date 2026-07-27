@@ -4,7 +4,7 @@ import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { KadirLogo } from "@/components/KadirLogo";
+import { KadirIcon } from "@/components/KadirLogo";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
