@@ -228,7 +228,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
               <Label className="text-xs">Reason (optional)</Label>
               <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
-            <Button onClick={submit} disabled={!range?.from || !range?.to} className="w-full bg-steel-600 hover:bg-steel-700 text-white">
+            <Button onClick={submit} disabled={!range?.from || !range?.to} className="w-full">
               Submit request
             </Button>
           </div>
@@ -240,7 +240,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-steel-600 hover:bg-steel-700 text-white"><CalendarDays className="h-4 w-4 mr-2" />Request leave</Button>
+        <Button className=""><CalendarDays className="h-4 w-4 mr-2" />Request leave</Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader><DialogTitle>Book your leave</DialogTitle></DialogHeader>
