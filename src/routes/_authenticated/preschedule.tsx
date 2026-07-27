@@ -186,6 +186,13 @@ function PreschedulePage() {
         </CardContent>
       </Card>
 
+      <div className="pt-2">
+        <h2 className="text-2xl font-semibold">Post-Schedule</h2>
+        <p className="text-sm text-muted-foreground">
+          Report overtime you worked that was not recorded in the schedule.
+        </p>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Missed Overtime</CardTitle>
