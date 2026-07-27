@@ -154,7 +154,7 @@ function SchedulePage() {
             }
             onCellClick={handleCell}
           />
-          <TotalsTable staff={roster} shifts={shifts} />
+          {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} />}
         </CardContent>
       </Card>
 
