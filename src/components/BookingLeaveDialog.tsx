@@ -160,17 +160,17 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
                 nearly: Array.from(dailyUsed.entries()).filter(([, n]) => cap > 0 && n >= Math.max(1, cap - 1) && n < cap).map(([iso]) => new Date(iso + "T00:00:00")),
               } : undefined}
               modifiersClassNames={{
-                full: "bg-red-200 text-red-900",
-                nearly: "bg-amber-200 text-amber-900",
+                full: "bg-muted text-muted-foreground line-through opacity-70",
+                nearly: "bg-copper/25 text-foreground",
               }}
               autoFocus
               className="pointer-events-auto"
             />
             {type === "Vacation" && (
-              <div className="mt-2 flex gap-3 text-xs">
-                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-200 inline-block" />Available</span>
-                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-200 inline-block" />Nearly full</span>
-                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 inline-block" />Full · cap {cap}/day</span>
+              <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded border bg-card inline-block" />Available</span>
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-copper/25 inline-block" />Almost full</span>
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-muted inline-block" />Unavailable · cap {cap}/day</span>
               </div>
             )}
           </div>
