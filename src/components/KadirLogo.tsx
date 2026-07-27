@@ -13,14 +13,14 @@ export function KadirIcon({ className }: { className?: string }) {
       aria-hidden
     >
       {/* Left person */}
-      <circle cx="5.4" cy="6.1" r="1.9" />
-      <path d="M1.9 13.6a3.6 3.6 0 0 1 5.1-3.3" />
-      {/* Right person */}
-      <circle cx="18.6" cy="6.1" r="1.9" />
-      <path d="M22.1 13.6a3.6 3.6 0 0 0-5.1-3.3" />
+      <circle cx="6" cy="7" r="2.5" />
+      <path d="M3.5 15c0-2.5 1-4.5 2.5-4.5s2.5 2 2.5 4.5" />
       {/* Center person */}
-      <circle cx="12" cy="5.6" r="2.7" />
-      <path d="M5.8 19a6.2 6.2 0 0 1 12.4 0" />
+      <circle cx="12" cy="5" r="2.5" />
+      <path d="M8.5 17c0-3 1.5-5.5 3.5-5.5s3.5 2.5 3.5 5.5" />
+      {/* Right person */}
+      <circle cx="18" cy="7" r="2.5" />
+      <path d="M15.5 15c0-2.5 1-4.5 2.5-4.5s2.5 2 2.5 4.5" />
     </svg>
   );
 }
