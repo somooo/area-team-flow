@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 import { resolveApprover } from "@/lib/approver";
@@ -48,6 +49,7 @@ function PreschedulePage() {
   const [otUnit, setOtUnit] = useState("");
   const [otContact, setOtContact] = useState("");
   const [otNotes, setOtNotes] = useState("");
+  const [detail, setDetail] = useState<Row | null>(null);
 
   const openDay = ruleNumber(rules, "preschedule_open_day", 10);
   const closeDay = ruleNumber(rules, "preschedule_close_day", 20);
@@ -142,7 +144,7 @@ function PreschedulePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Pre-schedule</h1>
+        <h1 className="text-2xl font-semibold">Pre-Schedule</h1>
         <p className="text-sm text-muted-foreground">
           Requests for <strong>{targetMonth}</strong> · window open day {openDay}–{closeDay} of each month.
         </p>
@@ -184,9 +186,16 @@ function PreschedulePage() {
         </CardContent>
       </Card>
 
+      <div className="pt-2">
+        <h2 className="text-2xl font-semibold">Post-Schedule</h2>
+        <p className="text-sm text-muted-foreground">
+          Report overtime you worked that was not recorded in the schedule.
+        </p>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Post schedule</CardTitle>
+          <CardTitle>Missed Overtime</CardTitle>
           <p className="text-sm text-muted-foreground">
             Report missed overtime up to the 5th of the following month. Any request after this window will not be accepted.
           </p>
@@ -219,12 +228,22 @@ function PreschedulePage() {
         </CardContent>
       </Card>
 
+      <div className="pt-2">
+        <h2 className="text-2xl font-semibold">My Requests</h2>
+        <p className="text-sm text-muted-foreground">Approval status of your requests · tap a request to see details.</p>
+      </div>
+
       <Card>
-        <CardHeader><CardTitle>My pre-schedule history</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Submitted requests</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {mine.length === 0 && <p className="text-sm text-muted-foreground">None yet.</p>}
           {mine.map((r) => (
-            <div key={r.id} className="flex items-center justify-between border rounded-md p-3">
+            <button
+              type="button"
+              key={r.id}
+              onClick={() => setDetail(r)}
+              className="w-full text-left flex items-center justify-between border rounded-md p-3 transition-colors hover:bg-muted/50"
+            >
               <div>
                 <div className="font-medium capitalize">{r.request_type.replace("_", " ")} · {r.target_month.slice(0, 7)}</div>
                 <div className="text-xs text-muted-foreground">
@@ -235,7 +254,7 @@ function PreschedulePage() {
                 <div className="text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
               </div>
               <Badge variant={r.status === "Approved" ? "default" : r.status === "Rejected" ? "destructive" : "secondary"}>{r.status}</Badge>
-            </div>
+            </button>
           ))}
         </CardContent>
       </Card>
@@ -257,6 +276,41 @@ function PreschedulePage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="capitalize">{detail?.request_type.replace("_", " ")} request</DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <div className="text-sm">
+              <DetailRow label="Status" value={detail.status} />
+              <DetailRow label="Target month" value={detail.target_month.slice(0, 7)} />
+              <DetailRow label="Area" value={detail.area} />
+              {detail.request_type === "missed_ot" ? (
+                <>
+                  <DetailRow label="Overtime date" value={detail.missed_ot_date ?? "—"} />
+                  <DetailRow label="Unit code" value={detail.unit_code ?? "—"} />
+                  <DetailRow label="Contacted by" value={detail.contacted_by ?? "—"} />
+                </>
+              ) : (
+                <DetailRow label="Requested dates" value={detail.requested_dates.join(", ") || "—"} />
+              )}
+              <DetailRow label="Details" value={detail.details || "—"} />
+              <DetailRow label="Submitted" value={new Date(detail.created_at).toLocaleString()} />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 border-b py-2 last:border-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-right">{value}</span>
     </div>
   );
 }
