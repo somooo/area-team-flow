@@ -59,13 +59,15 @@ function PreschedulePage() {
   const openDay = ruleNumber(rules, "preschedule_open_day", 10);
   const closeDay = ruleNumber(rules, "preschedule_close_day", 20);
 
-  const { targetMonth, windowOpen } = useMemo(() => {
+  const { targetMonth, windowOpen, monthStart, monthEnd } = useMemo(() => {
     const now = new Date();
     const nm = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const day = now.getDate();
     return {
       targetMonth: `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, "0")}`,
       windowOpen: day >= openDay && day <= closeDay,
+      monthStart: nm,
+      monthEnd: new Date(nm.getFullYear(), nm.getMonth() + 1, 0),
     };
   }, [openDay, closeDay]);
 
