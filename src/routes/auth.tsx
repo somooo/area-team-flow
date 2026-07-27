@@ -4,7 +4,7 @@ import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { HeartPulse } from "lucide-react";
+import { KadirLogo } from "@/components/KadirLogo";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -34,12 +34,12 @@ function AuthPage() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <Card className="w-full max-w-md shadow-lg">
+      <Card className="w-full max-w-md shadow-lg border-steel-200">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-3 rounded-full bg-primary/10 p-3 w-fit">
-            <HeartPulse className="h-8 w-8 text-primary" />
+          <div className="mx-auto mb-4 w-fit rounded-xl bg-ink px-6 py-5">
+            <KadirLogo size="lg" className="[&_*]:text-bone" />
           </div>
-          <CardTitle className="text-2xl">KADIR Staff Management</CardTitle>
+          <CardTitle className="font-display text-2xl uppercase tracking-[0.12em]">Sign in</CardTitle>
           <CardDescription>Hospital staff operations — sign in with your Google account.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
