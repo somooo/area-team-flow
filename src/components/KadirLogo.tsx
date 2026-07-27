@@ -1,4 +1,4 @@
-import { Users } from "lucide-react";
+import { UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function KadirLogo({
