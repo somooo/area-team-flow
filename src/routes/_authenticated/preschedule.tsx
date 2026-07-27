@@ -214,7 +214,7 @@ function PreschedulePage() {
             <Textarea value={otNotes} onChange={(e) => setOtNotes(e.target.value)} />
           </div>
           <div className="sm:col-span-2 flex justify-end">
-            <Button onClick={submitMissedOt}>Report missed overtime</Button>
+            <Button onClick={submitMissedOt} disabled={!missedOtWindowOpen}>Report missed overtime</Button>
           </div>
         </CardContent>
       </Card>
