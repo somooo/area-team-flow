@@ -185,7 +185,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
             </div>
             <div className="flex items-center justify-between border-t pt-3">
               <div className="text-sm">Total days</div>
-              <div className="text-lg font-bold text-teal-700">{days}</div>
+              <div className="text-lg font-bold text-steel-700">{days}</div>
             </div>
             {allowSick ? (
               <div>
@@ -221,14 +221,14 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
                 <div>Yearly cap: <span className="font-medium">{ruleNumber(rules, "vacation_yearly_days", 25)}</span></div>
                 <div>Used approved: <span className="font-medium">{balance.approved}</span></div>
                 <div>Pending: <span className="font-medium">{balance.pending}</span></div>
-                <div>Remaining: <span className="font-medium text-teal-700">{Math.max(0, ruleNumber(rules, "vacation_yearly_days", 25) - balance.approved - balance.pending)}</span></div>
+                <div>Remaining: <span className="font-medium text-steel-700">{Math.max(0, ruleNumber(rules, "vacation_yearly_days", 25) - balance.approved - balance.pending)}</span></div>
               </div>
             )}
             <div>
               <Label className="text-xs">Reason (optional)</Label>
               <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
-            <Button onClick={submit} disabled={!range?.from || !range?.to} className="w-full bg-teal-600 hover:bg-teal-700 text-white">
+            <Button onClick={submit} disabled={!range?.from || !range?.to} className="w-full bg-steel-600 hover:bg-steel-700 text-white">
               Submit request
             </Button>
           </div>
@@ -240,7 +240,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-teal-600 hover:bg-teal-700 text-white"><CalendarDays className="h-4 w-4 mr-2" />Request leave</Button>
+        <Button className="bg-steel-600 hover:bg-steel-700 text-white"><CalendarDays className="h-4 w-4 mr-2" />Request leave</Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader><DialogTitle>Book your leave</DialogTitle></DialogHeader>

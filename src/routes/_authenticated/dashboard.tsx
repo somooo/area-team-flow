@@ -24,9 +24,9 @@ import { X } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Schedule — Shift & Leave Manager" },
+      { title: "Schedule — KADIR Staff Management" },
       { name: "description", content: "Monthly duty roster by area with swap and overtime requests." },
-      { property: "og:title", content: "Schedule — Shift & Leave Manager" },
+      { property: "og:title", content: "Schedule — KADIR Staff Management" },
       { property: "og:description", content: "Monthly duty roster by area with swap and overtime requests." },
     ],
   }),
@@ -119,7 +119,7 @@ function SchedulePage() {
       </div>
 
       {pick && (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-teal-300 bg-teal-50 px-4 py-2 text-sm text-teal-900">
+        <div className="flex items-center justify-between gap-3 rounded-md border border-steel-300 bg-steel-100 px-4 py-2 text-sm text-steel-900">
           <span>
             Select the shift to switch with
             {pick.kind === "switch_area" ? " (you can change area above)" : " (same area)"} — Esc to cancel
@@ -266,7 +266,7 @@ function ConfirmSwapDialog({ me, kind, source, target, onClose, onDone }: {
       <div className="text-xs uppercase text-muted-foreground">{title}</div>
       <div className="font-medium">{name}</div>
       <div className="text-sm">{shift.date}</div>
-      <div className="text-sm font-semibold text-teal-700">{cellFor(shift, false).code || shift.duty} · {shift.area}</div>
+      <div className="text-sm font-semibold text-steel-700">{cellFor(shift, false).code || shift.duty} · {shift.area}</div>
     </div>
   );
   return (
@@ -331,7 +331,7 @@ function TotalsTable({ staff, shifts }: { staff: Staff[]; shifts: Shift[] }) {
   return (
     <div className="mt-4 overflow-x-auto">
       <table className="w-full text-xs border rounded-md">
-        <thead className="bg-teal-50">
+        <thead className="bg-steel-100">
           <tr>
             <th className="p-2 text-left">Staff</th>
             <th className="p-2">Day</th><th className="p-2">Night</th>

@@ -82,8 +82,8 @@ function Shell() {
                 to={l.to}
                 className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
                   pathname === l.to
-                    ? "bg-teal-600 text-white font-medium shadow-sm"
-                    : "text-slate-600 hover:bg-teal-50 hover:text-teal-700"
+                    ? "bg-steel-600 text-white font-medium shadow-sm"
+                    : "text-slate-600 hover:bg-steel-100 hover:text-steel-700"
                 }`}
               >{l.label}</Link>
             ))}

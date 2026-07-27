@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toISODate } from "@/lib/roster";
 
 export const Route = createFileRoute("/_authenticated/reports")({
-  head: () => ({ meta: [{ title: "Reports — Shift & Leave Manager" }] }),
+  head: () => ({ meta: [{ title: "Reports — KADIR Staff Management" }] }),
   component: ReportsPage,
 });
 

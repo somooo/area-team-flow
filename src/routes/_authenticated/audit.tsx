@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_authenticated/audit")({
-  head: () => ({ meta: [{ title: "Audit log — Shift & Leave Manager" }] }),
+  head: () => ({ meta: [{ title: "Audit log — KADIR Staff Management" }] }),
   component: AuditPage,
 });
 

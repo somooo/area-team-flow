@@ -8,7 +8,7 @@ import { HeartPulse } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
-    meta: [{ title: "Sign in — Shift & Leave Manager" }],
+    meta: [{ title: "Sign in — KADIR Staff Management" }],
   }),
   component: AuthPage,
 });
@@ -39,7 +39,7 @@ function AuthPage() {
           <div className="mx-auto mb-3 rounded-full bg-primary/10 p-3 w-fit">
             <HeartPulse className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Shift & Leave Manager</CardTitle>
+          <CardTitle className="text-2xl">KADIR Staff Management</CardTitle>
           <CardDescription>Hospital staff operations — sign in with your Google account.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

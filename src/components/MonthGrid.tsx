@@ -79,7 +79,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
         <table className="text-xs border-separate border-spacing-0">
           <thead>
             <tr>
-              <th className="sticky top-0 left-0 z-30 bg-teal-50 border-b border-r px-3 py-2 text-left min-w-[180px]">Staff</th>
+              <th className="sticky top-0 left-0 z-30 bg-steel-100 border-b border-r px-3 py-2 text-left min-w-[180px]">Staff</th>
               {days.map((d) => {
                 const wd = d.toLocaleDateString(undefined, { weekday: "short" });
                 const isWknd = d.getDay() === 0 || d.getDay() === 6;
@@ -88,7 +88,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                     key={d.toISOString()}
                     className={cn(
                       "sticky top-0 z-20 border-b border-r px-1 py-1 text-center font-medium",
-                      isWknd ? "bg-slate-100" : "bg-teal-50"
+                      isWknd ? "bg-slate-100" : "bg-steel-100"
                     )}
                   >
                     <div className="leading-tight">{d.getDate()}</div>
@@ -102,15 +102,15 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
             {grouped.map(([dept, members]) => (
               <Fragment key={`dept-${dept}`}>
                 <tr>
-                  <td colSpan={days.length + 1} className="bg-teal-100/60 text-teal-900 text-[11px] font-semibold px-3 py-1 sticky left-0 z-10">
+                  <td colSpan={days.length + 1} className="bg-steel-200/60 text-steel-900 text-[11px] font-semibold px-3 py-1 sticky left-0 z-10">
                     {dept}
                   </td>
                 </tr>
                 {members.map((s) => {
                   const isMe = s.email.toLowerCase() === meEmail.toLowerCase();
                   return (
-                    <tr key={s.id} className={cn(isMe && "bg-teal-50/40")}>
-                      <td className={cn("sticky left-0 z-10 border-b border-r px-3 py-2 min-w-[180px]", isMe ? "bg-teal-50" : "bg-white")}>
+                    <tr key={s.id} className={cn(isMe && "bg-steel-100/40")}>
+                      <td className={cn("sticky left-0 z-10 border-b border-r px-3 py-2 min-w-[180px]", isMe ? "bg-steel-100" : "bg-white")}>
                         <div className="font-medium truncate">{s.name}</div>
                         <div className="text-[10px] text-muted-foreground truncate">
                           {s.role}{s.department ? ` · ${s.department}` : ""}
@@ -130,7 +130,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                             className={cn(
                               "border-b border-r text-center align-middle p-0",
                               style.className,
-                              clickable && "cursor-pointer hover:ring-2 hover:ring-teal-400"
+                              clickable && "cursor-pointer hover:ring-2 hover:ring-steel-400"
                             )}
                           >
                             <div className="w-10 h-10 flex items-center justify-center text-[11px] font-semibold">

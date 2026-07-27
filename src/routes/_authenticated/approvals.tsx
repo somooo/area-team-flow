@@ -12,7 +12,7 @@ import { logAudit } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications.functions";
 
 export const Route = createFileRoute("/_authenticated/approvals")({
-  head: () => ({ meta: [{ title: "Approvals — Shift & Leave Manager" }] }),
+  head: () => ({ meta: [{ title: "Approvals — KADIR Staff Management" }] }),
   component: ApprovalsPage,
 });
 

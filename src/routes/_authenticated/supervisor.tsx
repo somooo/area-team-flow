@@ -19,7 +19,7 @@ import { toISODate } from "@/lib/roster";
 import type { RosterShift, Duty, OtType } from "@/lib/roster";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
-  head: () => ({ meta: [{ title: "Supervisor — Shift & Leave Manager" }] }),
+  head: () => ({ meta: [{ title: "Supervisor — KADIR Staff Management" }] }),
   component: SupervisorPage,
 });
 
