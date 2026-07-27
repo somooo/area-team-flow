@@ -1,5 +1,29 @@
-import { UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function KadirIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      {/* Left person */}
+      <circle cx="6" cy="7" r="2.5" />
+      <path d="M3.5 15c0-2.5 1-4.5 2.5-4.5s2.5 2 2.5 4.5" />
+      {/* Center person */}
+      <circle cx="12" cy="5" r="2.5" />
+      <path d="M8.5 17c0-3 1.5-5.5 3.5-5.5s3.5 2.5 3.5 5.5" />
+      {/* Right person */}
+      <circle cx="18" cy="7" r="2.5" />
+      <path d="M15.5 15c0-2.5 1-4.5 2.5-4.5s2.5 2 2.5 4.5" />
+    </svg>
+  );
+}
 
 export function KadirLogo({
   className,
@@ -16,7 +40,7 @@ export function KadirLogo({
 
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <UsersRound className={cn(icon, "text-primary")} strokeWidth={1.75} aria-hidden />
+      <KadirIcon className={cn(icon, "text-primary")} />
       <div className="leading-none">
         <div className={cn("font-display font-semibold uppercase tracking-[0.22em] text-foreground", word)}>
           Kadir
