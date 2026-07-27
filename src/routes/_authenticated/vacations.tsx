@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
+import { VacationPlanner } from "@/components/VacationPlanner";
 
 export const Route = createFileRoute("/_authenticated/vacations")({
   head: () => ({
@@ -45,15 +45,10 @@ function VacationsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Vacations</h1>
-        <p className="text-muted-foreground text-sm">Pick your start and end dates. Requests go to your approver.</p>
+        <p className="text-muted-foreground text-sm">Click a day to set your vacation start, then another for the end. Requests go to your approver.</p>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Book vacation</CardTitle></CardHeader>
-        <CardContent>
-          <BookingLeaveDialog inline me={me.staff} onDone={load} />
-        </CardContent>
-      </Card>
+      <VacationPlanner me={me.staff} onDone={load} />
 
       <Card>
         <CardHeader><CardTitle>My vacation requests</CardTitle></CardHeader>
