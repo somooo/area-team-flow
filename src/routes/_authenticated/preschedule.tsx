@@ -184,8 +184,18 @@ function PreschedulePage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Missed overtime report</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Post schedule</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Report missed overtime up to the 5th of the following month. Any request after this window will not be accepted.
+          </p>
+        </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
+          {!missedOtWindowOpen && (
+            <div className="sm:col-span-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              The reporting window for this missed overtime has closed (deadline was {missedOtDeadline}).
+            </div>
+          )}
           <div>
             <Label>Date</Label>
             <Input type="date" value={otDate} max={toISODate(new Date())} onChange={(e) => setOtDate(e.target.value)} />
