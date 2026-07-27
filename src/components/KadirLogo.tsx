@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-function KadirIcon({ className }: { className?: string }) {
+export function KadirIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
