@@ -37,7 +37,7 @@ function AuthPage() {
       <Card className="w-full max-w-md shadow-2xl border-0 bg-ink text-bone overflow-hidden">
         <div className="bg-gradient-to-br from-ink to-steel-900 p-10 text-center">
           <div className="mx-auto mb-6 inline-flex items-center justify-center rounded-2xl bg-bone/10 p-5">
-            <KadirLogo size="lg" showTagline={false} className="[&_*]:text-bone" />
+            <KadirIcon className="h-10 w-10 text-bone" />
           </div>
           <div className="font-display text-4xl font-semibold uppercase tracking-[0.22em] text-bone">
             KADIR
