@@ -11,6 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 import { resolveApprover } from "@/lib/approver";
@@ -43,6 +46,8 @@ function PreschedulePage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [type, setType] = useState<"off" | "switch">("off");
   const [dates, setDates] = useState<Date[]>([]);
+  const [dateError, setDateError] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [details, setDetails] = useState("");
   const [shiftFrom, setShiftFrom] = useState<"Day" | "Night">("Day");
   const [shiftTo, setShiftTo] = useState<"Day" | "Night">("Night");
@@ -58,6 +63,34 @@ function PreschedulePage() {
 
   const openDay = ruleNumber(rules, "preschedule_open_day", 10);
   const closeDay = ruleNumber(rules, "preschedule_close_day", 20);
+  const MAX_DAYS = 4;
+
+  const countFullWeekends = (list: Date[]) => {
+    const iso = new Set(list.map(toISODate));
+    let n = 0;
+    for (const d of list) {
+      if (d.getDay() !== 5) continue;
+      const sat = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+      if (iso.has(toISODate(sat))) n++;
+    }
+    return n;
+  };
+
+  const handleSelectDates = (next: Date[] | undefined) => {
+    const list = next ?? [];
+    if (list.length > dates.length) {
+      if (list.length > MAX_DAYS) {
+        setDateError(`You can select a maximum of ${MAX_DAYS} days.`);
+        return;
+      }
+      if (countFullWeekends(list) > 1) {
+        setDateError("You can only request one full weekend (Fri–Sat) per month.");
+        return;
+      }
+    }
+    setDateError("");
+    setDates(list);
+  };
 
   const { targetMonth, windowOpen, monthStart, monthEnd } = useMemo(() => {
     const now = new Date();
@@ -143,12 +176,14 @@ function PreschedulePage() {
       return;
     }
     const dateList = [...dates].sort((a, b) => a.getTime() - b.getTime()).map(toISODate);
-    if (dateList.length === 0) { toast.error("Enter at least one date"); return; }
+    if (dateList.length === 0) { setDateError("Select at least one date"); return; }
+    if (dateList.length > MAX_DAYS) { setDateError(`You can select a maximum of ${MAX_DAYS} days.`); return; }
+    if (countFullWeekends(dates) > 1) { setDateError("You can only request one full weekend (Fri–Sat) per month."); return; }
     const ok = await insertRequest(
       { request_type: "off", requested_dates: dateList, details },
       "Pre-schedule request",
     );
-    if (ok) { setDates([]); setDetails(""); }
+    if (ok) { setDates([]); setDetails(""); setDateError(""); }
   };
 
   const submitMissedOt = async () => {
@@ -202,24 +237,51 @@ function PreschedulePage() {
           </div>
           {type === "off" ? (
             <div className="sm:col-span-2">
-              <Label>Requested dates</Label>
-              <div className="rounded-md border p-2 pointer-events-auto inline-block">
-                <Calendar
-                  mode="multiple"
-                  selected={dates}
-                  onSelect={(d) => setDates(d ?? [])}
-                  month={monthStart}
-                  startMonth={monthStart}
-                  endMonth={monthStart}
-                  disableNavigation
-                  disabled={!windowOpen ? true : { before: monthStart, after: monthEnd }}
-                  className="p-3 pointer-events-auto"
-                />
+              <div className="flex items-center justify-between">
+                <Label>Requested dates</Label>
+                <span className="text-xs text-muted-foreground">{dates.length} / {MAX_DAYS} days selected</span>
               </div>
+              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    disabled={!windowOpen}
+                    className={cn("w-[280px] justify-start text-left font-normal", dates.length === 0 && "text-muted-foreground")}
+                  >
+                    <CalendarIcon />
+                    {dates.length > 0
+                      ? [...dates].sort((a, b) => a.getTime() - b.getTime()).map(toISODate).join(", ")
+                      : "Pick your days off"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="multiple"
+                    selected={dates}
+                    onSelect={(d) => handleSelectDates(d as Date[] | undefined)}
+                    month={monthStart}
+                    startMonth={monthStart}
+                    endMonth={monthStart}
+                    disableNavigation
+                    disabled={
+                      !windowOpen
+                        ? true
+                        : [
+                            { before: monthStart },
+                            { after: monthEnd },
+                            (d: Date) =>
+                              dates.length >= MAX_DAYS &&
+                              !dates.some((s) => toISODate(s) === toISODate(d)),
+                          ]
+                    }
+                    className="p-3 pointer-events-auto"
+                  />
+                  {dateError && <p className="px-3 pb-2 text-xs text-destructive">{dateError}</p>}
+                </PopoverContent>
+              </Popover>
+              {dateError && <p className="mt-1 text-xs text-destructive">{dateError}</p>}
               <p className="mt-1 text-xs text-muted-foreground">
-                {dates.length > 0
-                  ? `Selected: ${[...dates].sort((a, b) => a.getTime() - b.getTime()).map(toISODate).join(", ")}`
-                  : `Tap the days you want off in ${targetMonth}.`}
+                Tap up to {MAX_DAYS} days off in {targetMonth}. Only 1 full weekend (Fri–Sat) allowed.
               </p>
             </div>
           ) : (
