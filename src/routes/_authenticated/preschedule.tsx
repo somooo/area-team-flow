@@ -276,7 +276,6 @@ function PreschedulePage() {
                     }
                     className="p-3 pointer-events-auto"
                   />
-                  {dateError && <p className="px-3 pb-2 text-xs text-destructive">{dateError}</p>}
                 </PopoverContent>
               </Popover>
               {dateError && <p className="mt-1 text-xs text-destructive">{dateError}</p>}
