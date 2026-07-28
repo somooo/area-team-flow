@@ -76,6 +76,7 @@ export type Database = {
           approver_email: string | null
           area: string
           auto_approve_at: string | null
+          covering_supervisor_email: string | null
           created_at: string
           end_date: string
           id: string
@@ -84,6 +85,7 @@ export type Database = {
           staff_email: string
           staff_id: string | null
           staff_name: string
+          stage: string | null
           start_date: string
           status: Database["public"]["Enums"]["leave_status"]
         }
@@ -91,6 +93,7 @@ export type Database = {
           approver_email?: string | null
           area: string
           auto_approve_at?: string | null
+          covering_supervisor_email?: string | null
           created_at?: string
           end_date: string
           id?: string
@@ -99,6 +102,7 @@ export type Database = {
           staff_email: string
           staff_id?: string | null
           staff_name: string
+          stage?: string | null
           start_date: string
           status?: Database["public"]["Enums"]["leave_status"]
         }
@@ -106,6 +110,7 @@ export type Database = {
           approver_email?: string | null
           area?: string
           auto_approve_at?: string | null
+          covering_supervisor_email?: string | null
           created_at?: string
           end_date?: string
           id?: string
@@ -114,6 +119,7 @@ export type Database = {
           staff_email?: string
           staff_id?: string | null
           staff_name?: string
+          stage?: string | null
           start_date?: string
           status?: Database["public"]["Enums"]["leave_status"]
         }
