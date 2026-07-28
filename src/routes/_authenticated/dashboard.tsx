@@ -141,7 +141,7 @@ function SchedulePage() {
     return classify(date, shift) !== "inert";
   };
 
-  const handleCell = ({ staff, shift }: { staff: Staff; date: string; shift?: Shift }) => {
+  const handleCell = ({ staff, shift, date }: { staff: Staff; date: string; shift?: Shift }) => {
     const isSelf = staff.email.toLowerCase() === meEmail.toLowerCase();
     if (pick) {
       if (isSelf) { toast.info("Pick another person's shift."); return; }
@@ -154,12 +154,12 @@ function SchedulePage() {
       return;
     }
     if (!isSelf) return; // read-only for other people
-    if (!hasAssignment(shift)) return;
-    const kind = classify(shift!.date, shift);
+    const kind = classify(date, shift);
     if (kind === "past_month") {
       toast.info("For previous month requests, please use the Requests tab.");
       return;
     }
+    if (kind === "missed_ot") { setMissedOtDate({ staff, date }); return; }
     if (kind === "report") { setReportShift(shift!); return; }
     if (kind === "action") setMenuShift(shift!);
   };
