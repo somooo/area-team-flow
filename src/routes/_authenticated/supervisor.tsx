@@ -265,6 +265,16 @@ function CellEditor({ area, entry, monthShifts, year, month, onClose, onDone }: 
       <DialogContent>
         <DialogHeader><DialogTitle>{s.name} · {date}</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          {officeRole && (
+            <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+              {bedsideEligible ? (
+                <>Office-hours role (9h, Sun–Thu) — bedside cover is 12h weekend overtime only.
+                  {" "}Used this month: <span className="font-medium text-foreground">{bedsideUsed}h / 24h</span>.</>
+              ) : (
+                <>Admins can never be assigned bedside shifts.</>
+              )}
+            </div>
+          )}
           <div>
             <Label>Duty</Label>
             <Select value={duty} onValueChange={(v) => setDuty(v as Duty)}>
@@ -285,7 +295,7 @@ function CellEditor({ area, entry, monthShifts, year, month, onClose, onDone }: 
                 <Select value={ot} onValueChange={(v) => setOt(v as OtType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["None","BuiltIn","Additional","MedEvac"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                    {(officeRole ? ["BuiltIn","Additional","MedEvac"] : ["None","BuiltIn","Additional","MedEvac"]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -300,7 +310,7 @@ function CellEditor({ area, entry, monthShifts, year, month, onClose, onDone }: 
           {shift ? <Button variant="destructive" onClick={del}>Delete</Button> : <span />}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={save}>Save</Button>
+            <Button onClick={save} disabled={officeRole && !bedsideEligible && isWorking}>Save</Button>
           </div>
         </DialogFooter>
       </DialogContent>
