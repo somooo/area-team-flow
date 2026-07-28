@@ -37,11 +37,15 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 type Shift = RosterShift;
 type Staff = StaffLite;
 type PickMode = null | { kind: "switch_date" | "switch_area"; source: Shift };
-type ReportKind = "missed_ot" | "wrong_entry";
 
-/** Cells that carry no working assignment are never interactive. */
+/** Cells that carry a working assignment. */
 function hasAssignment(shift?: Shift) {
   return !!shift && shift.duty !== "Off" && shift.duty !== "Vacation";
+}
+
+/** Empty / unscheduled cells are eligible for missed-OT reports on past days of the same month. */
+function isEmpty(shift?: Shift) {
+  return !shift;
 }
 
 function SchedulePage() {
@@ -59,6 +63,7 @@ function SchedulePage() {
   const [confirmTarget, setConfirmTarget] = useState<{ shift: Shift; staff: Staff } | null>(null);
   const [otShift, setOtShift] = useState<Shift | null>(null);
   const [reportShift, setReportShift] = useState<Shift | null>(null);
+  const [missedOtDate, setMissedOtDate] = useState<{ staff: Staff; date: string } | null>(null);
   const [serverNow, setServerNow] = useState<Date | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -112,13 +117,21 @@ function SchedulePage() {
   const meEmail = me?.staff?.email ?? "";
 
   /** Classify a cell against the authoritative server clock. */
-  const classify = (date: string, shift?: Shift): "inert" | "past_month" | "action" | "report" => {
-    if (!serverNow || !hasAssignment(shift)) return "inert";
+  const classify = (date: string, shift?: Shift): "inert" | "past_month" | "action" | "report" | "missed_ot" => {
+    if (!serverNow) return "inert";
     const [y, m, d] = date.split("-").map(Number);
     const cellStart = new Date(y, m - 1, d);
     const nowMonth = serverNow.getFullYear() * 12 + serverNow.getMonth();
     const cellMonth = y * 12 + (m - 1);
     if (cellMonth < nowMonth) return "past_month";
+
+    if (isEmpty(shift)) {
+      // Empty cells in the current month, today or earlier, can report missed OT.
+      if (cellStart.getTime() <= serverNow.getTime()) return "missed_ot";
+      return "inert";
+    }
+
+    if (!hasAssignment(shift)) return "inert";
     if (cellStart.getTime() - serverNow.getTime() > 24 * 60 * 60 * 1000) return "action";
     return "report";
   };
@@ -128,7 +141,7 @@ function SchedulePage() {
     return classify(date, shift) !== "inert";
   };
 
-  const handleCell = ({ staff, shift }: { staff: Staff; date: string; shift?: Shift }) => {
+  const handleCell = ({ staff, shift, date }: { staff: Staff; date: string; shift?: Shift }) => {
     const isSelf = staff.email.toLowerCase() === meEmail.toLowerCase();
     if (pick) {
       if (isSelf) { toast.info("Pick another person's shift."); return; }
@@ -141,12 +154,12 @@ function SchedulePage() {
       return;
     }
     if (!isSelf) return; // read-only for other people
-    if (!hasAssignment(shift)) return;
-    const kind = classify(shift!.date, shift);
+    const kind = classify(date, shift);
     if (kind === "past_month") {
       toast.info("For previous month requests, please use the Requests tab.");
       return;
     }
+    if (kind === "missed_ot") { setMissedOtDate({ staff, date }); return; }
     if (kind === "report") { setReportShift(shift!); return; }
     if (kind === "action") setMenuShift(shift!);
   };
@@ -285,24 +298,24 @@ function SchedulePage() {
       {reportShift && (
         <ReportDialog me={meStaff} shift={reportShift} onClose={() => setReportShift(null)} />
       )}
+
+      {missedOtDate && (
+        <MissedOvertimeDialog me={meStaff} date={missedOtDate.date} onClose={() => setMissedOtDate(null)} />
+      )}
     </div>
   );
 }
 
 function ReportDialog({ me, shift, onClose }: { me: MeStaff; shift: Shift; onClose: () => void }) {
-  const isMot = shift.ot_type === "MedEvac";
-  const [kind, setKind] = useState<ReportKind | null>(isMot ? "wrong_entry" : null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const code = cellFor(shift, false).code || shift.duty;
 
   const submit = async () => {
-    if (!kind) return;
     setBusy(true);
-    const label = kind === "missed_ot" ? "Missed overtime" : "Wrong entry";
     const approver = await resolveApprover(me);
     await logAudit({
-      action: kind === "missed_ot" ? "report_missed_overtime" : "report_wrong_entry",
+      action: "report_wrong_entry",
       entity_type: "shift",
       entity_id: shift.id,
       area: me.area,
@@ -312,7 +325,7 @@ function ReportDialog({ me, shift, onClose }: { me: MeStaff; shift: Shift; onClo
       await createNotification({
         data: {
           recipient_email: approver,
-          title: `${label} report — ${me.name}`,
+          title: `Wrong entry report — ${me.name}`,
           body: `${shift.date} · ${code}${note ? ` — ${note}` : ""}`,
           link: "/approvals",
         },
@@ -327,28 +340,69 @@ function ReportDialog({ me, shift, onClose }: { me: MeStaff; shift: Shift; onClo
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>{shift.date} · {code}</DialogTitle></DialogHeader>
-        {!kind ? (
-          <div className="grid gap-2">
-            <Button variant="outline" onClick={() => setKind("missed_ot")}>Report missed overtime</Button>
-            <Button variant="outline" onClick={() => setKind("wrong_entry")}>Report wrong entry</Button>
+        <div className="space-y-3">
+          <div>
+            <Label>Note</Label>
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Describe what should be corrected" />
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="text-sm font-medium">
-              {kind === "missed_ot" ? "Report missed overtime" : "Report wrong entry"}
-            </div>
-            <div>
-              <Label>Note</Label>
-              <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Describe what should be corrected" />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              This is a flagged note for your supervisor to review — not an approval request.
-            </p>
-            <DialogFooter>
-              <Button onClick={submit} disabled={busy || !note.trim()}>Submit</Button>
-            </DialogFooter>
+          <p className="text-xs text-muted-foreground">
+            This is a flagged note for your supervisor to review — not an approval request.
+          </p>
+          <DialogFooter>
+            <Button onClick={submit} disabled={busy || !note.trim()}>Submit</Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MissedOvertimeDialog({ me, date, onClose }: { me: MeStaff; date: string; onClose: () => void }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!note.trim()) return;
+    setBusy(true);
+    const approver = await resolveApprover(me);
+    await logAudit({
+      action: "report_missed_overtime",
+      entity_type: "shift",
+      entity_id: null,
+      area: me.area,
+      details: { date, note, approver_email: approver },
+    });
+    if (approver) {
+      await createNotification({
+        data: {
+          recipient_email: approver,
+          title: `Missed overtime report — ${me.name}`,
+          body: `${date}${note ? ` — ${note}` : ""}`,
+          link: "/approvals",
+        },
+      });
+    }
+    setBusy(false);
+    toast.success("Report sent to your supervisor");
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{date} · Missed overtime</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Note</Label>
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Describe the missed overtime" />
           </div>
-        )}
+          <p className="text-xs text-muted-foreground">
+            This is a flagged note for your supervisor to review — not an approval request.
+          </p>
+          <DialogFooter>
+            <Button onClick={submit} disabled={busy || !note.trim()}>Submit</Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
