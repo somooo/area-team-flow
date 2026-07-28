@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/approvals")({
   component: ApprovalsPage,
 });
 
-type Leave = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null };
+type Leave = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null; stage: string | null; covering_supervisor_email: string | null };
 type Change = { id: string; requester_email: string; requester_name: string; area: string; change_type: string; target_staff_name: string; details: string | null; status: string };
 type Pre = { id: string; requester_email: string; requester_name: string; area: string; request_type: string; target_month: string; requested_dates: string[]; details: string | null; status: string };
 
@@ -44,6 +44,20 @@ function ApprovalsPage() {
   if (!canApprove) return <p>Approvals are limited to supervisors, team leaders and admins.</p>;
 
   const decideLeave = async (r: Leave, status: "Approved" | "Rejected") => {
+    // Supervisor-calendar vacations: covering supervisor approves first, then admin.
+    if (status === "Approved" && r.stage === "covering") {
+      const { data: admin } = await supabase.from("staff").select("email").eq("role", "admin").limit(1).maybeSingle();
+      if (!admin?.email) { toast.error("No admin available for final approval"); return; }
+      const { error: e1 } = await supabase.from("leave_requests")
+        .update({ stage: "admin", approver_email: admin.email }).eq("id", r.id);
+      if (e1) { toast.error(e1.message); return; }
+      await logAudit({ action: "leave_covering_approved", entity_type: "leave_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
+      await createNotification({ data: { recipient_email: admin.email, title: "Supervisor vacation — final approval", body: `${r.staff_name}: ${r.start_date} → ${r.end_date}`, link: "/approvals" } });
+      await createNotification({ data: { recipient_email: r.staff_email, title: "Covering supervisor approved", body: "Pending admin approval", link: "/vacations" } });
+      toast.success("Sent to admin for final approval");
+      load();
+      return;
+    }
     const { error } = await supabase.from("leave_requests").update({ status }).eq("id", r.id);
     if (error) { toast.error(error.message); return; }
     await notify({ data: { event: "request_decided", staff_name: r.staff_name, staff_email: r.staff_email, status, start_date: r.start_date, end_date: r.end_date } });
