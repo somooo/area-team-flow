@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { VacationPlanner } from "@/components/VacationPlanner";
+import { VacationPlanner, stageLabel } from "@/components/VacationPlanner";
 
 export const Route = createFileRoute("/_authenticated/vacations")({
   head: () => ({
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/_authenticated/vacations")({
 type Leave = {
   id: string; leave_type: string; start_date: string; end_date: string;
   reason: string | null; status: string; approver_email: string | null; created_at: string;
+  stage: string | null;
 };
 
 function VacationsPage() {
@@ -78,7 +79,7 @@ function VacationsPage() {
                       <td className="p-2">{r.reason || "—"}</td>
                       <td className="p-2">{(r.approver_email && names[r.approver_email.toLowerCase()]) || r.approver_email || "—"}</td>
                       <td className="p-2">
-                        <Badge variant={r.status === "Approved" ? "default" : r.status === "Rejected" ? "destructive" : "secondary"}>{r.status}</Badge>
+                        <Badge variant={r.status === "Approved" ? "default" : r.status === "Rejected" ? "destructive" : "secondary"}>{stageLabel(r)}</Badge>
                       </td>
                     </tr>
                   ))}
