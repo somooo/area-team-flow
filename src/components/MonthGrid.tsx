@@ -23,10 +23,12 @@ export type MonthGridProps = {
   areaLabel?: string;
   headerRight?: ReactNode;
   onCellClick?: (row: { staff: StaffLite; date: string; shift?: RosterShift }) => void;
+  /** Return false to render the cell inert (no hover, no pointer, no click). */
+  isCellClickable?: (row: { staff: StaffLite; date: string; shift?: RosterShift }) => boolean;
   layer?: "all" | "day" | "night";
 };
 
-export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, layer = "all" }: MonthGridProps) {
+export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, isCellClickable, layer = "all" }: MonthGridProps) {
   const days = useMemo(() => monthDays(year, month), [year, month]);
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
@@ -121,7 +123,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                         const shift = shiftIdx.get(`${s.email.toLowerCase()}|${iso}`);
                         const isWknd = d.getDay() === 0 || d.getDay() === 6;
                         const style = cellFor(shift, isWknd);
-                        const clickable = !!onCellClick;
+                        const clickable = !!onCellClick && (!isCellClickable || isCellClickable({ staff: s, date: iso, shift }));
                         return (
                           <td
                             key={iso}
