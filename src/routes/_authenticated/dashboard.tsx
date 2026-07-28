@@ -298,6 +298,10 @@ function SchedulePage() {
       {reportShift && (
         <ReportDialog me={meStaff} shift={reportShift} onClose={() => setReportShift(null)} />
       )}
+
+      {missedOtDate && (
+        <MissedOvertimeDialog me={meStaff} date={missedOtDate.date} onClose={() => setMissedOtDate(null)} />
+      )}
     </div>
   );
 }
