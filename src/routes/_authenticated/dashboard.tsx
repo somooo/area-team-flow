@@ -150,21 +150,51 @@ function SchedulePage() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <Label className="mb-1.5 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Area</Label>
+              <div className="grid grid-cols-3 gap-1 rounded-md border bg-muted/40 p-1">
+                {areas.map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => setViewArea(a)}
+                    aria-pressed={viewArea === a}
+                    className={`min-h-11 truncate rounded px-2 text-sm font-medium transition-colors ${
+                      viewArea === a ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"
+                    }`}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="min-w-0 sm:w-56">
+              <Label className="mb-1.5 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Shift</Label>
+              <div className={`grid grid-cols-2 gap-1 rounded-md border bg-muted/40 p-1 ${isAssistants ? "opacity-50" : ""}`}>
+                {(["day", "night"] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    disabled={isAssistants}
+                    onClick={() => setLayer(l)}
+                    aria-pressed={!isAssistants && layer === l}
+                    className={`min-h-11 rounded px-2 text-sm font-medium capitalize transition-colors disabled:cursor-not-allowed ${
+                      !isAssistants && layer === l ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
             staff={roster} shifts={shifts}
             meEmail={isMyArea ? meStaff.email : ""}
-            headerRight={
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Area</span>
-                <Select value={viewArea} onValueChange={setViewArea}>
-                  <SelectTrigger className="w-40"><SelectValue placeholder="Area" /></SelectTrigger>
-                  <SelectContent>
-                    {areas.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            }
+            layer={effectiveLayer}
+            areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             onCellClick={handleCell}
           />
           {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} />}
