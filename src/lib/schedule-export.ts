@@ -66,7 +66,7 @@ export function exportPdf(input: ExportInput) {
   doc.text("Legend:", 30, finalY);
   let x = 70;
   for (const l of LEGEND) {
-    doc.text(`${l.sample || "·"}: ${l.label}`, x, finalY);
+    doc.text(l.label, x, finalY);
     x += 110;
     if (x > 1100) { x = 70; }
   }
