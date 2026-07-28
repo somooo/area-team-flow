@@ -17,6 +17,7 @@ import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import { toISODate } from "@/lib/roster";
 import type { RosterShift, Duty, OtType } from "@/lib/roster";
+import { bedsideHoursInMonth, canTakeBedsideShift, isOfficeHoursRole, validateBedsideAssignment, BEDSIDE_SHIFT_HOURS } from "@/lib/hours-model";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
   head: () => ({ meta: [{ title: "Supervisor — KADIR Staff Management" }] }),
@@ -205,6 +206,9 @@ function SupervisorPage() {
         <CellEditor
           area={meStaff.area!}
           entry={editor}
+          monthShifts={shifts}
+          year={year}
+          month={month}
           onClose={() => setEditor(null)}
           onDone={() => { setEditor(null); load(); }}
         />
@@ -213,15 +217,25 @@ function SupervisorPage() {
   );
 }
 
-function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { staff: StaffLite; date: string; shift?: Shift }; onClose: () => void; onDone: () => void }) {
+function CellEditor({ area, entry, monthShifts, year, month, onClose, onDone }: { area: string; entry: { staff: StaffLite; date: string; shift?: Shift }; monthShifts: Shift[]; year: number; month: number; onClose: () => void; onDone: () => void }) {
   const { staff: s, date, shift } = entry;
+  const officeRole = isOfficeHoursRole(s.role);
+  const bedsideEligible = canTakeBedsideShift(s.role);
   const [duty, setDuty] = useState<Duty>(shift?.duty ?? "Day");
   const [unitCode, setUnitCode] = useState(shift?.unit_code ?? "");
-  const [ot, setOt] = useState<OtType>(shift?.ot_type ?? "None");
-  const [hours, setHours] = useState<string>(String(shift?.hours ?? 8));
+  const [ot, setOt] = useState<OtType>(shift?.ot_type ?? (officeRole ? "Additional" : "None"));
+  const [hours, setHours] = useState<string>(String(shift?.hours ?? (officeRole ? BEDSIDE_SHIFT_HOURS : 8)));
   const isWorking = duty === "Day" || duty === "Night";
+  const bedsideUsed = bedsideHoursInMonth(monthShifts, s.email, year, month, shift?.id);
 
   const save = async () => {
+    if (isWorking && officeRole) {
+      const check = validateBedsideAssignment({
+        role: s.role, dateISO: date, duty: duty as "Day" | "Night", otType: ot,
+        existingMonthHours: bedsideUsed, hours: Number(hours) || 0,
+      });
+      if (!check.ok) { toast.error(check.message); return; }
+    }
     const payload = {
       staff_email: s.email, staff_name: s.name, area, date,
       duty, unit_code: isWorking ? (unitCode || null) : null,
@@ -251,6 +265,16 @@ function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { s
       <DialogContent>
         <DialogHeader><DialogTitle>{s.name} · {date}</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          {officeRole && (
+            <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+              {bedsideEligible ? (
+                <>Office-hours role (9h, Sun–Thu) — bedside cover is 12h weekend overtime only.
+                  {" "}Used this month: <span className="font-medium text-foreground">{bedsideUsed}h / 24h</span>.</>
+              ) : (
+                <>Admins can never be assigned bedside shifts.</>
+              )}
+            </div>
+          )}
           <div>
             <Label>Duty</Label>
             <Select value={duty} onValueChange={(v) => setDuty(v as Duty)}>
@@ -271,7 +295,7 @@ function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { s
                 <Select value={ot} onValueChange={(v) => setOt(v as OtType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["None","BuiltIn","Additional","MedEvac"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                    {(officeRole ? ["BuiltIn","Additional","MedEvac"] : ["None","BuiltIn","Additional","MedEvac"]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -286,7 +310,7 @@ function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { s
           {shift ? <Button variant="destructive" onClick={del}>Delete</Button> : <span />}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={save}>Save</Button>
+            <Button onClick={save} disabled={officeRole && !bedsideEligible && isWorking}>Save</Button>
           </div>
         </DialogFooter>
       </DialogContent>
