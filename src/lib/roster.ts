@@ -47,37 +47,38 @@ export function cellFor(shift: RosterShift | undefined, isWeekend: boolean): Cel
 
   // MedEvac OT overrides
   if (shift.ot_type === "MedEvac") {
-    return { code: "MOT", className: "bg-amber-900 text-white", title: `MedEvac OT · ${shift.date}` };
+    return { code: "MOT", className: "bg-[#B98F52] text-white", title: `MedEvac OT · ${shift.date}` };
   }
   switch (shift.duty) {
     case "Sick":
       return { code: `s${letter || "S"}${unit}`, className: "bg-red-500 text-white", title: `Sick · ${shift.date}` };
     case "Vacation":
-      return { code: "VAC", className: "bg-indigo-200 text-indigo-900", title: `Vacation · ${shift.date}` };
+      return { code: "VAC", className: "bg-[#A2ABD8] text-slate-900", title: `Vacation · ${shift.date}` };
     case "Off":
-      return { code: "OFF", className: "bg-slate-300 text-slate-700", title: `Off · ${shift.date}` };
+      return { code: "OFF", className: "bg-[#D3D5D7] text-slate-700", title: `Off · ${shift.date}` };
     case "Paternity":
       return { code: "P", className: "bg-emerald-500 text-white", title: `Paternity · ${shift.date}` };
     case "Day":
     case "Night": {
       if (shift.ot_type === "BuiltIn")
-        return { code: `${letter}${unit}`, className: "bg-yellow-300 text-black", title: `Built-in OT · ${shift.date}` };
+        return { code: `${letter}${unit}`, className: "bg-[#F2C94C] text-black", title: `Built-in OT · ${shift.date}` };
       if (shift.ot_type === "Additional")
-        return { code: `${letter}${unit}`, className: "bg-orange-400 text-black", title: `Additional OT · ${shift.date}` };
+        return { code: `${letter}${unit}`, className: "bg-[#E88B2A] text-black", title: `Additional OT · ${shift.date}` };
       return { code: `${letter}${unit}`, className: "bg-white text-black border", title: `${shift.duty} duty · ${shift.date}` };
     }
   }
 }
 
-export const LEGEND: { label: string; className: string; sample: string }[] = [
-  { label: "Night duty", className: "bg-white text-black border", sample: "N6" },
-  { label: "Day duty", className: "bg-white text-black border", sample: "D12" },
-  { label: "Built-in OT", className: "bg-yellow-300 text-black", sample: "N6" },
-  { label: "Additional OT", className: "bg-orange-400 text-black", sample: "N6" },
-  { label: "MedEvac OT", className: "bg-amber-900 text-white", sample: "MOT" },
-  { label: "Sick leave", className: "bg-red-500 text-white", sample: "sN6" },
-  { label: "Vacation", className: "bg-indigo-200 text-indigo-900", sample: "VAC" },
-  { label: "Off request", className: "bg-slate-300 text-slate-700", sample: "OFF" },
-  { label: "Paternity", className: "bg-emerald-500 text-white", sample: "P" },
-  { label: "Weekend (empty)", className: "bg-slate-100 text-slate-400", sample: "" },
+export const LEGEND: { label: string; className: string }[] = [
+  { label: "Built-in Overtime", className: "bg-[#F2C94C]" },
+  { label: "Additional Overtime", className: "bg-[#E88B2A]" },
+  { label: "Medivac Overtime", className: "bg-[#B98F52]" },
+  { label: "Vacation", className: "bg-[#A2ABD8]" },
+  { label: "Off", className: "bg-[#D3D5D7]" },
 ];
+
+/** Static weekend rule: night schedules run Thu+Fri, everything else Fri+Sat. */
+export function isWeekendDay(d: Date, layer: "all" | "day" | "night"): boolean {
+  const wd = d.getDay();
+  return layer === "night" ? wd === 4 || wd === 5 : wd === 5 || wd === 6;
+}

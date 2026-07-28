@@ -1,7 +1,7 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cellFor, monthDays, toISODate, LEGEND, type RosterShift } from "@/lib/roster";
+import { cellFor, monthDays, toISODate, isWeekendDay, LEGEND, type RosterShift } from "@/lib/roster";
 import { cn } from "@/lib/utils";
 
 export type StaffLite = {
@@ -84,7 +84,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
               <th className="sticky top-0 left-0 z-30 bg-steel-100 border-b border-r px-3 py-2 text-left min-w-[180px] uppercase tracking-wider text-[11px] text-steel-800">Staff</th>
               {days.map((d) => {
                 const wd = d.toLocaleDateString(undefined, { weekday: "short" });
-                const isWknd = d.getDay() === 0 || d.getDay() === 6;
+                const isWknd = isWeekendDay(d, layer);
                 return (
                   <th
                     key={d.toISOString()}
@@ -121,7 +121,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                       {days.map((d) => {
                         const iso = toISODate(d);
                         const shift = shiftIdx.get(`${s.email.toLowerCase()}|${iso}`);
-                        const isWknd = d.getDay() === 0 || d.getDay() === 6;
+                        const isWknd = isWeekendDay(d, layer);
                         const style = cellFor(shift, isWknd);
                         const clickable = !!onCellClick && (!isCellClickable || isCellClickable({ staff: s, date: iso, shift }));
                         return (
@@ -152,13 +152,11 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
 
       <div className="rounded-md border p-3 bg-secondary/60">
         <div className="text-xs font-semibold mb-2 uppercase tracking-[0.16em] text-steel-800">Legend</div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {LEGEND.map((l) => (
-            <div key={l.label} className="flex items-center gap-2">
-              <span className={cn("inline-flex items-center justify-center w-8 h-6 rounded text-[10px] font-semibold", l.className)}>
-                {l.sample}
-              </span>
-              <span className="text-xs">{l.label}</span>
+            <div key={l.label} className="flex items-center gap-1.5">
+              <span className={cn("inline-block h-3.5 w-3.5 rounded-[3px] border border-black/10", l.className)} />
+              <span className="text-[11px]">{l.label}</span>
             </div>
           ))}
         </div>
