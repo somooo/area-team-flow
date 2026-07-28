@@ -150,16 +150,13 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
         </table>
       </div>
 
-      <div className="rounded-md border p-3 bg-secondary/60">
-        <div className="text-xs font-semibold mb-2 uppercase tracking-[0.16em] text-steel-800">Legend</div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {LEGEND.map((l) => (
-            <div key={l.label} className="flex items-center gap-1.5">
-              <span className={cn("inline-block h-3.5 w-3.5 rounded-[3px] border border-black/10", l.className)} />
-              <span className="text-[11px]">{l.label}</span>
-            </div>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {LEGEND.map((l) => (
+          <div key={l.label} className="flex items-center gap-1.5">
+            <span className={cn("inline-block h-3.5 w-3.5 rounded-[3px] border border-black/10", l.className)} />
+            <span className="text-[11px]">{l.label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
