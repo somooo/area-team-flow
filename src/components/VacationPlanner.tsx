@@ -16,6 +16,7 @@ import { notify } from "@/lib/notify.functions";
 import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
+import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 
 export const SUPERVISORS_AREA = "Supervisors";
 
@@ -159,12 +160,12 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     setLeaves((area ?? []) as LeaveRow[]);
     let approved = 0, pending = 0;
     for (const r of mine ?? []) {
-      const n = countDays(r.start_date, r.end_date);
+      const n = countVacationDays(r.start_date, r.end_date, me.role);
       if (r.status === "Approved") approved += n;
       else if (r.status === "Pending") pending += n;
     }
     setBalance({ approved, pending });
-  }, [viewArea, cursor, me.email, isSupervisorsView]);
+  }, [viewArea, cursor, me.email, me.role, isSupervisorsView]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -218,7 +219,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     setEnd(iso);
   };
 
-  const totalDays = start ? countDays(start, end ?? start) : 0;
+  const officeHours = isOfficeHoursRole(me.role);
+  const totalDays = start ? countVacationDays(start, end ?? start, me.role) : 0;
 
   const submit = async () => {
     if (!start) return;
@@ -322,7 +324,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
             </PopoverTrigger>
             <PopoverContent className="w-80 space-y-3" align="end">
               <div className="text-sm space-y-1">
-                <div className="flex justify-between"><span className="text-muted-foreground">Total days</span><span className="font-semibold">{totalDays}</span></div>
+                {officeHours && <p className="text-[11px] text-muted-foreground">Office hours (9h) — only Sunday–Thursday count as vacation days.</p>}
+              <div className="flex justify-between"><span className="text-muted-foreground">Total days</span><span className="font-semibold">{totalDays}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Remaining this year</span><span className="font-semibold">{remaining}</span></div>
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground">Routes to</span>
@@ -449,7 +452,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
           {detail && (
             <div className="space-y-3 text-sm">
               <div><span className="text-muted-foreground">Dates: </span><span className="font-medium">{detail.start_date} → {detail.end_date}</span></div>
-              <div><span className="text-muted-foreground">Days: </span><span className="font-medium">{countDays(detail.start_date, detail.end_date)}</span></div>
+              <div><span className="text-muted-foreground">Days: </span><span className="font-medium">{countVacationDays(detail.start_date, detail.end_date, me.role)}</span></div>
               <div><span className="text-muted-foreground">Stage: </span><span className="font-medium">{stageLabel(detail)}</span></div>
               <div><span className="text-muted-foreground">Approver: </span><span className="font-medium">{(detail.approver_email && detail.approver_email.toLowerCase() === approver?.toLowerCase() ? approverName : detail.approver_email) ?? "—"}</span></div>
               {detail.reason && <div><span className="text-muted-foreground">Reason: </span>{detail.reason}</div>}
