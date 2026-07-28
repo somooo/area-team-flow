@@ -303,19 +303,15 @@ function SchedulePage() {
 }
 
 function ReportDialog({ me, shift, onClose }: { me: MeStaff; shift: Shift; onClose: () => void }) {
-  const isMot = shift.ot_type === "MedEvac";
-  const [kind, setKind] = useState<ReportKind | null>(isMot ? "wrong_entry" : null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const code = cellFor(shift, false).code || shift.duty;
 
   const submit = async () => {
-    if (!kind) return;
     setBusy(true);
-    const label = kind === "missed_ot" ? "Missed overtime" : "Wrong entry";
     const approver = await resolveApprover(me);
     await logAudit({
-      action: kind === "missed_ot" ? "report_missed_overtime" : "report_wrong_entry",
+      action: "report_wrong_entry",
       entity_type: "shift",
       entity_id: shift.id,
       area: me.area,
@@ -325,7 +321,7 @@ function ReportDialog({ me, shift, onClose }: { me: MeStaff; shift: Shift; onClo
       await createNotification({
         data: {
           recipient_email: approver,
-          title: `${label} report — ${me.name}`,
+          title: `Wrong entry report — ${me.name}`,
           body: `${shift.date} · ${code}${note ? ` — ${note}` : ""}`,
           link: "/approvals",
         },
@@ -340,28 +336,69 @@ function ReportDialog({ me, shift, onClose }: { me: MeStaff; shift: Shift; onClo
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>{shift.date} · {code}</DialogTitle></DialogHeader>
-        {!kind ? (
-          <div className="grid gap-2">
-            <Button variant="outline" onClick={() => setKind("missed_ot")}>Report missed overtime</Button>
-            <Button variant="outline" onClick={() => setKind("wrong_entry")}>Report wrong entry</Button>
+        <div className="space-y-3">
+          <div>
+            <Label>Note</Label>
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Describe what should be corrected" />
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="text-sm font-medium">
-              {kind === "missed_ot" ? "Report missed overtime" : "Report wrong entry"}
-            </div>
-            <div>
-              <Label>Note</Label>
-              <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Describe what should be corrected" />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              This is a flagged note for your supervisor to review — not an approval request.
-            </p>
-            <DialogFooter>
-              <Button onClick={submit} disabled={busy || !note.trim()}>Submit</Button>
-            </DialogFooter>
+          <p className="text-xs text-muted-foreground">
+            This is a flagged note for your supervisor to review — not an approval request.
+          </p>
+          <DialogFooter>
+            <Button onClick={submit} disabled={busy || !note.trim()}>Submit</Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MissedOvertimeDialog({ me, date, onClose }: { me: MeStaff; date: string; onClose: () => void }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!note.trim()) return;
+    setBusy(true);
+    const approver = await resolveApprover(me);
+    await logAudit({
+      action: "report_missed_overtime",
+      entity_type: "shift",
+      entity_id: null,
+      area: me.area,
+      details: { date, note, approver_email: approver },
+    });
+    if (approver) {
+      await createNotification({
+        data: {
+          recipient_email: approver,
+          title: `Missed overtime report — ${me.name}`,
+          body: `${date}${note ? ` — ${note}` : ""}`,
+          link: "/approvals",
+        },
+      });
+    }
+    setBusy(false);
+    toast.success("Report sent to your supervisor");
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{date} · Missed overtime</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Note</Label>
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Describe the missed overtime" />
           </div>
-        )}
+          <p className="text-xs text-muted-foreground">
+            This is a flagged note for your supervisor to review — not an approval request.
+          </p>
+          <DialogFooter>
+            <Button onClick={submit} disabled={busy || !note.trim()}>Submit</Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
