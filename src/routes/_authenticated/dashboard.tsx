@@ -46,6 +46,7 @@ function SchedulePage() {
   const [roster, setRoster] = useState<Staff[]>([]);
   const [areas, setAreas] = useState<string[]>([]);
   const [viewArea, setViewArea] = useState<string>("");
+  const [layer, setLayer] = useState<"all" | "day" | "night">("day");
   const [menuShift, setMenuShift] = useState<Shift | null>(null);
   const [pick, setPick] = useState<PickMode>(null);
   const [confirmTarget, setConfirmTarget] = useState<{ shift: Shift; staff: Staff } | null>(null);
