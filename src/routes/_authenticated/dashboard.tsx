@@ -140,9 +140,9 @@ function SchedulePage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Monthly schedule</CardTitle>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {meStaff.role !== "staff" && (
               <Button size="sm" variant="outline" onClick={() => exportExcel({ area: viewArea, year, month, staff: roster, shifts })}>Download Excel</Button>
             )}
