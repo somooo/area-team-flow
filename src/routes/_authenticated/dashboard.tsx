@@ -56,14 +56,24 @@ function SchedulePage() {
   useEffect(() => {
     supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
       const uniq = Array.from(new Set((data ?? []).map((r) => r.area as string).filter(Boolean))).sort();
+      const order = ["ICU", "Wards", "Assistants"];
+      uniq.sort((a, b) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+      });
       setAreas(uniq);
     });
   }, []);
 
   useEffect(() => {
-    if (!viewArea && me?.staff?.area) setViewArea(me.staff.area);
-    else if (!viewArea && areas[0]) setViewArea(areas[0]);
+    if (viewArea) return;
+    if (me?.staff?.area) setViewArea(me.staff.area);
+    else if (areas.includes("ICU")) setViewArea("ICU");
+    else if (areas[0]) setViewArea(areas[0]);
   }, [me?.staff?.area, areas]);
+
+  const isAssistants = viewArea.toLowerCase() === "assistants";
+  const effectiveLayer: "all" | "day" | "night" = isAssistants ? "all" : layer;
 
   const load = async () => {
     if (!viewArea) return;
