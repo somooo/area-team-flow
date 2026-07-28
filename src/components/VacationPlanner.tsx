@@ -66,6 +66,7 @@ function eachDay(startISO: string, endISO: string): string[] {
   return out;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function countDays(a: string, b: string) {
   return eachDay(a, b).length;
 }
