@@ -63,13 +63,13 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={prev} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></Button>
-          <h2 className="font-display text-xl uppercase tracking-[0.12em] min-w-40 text-center">{monthLabel}</h2>
+          <h2 className="font-display text-lg sm:text-xl uppercase tracking-[0.12em] flex-1 min-w-0 sm:min-w-40 text-center truncate">{monthLabel}</h2>
           <Button variant="outline" size="icon" onClick={next} aria-label="Next month"><ChevronRight className="h-4 w-4" /></Button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {headerRight}
           {!headerRight && areaLabel && <div className="text-sm text-muted-foreground">Area: {areaLabel}</div>}
         </div>

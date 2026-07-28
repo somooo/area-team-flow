@@ -327,11 +327,20 @@ export type Database = {
           id: string
           is_overtime: boolean
           notes: string | null
+          origin: string
+          origin_request_id: string | null
           ot_type: Database["public"]["Enums"]["ot_type"]
+          prev_duty: Database["public"]["Enums"]["duty_type"] | null
+          prev_hours: number | null
+          prev_is_overtime: boolean | null
+          prev_ot_type: Database["public"]["Enums"]["ot_type"] | null
+          prev_shift_type: Database["public"]["Enums"]["shift_type"] | null
+          prev_unit_code: string | null
           shift_type: Database["public"]["Enums"]["shift_type"]
           staff_email: string
           staff_id: string | null
           staff_name: string
+          switched_with_name: string | null
           unit_code: string | null
         }
         Insert: {
@@ -343,11 +352,20 @@ export type Database = {
           id?: string
           is_overtime?: boolean
           notes?: string | null
+          origin?: string
+          origin_request_id?: string | null
           ot_type?: Database["public"]["Enums"]["ot_type"]
+          prev_duty?: Database["public"]["Enums"]["duty_type"] | null
+          prev_hours?: number | null
+          prev_is_overtime?: boolean | null
+          prev_ot_type?: Database["public"]["Enums"]["ot_type"] | null
+          prev_shift_type?: Database["public"]["Enums"]["shift_type"] | null
+          prev_unit_code?: string | null
           shift_type: Database["public"]["Enums"]["shift_type"]
           staff_email: string
           staff_id?: string | null
           staff_name: string
+          switched_with_name?: string | null
           unit_code?: string | null
         }
         Update: {
@@ -359,11 +377,20 @@ export type Database = {
           id?: string
           is_overtime?: boolean
           notes?: string | null
+          origin?: string
+          origin_request_id?: string | null
           ot_type?: Database["public"]["Enums"]["ot_type"]
+          prev_duty?: Database["public"]["Enums"]["duty_type"] | null
+          prev_hours?: number | null
+          prev_is_overtime?: boolean | null
+          prev_ot_type?: Database["public"]["Enums"]["ot_type"] | null
+          prev_shift_type?: Database["public"]["Enums"]["shift_type"] | null
+          prev_unit_code?: string | null
           shift_type?: Database["public"]["Enums"]["shift_type"]
           staff_email?: string
           staff_id?: string | null
           staff_name?: string
+          switched_with_name?: string | null
           unit_code?: string | null
         }
         Relationships: [
@@ -453,12 +480,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_absence_to_shifts: {
+        Args: {
+          _area: string
+          _dates: string[]
+          _duty: Database["public"]["Enums"]["duty_type"]
+          _email: string
+          _name: string
+          _origin: string
+          _req: string
+        }
+        Returns: undefined
+      }
       current_email: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
       is_area_manager_of: { Args: { _area: string }; Returns: boolean }
       is_supervisor_of: { Args: { _area: string }; Returns: boolean }
       my_area: { Args: never; Returns: string }
       my_role: { Args: never; Returns: Database["public"]["Enums"]["app_role"] }
+      revert_request_shifts: {
+        Args: { _origin: string; _req: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "staff" | "supervisor" | "admin" | "team_leader"

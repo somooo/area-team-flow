@@ -46,6 +46,7 @@ function SchedulePage() {
   const [roster, setRoster] = useState<Staff[]>([]);
   const [areas, setAreas] = useState<string[]>([]);
   const [viewArea, setViewArea] = useState<string>("");
+  const [layer, setLayer] = useState<"all" | "day" | "night">("day");
   const [menuShift, setMenuShift] = useState<Shift | null>(null);
   const [pick, setPick] = useState<PickMode>(null);
   const [confirmTarget, setConfirmTarget] = useState<{ shift: Shift; staff: Staff } | null>(null);
@@ -55,14 +56,24 @@ function SchedulePage() {
   useEffect(() => {
     supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
       const uniq = Array.from(new Set((data ?? []).map((r) => r.area as string).filter(Boolean))).sort();
+      const order = ["ICU", "Wards", "Assistants"];
+      uniq.sort((a, b) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+      });
       setAreas(uniq);
     });
   }, []);
 
   useEffect(() => {
-    if (!viewArea && me?.staff?.area) setViewArea(me.staff.area);
-    else if (!viewArea && areas[0]) setViewArea(areas[0]);
+    if (viewArea) return;
+    if (me?.staff?.area) setViewArea(me.staff.area);
+    else if (areas.includes("ICU")) setViewArea("ICU");
+    else if (areas[0]) setViewArea(areas[0]);
   }, [me?.staff?.area, areas]);
+
+  const isAssistants = viewArea.toLowerCase() === "assistants";
+  const effectiveLayer: "all" | "day" | "night" = isAssistants ? "all" : layer;
 
   const load = async () => {
     if (!viewArea) return;
@@ -129,9 +140,9 @@ function SchedulePage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Monthly schedule</CardTitle>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {meStaff.role !== "staff" && (
               <Button size="sm" variant="outline" onClick={() => exportExcel({ area: viewArea, year, month, staff: roster, shifts })}>Download Excel</Button>
             )}
@@ -139,21 +150,51 @@ function SchedulePage() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <Label className="mb-1.5 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Area</Label>
+              <div className="grid grid-cols-3 gap-1 rounded-md border bg-muted/40 p-1">
+                {areas.map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => setViewArea(a)}
+                    aria-pressed={viewArea === a}
+                    className={`min-h-11 truncate rounded px-2 text-sm font-medium transition-colors ${
+                      viewArea === a ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"
+                    }`}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="min-w-0 sm:w-56">
+              <Label className="mb-1.5 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Shift</Label>
+              <div className={`grid grid-cols-2 gap-1 rounded-md border bg-muted/40 p-1 ${isAssistants ? "opacity-50" : ""}`}>
+                {(["day", "night"] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    disabled={isAssistants}
+                    onClick={() => setLayer(l)}
+                    aria-pressed={!isAssistants && layer === l}
+                    className={`min-h-11 rounded px-2 text-sm font-medium capitalize transition-colors disabled:cursor-not-allowed ${
+                      !isAssistants && layer === l ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
             staff={roster} shifts={shifts}
             meEmail={isMyArea ? meStaff.email : ""}
-            headerRight={
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Area</span>
-                <Select value={viewArea} onValueChange={setViewArea}>
-                  <SelectTrigger className="w-40"><SelectValue placeholder="Area" /></SelectTrigger>
-                  <SelectContent>
-                    {areas.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            }
+            layer={effectiveLayer}
+            areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             onCellClick={handleCell}
           />
           {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} />}
