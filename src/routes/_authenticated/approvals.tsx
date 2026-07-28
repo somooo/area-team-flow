@@ -112,7 +112,11 @@ function ApprovalsPage() {
             <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-md p-3">
               <div>
                 <div className="font-medium">{l.staff_name} · {l.leave_type} <span className="text-xs text-muted-foreground">({l.area})</span></div>
-                <div className="text-xs text-muted-foreground">{l.start_date} → {l.end_date} · {l.reason}</div>
+                <div className="text-xs text-muted-foreground">
+                  {l.start_date} → {l.end_date}{l.reason ? ` · ${l.reason}` : ""}
+                  {l.stage === "covering" && " · Pending covering supervisor approval"}
+                  {l.stage === "admin" && " · Pending admin approval"}
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => decideLeave(l, "Approved")}>Approve</Button>
