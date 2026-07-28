@@ -117,13 +117,21 @@ function SchedulePage() {
   const meEmail = me?.staff?.email ?? "";
 
   /** Classify a cell against the authoritative server clock. */
-  const classify = (date: string, shift?: Shift): "inert" | "past_month" | "action" | "report" => {
-    if (!serverNow || !hasAssignment(shift)) return "inert";
+  const classify = (date: string, shift?: Shift): "inert" | "past_month" | "action" | "report" | "missed_ot" => {
+    if (!serverNow) return "inert";
     const [y, m, d] = date.split("-").map(Number);
     const cellStart = new Date(y, m - 1, d);
     const nowMonth = serverNow.getFullYear() * 12 + serverNow.getMonth();
     const cellMonth = y * 12 + (m - 1);
     if (cellMonth < nowMonth) return "past_month";
+
+    if (isEmpty(shift)) {
+      // Empty cells in the current month, today or earlier, can report missed OT.
+      if (cellStart.getTime() <= serverNow.getTime()) return "missed_ot";
+      return "inert";
+    }
+
+    if (!hasAssignment(shift)) return "inert";
     if (cellStart.getTime() - serverNow.getTime() > 24 * 60 * 60 * 1000) return "action";
     return "report";
   };
