@@ -63,6 +63,7 @@ function SchedulePage() {
   const [confirmTarget, setConfirmTarget] = useState<{ shift: Shift; staff: Staff } | null>(null);
   const [otShift, setOtShift] = useState<Shift | null>(null);
   const [reportShift, setReportShift] = useState<Shift | null>(null);
+  const [missedOtDate, setMissedOtDate] = useState<{ staff: Staff; date: string } | null>(null);
   const [serverNow, setServerNow] = useState<Date | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
