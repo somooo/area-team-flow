@@ -17,6 +17,7 @@ import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import { toISODate } from "@/lib/roster";
 import type { RosterShift, Duty, OtType } from "@/lib/roster";
+import { bedsideHoursInMonth, canTakeBedsideShift, isOfficeHoursRole, validateBedsideAssignment, BEDSIDE_SHIFT_HOURS } from "@/lib/hours-model";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
   head: () => ({ meta: [{ title: "Supervisor — KADIR Staff Management" }] }),
@@ -205,6 +206,9 @@ function SupervisorPage() {
         <CellEditor
           area={meStaff.area!}
           entry={editor}
+          monthShifts={shifts}
+          year={year}
+          month={month}
           onClose={() => setEditor(null)}
           onDone={() => { setEditor(null); load(); }}
         />
@@ -213,15 +217,25 @@ function SupervisorPage() {
   );
 }
 
-function CellEditor({ area, entry, onClose, onDone }: { area: string; entry: { staff: StaffLite; date: string; shift?: Shift }; onClose: () => void; onDone: () => void }) {
+function CellEditor({ area, entry, monthShifts, year, month, onClose, onDone }: { area: string; entry: { staff: StaffLite; date: string; shift?: Shift }; monthShifts: Shift[]; year: number; month: number; onClose: () => void; onDone: () => void }) {
   const { staff: s, date, shift } = entry;
+  const officeRole = isOfficeHoursRole(s.role);
+  const bedsideEligible = canTakeBedsideShift(s.role);
   const [duty, setDuty] = useState<Duty>(shift?.duty ?? "Day");
   const [unitCode, setUnitCode] = useState(shift?.unit_code ?? "");
-  const [ot, setOt] = useState<OtType>(shift?.ot_type ?? "None");
-  const [hours, setHours] = useState<string>(String(shift?.hours ?? 8));
+  const [ot, setOt] = useState<OtType>(shift?.ot_type ?? (officeRole ? "Additional" : "None"));
+  const [hours, setHours] = useState<string>(String(shift?.hours ?? (officeRole ? BEDSIDE_SHIFT_HOURS : 8)));
   const isWorking = duty === "Day" || duty === "Night";
+  const bedsideUsed = bedsideHoursInMonth(monthShifts, s.email, year, month, shift?.id);
 
   const save = async () => {
+    if (isWorking && officeRole) {
+      const check = validateBedsideAssignment({
+        role: s.role, dateISO: date, duty: duty as "Day" | "Night", otType: ot,
+        existingMonthHours: bedsideUsed, hours: Number(hours) || 0,
+      });
+      if (!check.ok) { toast.error(check.message); return; }
+    }
     const payload = {
       staff_email: s.email, staff_name: s.name, area, date,
       duty, unit_code: isWorking ? (unitCode || null) : null,
