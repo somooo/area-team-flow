@@ -37,11 +37,15 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 type Shift = RosterShift;
 type Staff = StaffLite;
 type PickMode = null | { kind: "switch_date" | "switch_area"; source: Shift };
-type ReportKind = "missed_ot" | "wrong_entry";
 
-/** Cells that carry no working assignment are never interactive. */
+/** Cells that carry a working assignment. */
 function hasAssignment(shift?: Shift) {
   return !!shift && shift.duty !== "Off" && shift.duty !== "Vacation";
+}
+
+/** Empty / unscheduled cells are eligible for missed-OT reports on past days of the same month. */
+function isEmpty(shift?: Shift) {
+  return !shift;
 }
 
 function SchedulePage() {
