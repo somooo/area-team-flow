@@ -17,6 +17,8 @@ import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { MyChangeRequests } from "@/components/MyChangeRequests";
 import { toISODate, cellFor } from "@/lib/roster";
 import type { RosterShift } from "@/lib/roster";
+import { getServerNow } from "@/lib/server-time.functions";
+import { Input } from "@/components/ui/input";
 import { exportExcel, exportPdf } from "@/lib/schedule-export";
 import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
 import { X } from "lucide-react";
@@ -36,6 +38,12 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 type Shift = RosterShift;
 type Staff = StaffLite;
 type PickMode = null | { kind: "switch_date" | "switch_area"; source: Shift };
+type ReportKind = "missed_ot" | "wrong_entry";
+
+/** Cells that carry no working assignment are never interactive. */
+function hasAssignment(shift?: Shift) {
+  return !!shift && shift.duty !== "Off" && shift.duty !== "Vacation";
+}
 
 function SchedulePage() {
   const { me } = useMe();
@@ -51,7 +59,13 @@ function SchedulePage() {
   const [pick, setPick] = useState<PickMode>(null);
   const [confirmTarget, setConfirmTarget] = useState<{ shift: Shift; staff: Staff } | null>(null);
   const [otShift, setOtShift] = useState<Shift | null>(null);
+  const [reportShift, setReportShift] = useState<Shift | null>(null);
+  const [serverNow, setServerNow] = useState<Date | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    void getServerNow().then((r) => setServerNow(new Date(r.now)));
+  }, []);
 
   useEffect(() => {
     supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
@@ -98,6 +112,23 @@ function SchedulePage() {
   const isMyArea = me?.staff?.area === viewArea;
   const meEmail = me?.staff?.email ?? "";
 
+  /** Classify a cell against the authoritative server clock. */
+  const classify = (date: string, shift?: Shift): "inert" | "past_month" | "action" | "report" => {
+    if (!serverNow || !hasAssignment(shift)) return "inert";
+    const [y, m, d] = date.split("-").map(Number);
+    const cellStart = new Date(y, m - 1, d);
+    const nowMonth = serverNow.getFullYear() * 12 + serverNow.getMonth();
+    const cellMonth = y * 12 + (m - 1);
+    if (cellMonth < nowMonth) return "past_month";
+    if (cellStart.getTime() - serverNow.getTime() > 24 * 60 * 60 * 1000) return "action";
+    return "report";
+  };
+
+  const cellClickable = ({ staff, date, shift }: { staff: Staff; date: string; shift?: Shift }) => {
+    if (!meEmail || staff.email.toLowerCase() !== meEmail.toLowerCase()) return !!pick && hasAssignment(shift);
+    return classify(date, shift) !== "inert";
+  };
+
   const handleCell = ({ staff, shift }: { staff: Staff; date: string; shift?: Shift }) => {
     const isSelf = staff.email.toLowerCase() === meEmail.toLowerCase();
     if (pick) {
@@ -111,8 +142,14 @@ function SchedulePage() {
       return;
     }
     if (!isSelf) return; // read-only for other people
-    if (!shift) { toast.info("No shift on that day."); return; }
-    setMenuShift(shift);
+    if (!hasAssignment(shift)) return;
+    const kind = classify(shift!.date, shift);
+    if (kind === "past_month") {
+      toast.info("For previous month requests, please use the Requests tab.");
+      return;
+    }
+    if (kind === "report") { setReportShift(shift!); return; }
+    if (kind === "action") setMenuShift(shift!);
   };
 
   if (!me?.staff) return null;
@@ -196,6 +233,7 @@ function SchedulePage() {
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             onCellClick={handleCell}
+            isCellClickable={cellClickable}
           />
           {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} />}
         </CardContent>
@@ -244,7 +282,76 @@ function SchedulePage() {
           onDone={() => { setOtShift(null); setRefreshKey((k) => k + 1); }}
         />
       )}
+
+      {reportShift && (
+        <ReportDialog me={meStaff} shift={reportShift} onClose={() => setReportShift(null)} />
+      )}
     </div>
+  );
+}
+
+function ReportDialog({ me, shift, onClose }: { me: MeStaff; shift: Shift; onClose: () => void }) {
+  const isMot = shift.ot_type === "MedEvac";
+  const [kind, setKind] = useState<ReportKind | null>(isMot ? "wrong_entry" : null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const code = cellFor(shift, false).code || shift.duty;
+
+  const submit = async () => {
+    if (!kind) return;
+    setBusy(true);
+    const label = kind === "missed_ot" ? "Missed overtime" : "Wrong entry";
+    const approver = await resolveApprover(me);
+    await logAudit({
+      action: kind === "missed_ot" ? "report_missed_overtime" : "report_wrong_entry",
+      entity_type: "shift",
+      entity_id: shift.id,
+      area: me.area,
+      details: { date: shift.date, code, note, approver_email: approver },
+    });
+    if (approver) {
+      await createNotification({
+        data: {
+          recipient_email: approver,
+          title: `${label} report — ${me.name}`,
+          body: `${shift.date} · ${code}${note ? ` — ${note}` : ""}`,
+          link: "/approvals",
+        },
+      });
+    }
+    setBusy(false);
+    toast.success("Report sent to your supervisor");
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{shift.date} · {code}</DialogTitle></DialogHeader>
+        {!kind ? (
+          <div className="grid gap-2">
+            <Button variant="outline" onClick={() => setKind("missed_ot")}>Report missed overtime</Button>
+            <Button variant="outline" onClick={() => setKind("wrong_entry")}>Report wrong entry</Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="text-sm font-medium">
+              {kind === "missed_ot" ? "Report missed overtime" : "Report wrong entry"}
+            </div>
+            <div>
+              <Label>Note</Label>
+              <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Describe what should be corrected" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This is a flagged note for your supervisor to review — not an approval request.
+            </p>
+            <DialogFooter>
+              <Button onClick={submit} disabled={busy || !note.trim()}>Submit</Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
