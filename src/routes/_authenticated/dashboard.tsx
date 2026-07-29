@@ -15,6 +15,9 @@ import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { MyChangeRequests } from "@/components/MyChangeRequests";
+import { ReferenceTable } from "@/components/ReferenceTable";
+import { TeamLeaderReportDialog } from "@/components/TeamLeaderReportDialog";
+import { fetchZoneReference, isLeaderShift, type ZoneReferenceRow } from "@/lib/assignments";
 import { toISODate, cellFor } from "@/lib/roster";
 import type { RosterShift } from "@/lib/roster";
 import { getServerNow } from "@/lib/server-time.functions";
@@ -66,6 +69,8 @@ function SchedulePage() {
   const [missedOtDate, setMissedOtDate] = useState<{ staff: Staff; date: string } | null>(null);
   const [serverNow, setServerNow] = useState<Date | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [reference, setReference] = useState<ZoneReferenceRow[]>([]);
+  const [tlOpen, setTlOpen] = useState(false);
 
   useEffect(() => {
     void getServerNow().then((r) => setServerNow(new Date(r.now)));
@@ -108,6 +113,11 @@ function SchedulePage() {
   useEffect(() => { void load(); }, [year, month, viewArea]);
 
   useEffect(() => {
+    if (!viewArea) { setReference([]); return; }
+    void fetchZoneReference(viewArea).then(setReference);
+  }, [viewArea]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPick(null); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -115,6 +125,19 @@ function SchedulePage() {
 
   const isMyArea = me?.staff?.area === viewArea;
   const meEmail = me?.staff?.email ?? "";
+
+  /** Today's own shift in the visible schedule, used for the Team Leader Report button. */
+  const todaysOwnShift = useMemo(() => {
+    if (!serverNow || !meEmail) return undefined;
+    const iso = toISODate(serverNow);
+    return shifts.find(
+      (s) =>
+        s.staff_email.toLowerCase() === meEmail.toLowerCase() &&
+        s.date === iso &&
+        (effectiveLayer === "all" || (effectiveLayer === "night" ? s.duty === "Night" : s.duty !== "Night")),
+    );
+  }, [shifts, serverNow, meEmail, effectiveLayer]);
+  const isLeaderToday = isMyArea && isLeaderShift(todaysOwnShift, reference);
 
   /** Classify a cell against the authoritative server clock. */
   const classify = (date: string, shift?: Shift): "inert" | "past_month" | "action" | "report" | "missed_ot" => {
@@ -146,6 +169,12 @@ function SchedulePage() {
     if (pick) {
       if (isSelf) { toast.info("Pick another person's shift."); return; }
       if (!shift) { toast.info("That day has no assignment."); return; }
+      const sourceIsNight = pick.source.duty === "Night";
+      const targetIsNight = shift.duty === "Night";
+      if (sourceIsNight !== targetIsNight) {
+        toast.error("Day and Night schedules can't be swapped — pick someone on the same schedule.");
+        return;
+      }
       if (pick.kind === "switch_date" && staff.area !== pick.source.area) {
         toast.error("Switch day must stay within the same area.");
         return;
@@ -175,6 +204,11 @@ function SchedulePage() {
           <p className="text-muted-foreground text-sm">
             {isMyArea ? `${meStaff.area ?? "—"} · your area` : `${viewArea} · read-only`}
           </p>
+          {isLeaderToday && (
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => setTlOpen(true)}>
+              Team Leader Report
+            </Button>
+          )}
         </div>
       </div>
 
@@ -238,6 +272,7 @@ function SchedulePage() {
               </div>
             </div>
           </div>
+          <ReferenceTable area={viewArea} rows={reference} />
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
             staff={roster} shifts={shifts}
