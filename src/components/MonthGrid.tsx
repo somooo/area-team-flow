@@ -136,7 +136,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                               "border-b border-r text-center align-middle p-0",
                               style.className,
                               clickable && "cursor-pointer hover:ring-2 hover:ring-steel-400",
-                              pending && "ring-2 ring-inset ring-copper-500"
+                              pending && "ring-2 ring-inset ring-copper"
                             )}
                           >
                             <div className="w-10 h-10 flex items-center justify-center text-[11px] font-semibold">
