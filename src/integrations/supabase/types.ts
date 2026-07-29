@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      assignment_codes: {
+        Row: {
+          area: string
+          code: string
+          created_at: string
+          duty: Database["public"]["Enums"]["duty_type"]
+          id: string
+          layer: string
+          sort_order: number
+          unit: string | null
+          unit_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          area: string
+          code: string
+          created_at?: string
+          duty?: Database["public"]["Enums"]["duty_type"]
+          id?: string
+          layer?: string
+          sort_order?: number
+          unit?: string | null
+          unit_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          area?: string
+          code?: string
+          created_at?: string
+          duty?: Database["public"]["Enums"]["duty_type"]
+          id?: string
+          layer?: string
+          sort_order?: number
+          unit?: string | null
+          unit_code?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -478,6 +517,105 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           value?: Json
+        }
+        Relationships: []
+      }
+      team_leader_reports: {
+        Row: {
+          approver_email: string | null
+          area: string
+          assignment_code: string | null
+          comment: string | null
+          created_at: string
+          id: string
+          layer: string
+          reporter_email: string
+          reporter_name: string
+          shift_date: string
+          sick_calls: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approver_email?: string | null
+          area: string
+          assignment_code?: string | null
+          comment?: string | null
+          created_at?: string
+          id?: string
+          layer?: string
+          reporter_email: string
+          reporter_name: string
+          shift_date: string
+          sick_calls?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approver_email?: string | null
+          area?: string
+          assignment_code?: string | null
+          comment?: string | null
+          created_at?: string
+          id?: string
+          layer?: string
+          reporter_email?: string
+          reporter_name?: string
+          shift_date?: string
+          sick_calls?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      zone_reference: {
+        Row: {
+          area: string
+          assignment_no: string | null
+          coverage_weekday: string | null
+          coverage_weekend: string | null
+          created_at: string
+          extension: string | null
+          id: string
+          label: string | null
+          pager: string | null
+          role: string | null
+          sort_order: number
+          unit: string | null
+          updated_at: string
+          zone: string | null
+        }
+        Insert: {
+          area: string
+          assignment_no?: string | null
+          coverage_weekday?: string | null
+          coverage_weekend?: string | null
+          created_at?: string
+          extension?: string | null
+          id?: string
+          label?: string | null
+          pager?: string | null
+          role?: string | null
+          sort_order?: number
+          unit?: string | null
+          updated_at?: string
+          zone?: string | null
+        }
+        Update: {
+          area?: string
+          assignment_no?: string | null
+          coverage_weekday?: string | null
+          coverage_weekend?: string | null
+          created_at?: string
+          extension?: string | null
+          id?: string
+          label?: string | null
+          pager?: string | null
+          role?: string | null
+          sort_order?: number
+          unit?: string | null
+          updated_at?: string
+          zone?: string | null
         }
         Relationships: []
       }
