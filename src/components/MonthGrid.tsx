@@ -26,9 +26,11 @@ export type MonthGridProps = {
   /** Return false to render the cell inert (no hover, no pointer, no click). */
   isCellClickable?: (row: { staff: StaffLite; date: string; shift?: RosterShift }) => boolean;
   layer?: "all" | "day" | "night";
+  /** `email|date` keys with unsaved edits — rendered with a pending outline. */
+  pendingKeys?: Set<string>;
 };
 
-export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, isCellClickable, layer = "all" }: MonthGridProps) {
+export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, isCellClickable, layer = "all", pendingKeys }: MonthGridProps) {
   const days = useMemo(() => monthDays(year, month), [year, month]);
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
@@ -124,6 +126,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                         const isWknd = isWeekendDay(d, layer);
                         const style = cellFor(shift, isWknd);
                         const clickable = !!onCellClick && (!isCellClickable || isCellClickable({ staff: s, date: iso, shift }));
+                        const pending = pendingKeys?.has(`${s.email.toLowerCase()}|${iso}`);
                         return (
                           <td
                             key={iso}
@@ -132,7 +135,8 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                             className={cn(
                               "border-b border-r text-center align-middle p-0",
                               style.className,
-                              clickable && "cursor-pointer hover:ring-2 hover:ring-steel-400"
+                              clickable && "cursor-pointer hover:ring-2 hover:ring-steel-400",
+                              pending && "ring-2 ring-inset ring-copper"
                             )}
                           >
                             <div className="w-10 h-10 flex items-center justify-center text-[11px] font-semibold">
