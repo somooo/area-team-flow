@@ -337,6 +337,16 @@ function SchedulePage() {
       {missedOtDate && (
         <MissedOvertimeDialog me={meStaff} date={missedOtDate.date} onClose={() => setMissedOtDate(null)} />
       )}
+
+      {tlOpen && serverNow && (
+        <TeamLeaderReportDialog
+          me={meStaff}
+          date={toISODate(serverNow)}
+          layer={effectiveLayer}
+          assignmentCode={todaysOwnShift?.unit_code ?? null}
+          onClose={() => setTlOpen(false)}
+        />
+      )}
     </div>
   );
 }
