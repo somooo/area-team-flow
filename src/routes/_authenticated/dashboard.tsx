@@ -233,43 +233,31 @@ function SchedulePage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1">
+          <div className="mb-4 flex flex-row items-end gap-3">
+            <div className="min-w-0 flex-1 sm:max-w-56">
               <Label className="mb-1.5 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Area</Label>
-              <div className="grid grid-cols-3 gap-1 rounded-md border bg-muted/40 p-1">
-                {areas.map((a) => (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={() => setViewArea(a)}
-                    aria-pressed={viewArea === a}
-                    className={`min-h-11 truncate rounded px-2 text-sm font-medium transition-colors ${
-                      viewArea === a ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"
-                    }`}
-                  >
-                    {a}
-                  </button>
-                ))}
-              </div>
+              <Select value={viewArea} onValueChange={(v) => setViewArea(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Area" />
+                </SelectTrigger>
+                <SelectContent>
+                  {areas.map((a) => (
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="min-w-0 sm:w-56">
+            <div className="min-w-0 flex-1 sm:w-40 sm:flex-none">
               <Label className="mb-1.5 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Shift</Label>
-              <div className={`grid grid-cols-2 gap-1 rounded-md border bg-muted/40 p-1 ${isAssistants ? "opacity-50" : ""}`}>
-                {(["day", "night"] as const).map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    disabled={isAssistants}
-                    onClick={() => setLayer(l)}
-                    aria-pressed={!isAssistants && layer === l}
-                    className={`min-h-11 rounded px-2 text-sm font-medium capitalize transition-colors disabled:cursor-not-allowed ${
-                      !isAssistants && layer === l ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"
-                    }`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
+              <Select value={layer} onValueChange={(v) => setLayer(v as "day" | "night")} disabled={isAssistants}>
+                <SelectTrigger className="w-full capitalize">
+                  <SelectValue placeholder="Shift" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Day</SelectItem>
+                  <SelectItem value="night">Night</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <ReferenceTable area={viewArea} rows={reference} />
