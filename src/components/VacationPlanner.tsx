@@ -367,35 +367,35 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       </div>
 
       {/* Calendars */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2 max-w-4xl mx-auto">
         {months.map((m, idx) => (
           <div key={idx} className="rounded-xl border bg-card overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 border-b bg-bone/60">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between px-2 py-1.5 border-b bg-bone/60">
+              <div className="flex items-center gap-1">
                 {idx === 0 && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>
-                    <ChevronLeft className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>
+                    <ChevronLeft className="h-3.5 w-3.5" />
                   </Button>
                 )}
-                <div className="font-semibold text-ink">{m.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</div>
+                <div className="font-semibold text-ink text-sm">{m.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="hidden sm:inline text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <span className="hidden sm:inline text-[10px] text-muted-foreground">
                   {canManage ? "Tap a day with entries to adjust or cancel" : "Tap a highlighted day to adjust or cancel"}
                 </span>
                 {idx === 1 && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>
-                    <ChevronRight className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-7 text-[11px] uppercase tracking-wide text-muted-foreground border-b">
-              {WEEKDAYS.map((w) => <div key={w} className="px-2 py-1 text-center">{w}</div>)}
+            <div className="grid grid-cols-7 text-[10px] uppercase tracking-wide text-muted-foreground border-b">
+              {WEEKDAYS.map((w) => <div key={w} className="px-1 py-0.5 text-center">{w}</div>)}
             </div>
             <div className="grid grid-cols-7">
               {monthMatrix(m.getFullYear(), m.getMonth()).map((d, i) => {
-                if (!d) return <div key={i} className="h-24 border-b border-r bg-muted/20" />;
+                if (!d) return <div key={i} className="aspect-square border-b border-r bg-muted/20" />;
                 const iso = toISODate(d);
                 const names = approvedByDay.get(iso) ?? [];
                 const own = mineByDay.get(iso);
@@ -412,17 +412,17 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                     onClick={() => onDayClick(iso)}
                     disabled={!clickable}
                     className={[
-                      "h-24 border-b border-r p-1.5 text-left align-top flex flex-col gap-1 transition-colors",
+                      "aspect-square border-b border-r p-1 text-left align-top flex flex-col gap-0.5 transition-colors",
                       full ? "bg-muted text-muted-foreground" : "bg-card",
                       past && !own ? "opacity-50" : "",
                       selected && !own ? "ring-2 ring-inset ring-steel-500 bg-steel-50" : "",
                       clickable ? "hover:bg-steel-50/70 cursor-pointer" : "cursor-default",
                     ].join(" ")}
                   >
-                    <span className="text-xs font-semibold text-ink">{d.getDate()}</span>
+                    <span className="text-[11px] font-semibold text-ink">{d.getDate()}</span>
                     {own && (
                       <span className={[
-                        "rounded px-1.5 py-0.5 text-[10px] font-semibold w-fit",
+                        "rounded px-1 py-0 text-[9px] font-semibold w-fit leading-none",
                         own.status === "Approved" ? "bg-steel-600 text-white" : "bg-copper/25 text-ink",
                       ].join(" ")}>{own.status === "Approved" ? "Approved" : "Pending"}</span>
                     )}
@@ -430,7 +430,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                       <TooltipProvider delayDuration={150}>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="text-[10px] leading-tight text-muted-foreground truncate w-full">
+                            <span className="text-[9px] leading-tight text-muted-foreground truncate w-full">
                               {names.slice(0, 2).join(", ")}{names.length > 2 ? ` +${names.length - 2}` : ""}
                             </span>
                           </TooltipTrigger>
