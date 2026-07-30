@@ -44,7 +44,7 @@ type PendingEdit = {
   existing?: Shift;
   /** null = remove the assignment */
   payload: null | {
-    duty: Duty; unit_code: string | null; ot_type: OtType; hours: number;
+    duty: Duty; unit_code: string | null; ot_type: OtType; hours: number; sick_tag: boolean;
   };
 };
 
@@ -131,7 +131,7 @@ function SupervisorPage() {
         date: p.date, shift_type: p.payload.duty === "Night" ? "Night" : p.payload.duty === "Day" ? "Morning" : "Off",
         hours: p.payload.hours, is_overtime: p.payload.ot_type !== "None",
         notes: null, unit_code: p.payload.unit_code,
-        duty: p.payload.duty, ot_type: p.payload.ot_type,
+        duty: p.payload.duty, ot_type: p.payload.ot_type, sick_tag: p.payload.sick_tag,
       });
     }
     return out;
@@ -163,6 +163,7 @@ function SupervisorPage() {
         unit_code: p.payload.unit_code,
         ot_type: p.payload.ot_type,
         is_overtime: p.payload.ot_type !== "None",
+        sick_tag: p.payload.sick_tag,
         hours: p.payload.hours,
         shift_type: (p.payload.duty === "Night" ? "Night" : p.payload.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
       };
@@ -460,9 +461,11 @@ function SupervisorPage() {
 
 const SPECIAL = [
   { value: "__vacation", label: "Vacation (VAC)", duty: "Vacation" as Duty, ot: "None" as OtType },
-  { value: "__sick", label: "Sick leave", duty: "Sick" as Duty, ot: "None" as OtType },
   { value: "__off", label: "Off", duty: "Off" as Duty, ot: "None" as OtType },
 ];
+
+const MOT_VALUE = "__mot";
+type Tag = "" | "BuiltIn" | "Additional" | "Sick";
 
 function CellEditor({ entry, codes, monthShifts, year, month, onClose, onStage }: {
   entry: { staff: StaffLite; date: string; shift?: Shift };
@@ -476,25 +479,34 @@ function CellEditor({ entry, codes, monthShifts, year, month, onClose, onStage }
   const bedsideUsed = bedsideHoursInMonth(monthShifts, s.email, year, month, shift?.id);
 
   const initial = shift
-    ? shift.duty === "Vacation" ? "__vacation"
-      : shift.duty === "Sick" ? "__sick"
+    ? shift.ot_type === "MedEvac" ? MOT_VALUE
+      : shift.duty === "Vacation" ? "__vacation"
+      : shift.duty === "Sick" ? "__off"
       : shift.duty === "Off" ? "__off"
       : codes.find((c) => c.unit_code === shift.unit_code && c.duty === shift.duty)?.code ?? ""
     : "";
 
   const [selection, setSelection] = useState(initial);
-  const [ot, setOt] = useState<OtType>(shift?.ot_type ?? (officeRole ? "Additional" : "None"));
+  const [tag, setTag] = useState<Tag>(
+    shift?.sick_tag || shift?.duty === "Sick" ? "Sick"
+      : shift?.ot_type === "BuiltIn" ? "BuiltIn"
+      : shift?.ot_type === "Additional" ? "Additional"
+      : officeRole ? "Additional" : "",
+  );
   const [hours, setHours] = useState(String(shift?.hours ?? (officeRole ? BEDSIDE_SHIFT_HOURS : 12)));
 
   const chosenCode = codes.find((c) => c.code === selection);
+  const isMot = selection === MOT_VALUE;
   const special = SPECIAL.find((x) => x.value === selection);
-  const isWorking = !!chosenCode;
+  const isWorking = !!chosenCode || isMot;
+  const motDuty: Duty = (shift?.duty === "Night" || shift?.duty === "Day" ? shift.duty : codes[0]?.duty ?? "Day") as Duty;
+  const otType: OtType = isMot ? "MedEvac" : tag === "BuiltIn" ? "BuiltIn" : tag === "Additional" ? "Additional" : "None";
 
   const stage = () => {
     if (!selection) { toast.error("Pick an assignment"); return; }
     if (isWorking && officeRole) {
       const check = validateBedsideAssignment({
-        role: s.role, dateISO: date, duty: chosenCode!.duty as "Day" | "Night", otType: ot,
+        role: s.role, dateISO: date, duty: (chosenCode?.duty ?? motDuty) as "Day" | "Night", otType,
         existingMonthHours: bedsideUsed, hours: Number(hours) || 0,
       });
       if (!check.ok) { toast.error(check.message); return; }
@@ -502,8 +514,14 @@ function CellEditor({ entry, codes, monthShifts, year, month, onClose, onStage }
     onStage({
       staff: s, date, existing: shift,
       payload: isWorking
-        ? { duty: chosenCode!.duty, unit_code: chosenCode!.unit_code, ot_type: ot, hours: Number(hours) || 0 }
-        : { duty: special!.duty, unit_code: null, ot_type: "None", hours: 0 },
+        ? {
+            duty: (chosenCode?.duty ?? motDuty) as Duty,
+            unit_code: chosenCode?.unit_code ?? null,
+            ot_type: otType,
+            hours: Number(hours) || 0,
+            sick_tag: tag === "Sick",
+          }
+        : { duty: special!.duty, unit_code: null, ot_type: "None", hours: 0, sick_tag: false },
     });
   };
 
@@ -530,6 +548,7 @@ function CellEditor({ entry, codes, monthShifts, year, month, onClose, onStage }
                 {codes.map((c) => (
                   <SelectItem key={c.id} value={c.code}>{c.code}{c.unit ? ` — ${c.unit}` : ""}</SelectItem>
                 ))}
+                <SelectItem value={MOT_VALUE}>MOT — MedEvac OT</SelectItem>
                 {SPECIAL.map((x) => <SelectItem key={x.value} value={x.value}>{x.label}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -537,15 +556,13 @@ function CellEditor({ entry, codes, monthShifts, year, month, onClose, onStage }
           {isWorking && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Overtime</Label>
-                <Select value={ot} onValueChange={(v) => setOt(v as OtType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Label>Tag</Label>
+                <Select value={tag} onValueChange={(v) => setTag(v as Tag)}>
+                  <SelectTrigger><SelectValue placeholder="No tag" /></SelectTrigger>
                   <SelectContent>
-                    {(officeRole ? ["BuiltIn", "Additional", "MedEvac"] : ["None", "BuiltIn", "Additional", "MedEvac"]).map((o) => (
-                      <SelectItem key={o} value={o}>
-                        {o === "BuiltIn" ? "BOT — Built-in OT" : o === "Additional" ? "AOT — Additional OT" : o === "MedEvac" ? "MOT — MedEvac OT" : "None"}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="BuiltIn">BOT — Built-in Overtime</SelectItem>
+                    <SelectItem value="Additional">AOT — Additional Overtime</SelectItem>
+                    <SelectItem value="Sick">Sick leave</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
