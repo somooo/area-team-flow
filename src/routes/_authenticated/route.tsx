@@ -71,14 +71,30 @@ function Shell() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <KadirLogo size="md" />
-          <nav className="flex items-center gap-1 flex-wrap">
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          {/* Top row: logo, user info, sign out, notifications */}
+          <div className="flex items-center justify-between gap-4">
+            <KadirLogo size="md" />
+            <div className="flex items-center gap-3 text-sm">
+              <div className="text-right hidden sm:block">
+                <div className="font-medium">{me?.staff?.name}</div>
+                <div className="text-muted-foreground text-xs">
+                  {me?.staff?.role}{me?.staff?.area ? ` · ${me.staff.area}` : ""}
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={signOut} disabled={signingOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+              <NotificationsBell />
+            </div>
+          </div>
+          {/* Bottom row: navigation tabs in one horizontal line */}
+          <nav className="mt-3 flex items-center justify-center gap-1 overflow-x-auto">
             {links.filter(l => l.show).map((l) => (
               <Link
                 key={l.to}
                 to={l.to}
-                className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm transition-colors ${
                   pathname === l.to
                     ? "bg-primary text-primary-foreground font-medium shadow-sm"
                     : "text-muted-foreground hover:bg-steel-100 hover:text-steel-700"
@@ -86,18 +102,6 @@ function Shell() {
               >{l.label}</Link>
             ))}
           </nav>
-          <div className="flex items-center gap-3 text-sm">
-            <div className="text-right hidden sm:block">
-              <div className="font-medium">{me?.staff?.name}</div>
-              <div className="text-muted-foreground text-xs">
-                {me?.staff?.role}{me?.staff?.area ? ` · ${me.staff.area}` : ""}
-              </div>
-            </div>
-            <Button variant="ghost" size="sm" onClick={signOut} disabled={signingOut}>
-              <LogOut className="h-4 w-4" />
-            </Button>
-            <NotificationsBell />
-          </div>
         </div>
       </header>
       <main className="max-w-6xl mx-auto p-4 md:p-6">
