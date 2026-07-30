@@ -382,6 +382,7 @@ export type Database = {
           prev_shift_type: Database["public"]["Enums"]["shift_type"] | null
           prev_unit_code: string | null
           shift_type: Database["public"]["Enums"]["shift_type"]
+          sick_tag: boolean
           staff_email: string
           staff_id: string | null
           staff_name: string
@@ -407,6 +408,7 @@ export type Database = {
           prev_shift_type?: Database["public"]["Enums"]["shift_type"] | null
           prev_unit_code?: string | null
           shift_type: Database["public"]["Enums"]["shift_type"]
+          sick_tag?: boolean
           staff_email: string
           staff_id?: string | null
           staff_name: string
@@ -432,6 +434,7 @@ export type Database = {
           prev_shift_type?: Database["public"]["Enums"]["shift_type"] | null
           prev_unit_code?: string | null
           shift_type?: Database["public"]["Enums"]["shift_type"]
+          sick_tag?: boolean
           staff_email?: string
           staff_id?: string | null
           staff_name?: string

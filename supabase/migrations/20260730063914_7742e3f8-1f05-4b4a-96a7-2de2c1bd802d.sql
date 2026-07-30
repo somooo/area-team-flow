@@ -1,0 +1,1 @@
+ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS sick_tag boolean NOT NULL DEFAULT false;
