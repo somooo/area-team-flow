@@ -44,7 +44,7 @@ type PendingEdit = {
   existing?: Shift;
   /** null = remove the assignment */
   payload: null | {
-    duty: Duty; unit_code: string | null; ot_type: OtType; hours: number;
+    duty: Duty; unit_code: string | null; ot_type: OtType; hours: number; sick_tag: boolean;
   };
 };
 
@@ -131,7 +131,7 @@ function SupervisorPage() {
         date: p.date, shift_type: p.payload.duty === "Night" ? "Night" : p.payload.duty === "Day" ? "Morning" : "Off",
         hours: p.payload.hours, is_overtime: p.payload.ot_type !== "None",
         notes: null, unit_code: p.payload.unit_code,
-        duty: p.payload.duty, ot_type: p.payload.ot_type,
+        duty: p.payload.duty, ot_type: p.payload.ot_type, sick_tag: p.payload.sick_tag,
       });
     }
     return out;
@@ -163,6 +163,7 @@ function SupervisorPage() {
         unit_code: p.payload.unit_code,
         ot_type: p.payload.ot_type,
         is_overtime: p.payload.ot_type !== "None",
+        sick_tag: p.payload.sick_tag,
         hours: p.payload.hours,
         shift_type: (p.payload.duty === "Night" ? "Night" : p.payload.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
       };
