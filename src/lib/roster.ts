@@ -14,6 +14,7 @@ export type RosterShift = {
   unit_code: string | null;
   duty: Duty;
   ot_type: OtType;
+  sick_tag?: boolean | null;
 };
 
 export function monthDays(year: number, month: number): Date[] {
@@ -44,6 +45,16 @@ export function cellFor(shift: RosterShift | undefined, isWeekend: boolean): Cel
   const letter =
     shift.duty === "Day" ? "D" :
     shift.duty === "Night" ? "N" : "";
+
+  // Sick tag layers on top of the original assignment: keep the code, colour it red.
+  if (shift.sick_tag) {
+    const base = shift.ot_type === "MedEvac" ? "MOT" : `${letter}${unit}` || "S";
+    return {
+      code: `s${base}`,
+      className: "bg-red-500 text-white",
+      title: `Sick leave (assigned ${base}) · ${shift.date}`,
+    };
+  }
 
   // MedEvac OT overrides
   if (shift.ot_type === "MedEvac") {
