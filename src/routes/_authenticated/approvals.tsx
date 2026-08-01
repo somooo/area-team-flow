@@ -100,14 +100,25 @@ function ApprovalsPage() {
     load();
   };
 
-  const total = leaves.length + changes.length + pre.length;
+  const decideReport = async (r: TlReport, status: "Reviewed" | "Rejected") => {
+    const { error } = await supabase.from("team_leader_reports").update({ status }).eq("id", r.id);
+    if (error) { toast.error(error.message); return; }
+    await logAudit({ action: `tl_report_${status.toLowerCase()}`, entity_type: "team_leader_report", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
+    await createNotification({ data: { recipient_email: r.reporter_email, title: `Shift report ${status.toLowerCase()}`, body: `${r.shift_date} · ${r.layer}`, link: "/dashboard" } });
+    toast.success(`Report ${status.toLowerCase()}`);
+    load();
+  };
+
+  const total = leaves.length + changes.length + pre.length + reports.length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Approvals</h1>
-          <p className="text-sm text-muted-foreground">Unified inbox for pending requests.</p>
+          <p className="text-sm text-muted-foreground">
+            {admin ? "Unified inbox — every pending request across all areas." : "Unified inbox for pending requests."}
+          </p>
         </div>
         <Badge variant="secondary">{total} pending</Badge>
       </div>
@@ -127,8 +138,32 @@ function ApprovalsPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => decideLeave(l, "Approved")}>Approve</Button>
+                <Button size="sm" onClick={() => decideLeave(l, "Approved")}>
+                  {admin && l.stage === "covering" ? "Approve (override)" : "Approve"}
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => decideLeave(l, "Rejected")}>Reject</Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Team Leader reports</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {reports.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
+          {reports.map(r => (
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-md p-3">
+              <div>
+                <div className="font-medium">{r.reporter_name} · {r.shift_date} · {r.layer} <span className="text-xs text-muted-foreground">({r.area})</span></div>
+                <div className="text-xs text-muted-foreground">
+                  {(r.sick_calls ?? []).map(c => `${c.staff_name} (${c.staff_code}) → ${c.covered_by} · ${c.coverage_type === "overtime" ? "overtime" : "area pull"}`).join(" | ") || "No sick calls"}
+                  {r.comment ? ` · ${r.comment}` : ""}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => decideReport(r, "Reviewed")}>Approve</Button>
+                <Button size="sm" variant="outline" onClick={() => decideReport(r, "Rejected")}>Reject</Button>
               </div>
             </div>
           ))}
