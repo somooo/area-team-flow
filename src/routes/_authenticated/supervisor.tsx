@@ -369,7 +369,7 @@ function SupervisorPage() {
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             pendingKeys={pendingKeys}
-            onCellClick={({ staff: s, date, shift }) => setEditor({ staff: s, date, shift })}
+            onCellClick={canEditViewedArea ? ({ staff: s, date, shift }) => setEditor({ staff: s, date, shift }) : undefined}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             Changes are staged — press <span className="font-medium">Save changes</span> to apply them.
