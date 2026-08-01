@@ -15,6 +15,7 @@ import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
+import { canManageArea, isAdmin } from "@/lib/permissions";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import { toISODate } from "@/lib/roster";
@@ -72,7 +73,10 @@ function SupervisorPage() {
   const [saving, setSaving] = useState(false);
 
   const role = me?.staff?.role;
-  const canManage = role === "supervisor" || role === "admin";
+  const admin = isAdmin(me?.staff);
+  const canManage = admin || role === "supervisor";
+  /** Admin bypasses area scoping entirely; supervisors are limited to their own area. */
+  const canEditViewedArea = canManageArea(me?.staff, viewArea);
 
   useEffect(() => {
     supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
@@ -238,7 +242,7 @@ function SupervisorPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{role === "admin" ? "Admin" : "Supervisor"} · {viewArea}</h1>
+        <h1 className="text-2xl font-semibold">{admin ? "Admin" : "Supervisor"} · {viewArea}</h1>
         <p className="text-sm text-muted-foreground">Manage the schedule and approvals.</p>
       </div>
 
@@ -330,7 +334,7 @@ function SupervisorPage() {
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-            {role === "admin" && (
+            {admin && (
               <div className="min-w-0 flex-1">
                 <Label className="mb-1.5 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Area</Label>
                 <Select value={viewArea} onValueChange={(v) => { setPending({}); setViewArea(v); }}>
@@ -365,7 +369,7 @@ function SupervisorPage() {
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             pendingKeys={pendingKeys}
-            onCellClick={({ staff: s, date, shift }) => setEditor({ staff: s, date, shift })}
+            onCellClick={canEditViewedArea ? ({ staff: s, date, shift }) => setEditor({ staff: s, date, shift }) : undefined}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             Changes are staged — press <span className="font-medium">Save changes</span> to apply them.
