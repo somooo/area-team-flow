@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
+import { exportExcel } from "@/lib/schedule-export";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import { toISODate } from "@/lib/roster";
@@ -311,6 +312,13 @@ function SupervisorPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
+            >
+              Download Excel
+            </Button>
             {Object.keys(pending).length > 0 && (
               <>
                 <Badge variant="secondary">{Object.keys(pending).length} unsaved</Badge>
