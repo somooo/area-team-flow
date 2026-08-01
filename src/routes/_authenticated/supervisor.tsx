@@ -311,6 +311,13 @@ function SupervisorPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
+            >
+              Download Excel
+            </Button>
             {Object.keys(pending).length > 0 && (
               <>
                 <Badge variant="secondary">{Object.keys(pending).length} unsaved</Badge>
