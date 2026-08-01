@@ -10,6 +10,7 @@ import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { logAudit } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications.functions";
+import { isAdmin } from "@/lib/permissions";
 
 export const Route = createFileRoute("/_authenticated/approvals")({
   head: () => ({ meta: [{ title: "Approvals — KADIR Staff Management" }] }),
@@ -19,25 +20,31 @@ export const Route = createFileRoute("/_authenticated/approvals")({
 type Leave = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null; stage: string | null; covering_supervisor_email: string | null };
 type Change = { id: string; requester_email: string; requester_name: string; area: string; change_type: string; target_staff_name: string; details: string | null; status: string };
 type Pre = { id: string; requester_email: string; requester_name: string; area: string; request_type: string; target_month: string; requested_dates: string[]; details: string | null; status: string };
+type SickCall = { staff_name: string; staff_code: string; covered_by: string; coverage_type: string };
+type TlReport = { id: string; reporter_name: string; reporter_email: string; area: string; layer: string; shift_date: string; sick_calls: SickCall[]; comment: string | null; status: string };
 
 function ApprovalsPage() {
   const { me } = useMe();
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [changes, setChanges] = useState<Change[]>([]);
   const [pre, setPre] = useState<Pre[]>([]);
+  const [reports, setReports] = useState<TlReport[]>([]);
 
   const role = me?.staff?.role as string | undefined;
   const canApprove = role === "supervisor" || role === "admin" || role === "team_leader";
+  const admin = isAdmin(me?.staff);
 
   const load = async () => {
-    const [{ data: lv }, { data: ch }, { data: pr }] = await Promise.all([
+    const [{ data: lv }, { data: ch }, { data: pr }, { data: tl }] = await Promise.all([
       supabase.from("leave_requests").select("*").eq("status", "Pending").order("created_at", { ascending: false }),
       supabase.from("schedule_change_requests").select("*").eq("status", "Pending Supervisor").order("created_at", { ascending: false }),
       supabase.from("preschedule_requests").select("*").eq("status", "Pending").order("created_at", { ascending: false }),
+      supabase.from("team_leader_reports").select("*").eq("status", "Pending").order("shift_date", { ascending: false }),
     ]);
     setLeaves((lv as Leave[]) ?? []);
     setChanges((ch as Change[]) ?? []);
     setPre((pr as Pre[]) ?? []);
+    setReports((tl as unknown as TlReport[]) ?? []);
   };
   useEffect(() => { void load(); }, [me?.staff?.email]);
 
@@ -45,7 +52,8 @@ function ApprovalsPage() {
 
   const decideLeave = async (r: Leave, status: "Approved" | "Rejected") => {
     // Supervisor-calendar vacations: covering supervisor approves first, then admin.
-    if (status === "Approved" && r.stage === "covering") {
+    // Admin can override and approve at any stage.
+    if (status === "Approved" && r.stage === "covering" && !admin) {
       const { data: admin } = await supabase.from("staff").select("email").eq("role", "admin").limit(1).maybeSingle();
       if (!admin?.email) { toast.error("No admin available for final approval"); return; }
       const { error: e1 } = await supabase.from("leave_requests")
