@@ -57,11 +57,12 @@ function Shell() {
   }
 
   const role = me?.staff?.role as string | undefined;
+  const isAdmin = role === "admin";
   const links: { to: string; label: string; show: boolean }[] = [
-    { to: "/dashboard", label: "Schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" },
-    { to: "/vacations", label: "Vacations", show: role === "staff" || role === "supervisor" || role === "team_leader" },
+    { to: "/dashboard", label: "Schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" || isAdmin },
+    { to: "/vacations", label: "Vacations", show: role === "staff" || role === "supervisor" || role === "team_leader" || isAdmin },
     { to: "/preschedule", label: "Requests", show: role === "staff" || role === "supervisor" || role === "team_leader" },
-    { to: "/supervisor", label: "Supervisor", show: role === "supervisor" || role === "team_leader" },
+    { to: "/supervisor", label: isAdmin ? "Edit schedule" : "Supervisor", show: role === "supervisor" || role === "team_leader" || isAdmin },
     { to: "/approvals", label: "Approvals", show: role === "supervisor" || role === "team_leader" || role === "admin" },
     { to: "/reports", label: "Reports", show: role === "admin" || role === "supervisor" },
     { to: "/settings", label: "Settings", show: role === "admin" },
