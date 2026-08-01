@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
+import { exportExcel } from "@/lib/schedule-export";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import { toISODate } from "@/lib/roster";
