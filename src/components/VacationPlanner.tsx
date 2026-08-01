@@ -82,9 +82,8 @@ export function stageLabel(r: { status: string; stage: string | null }) {
 
 export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () => void }) {
   const { rules } = useSystemRules();
-  const isManagerRole = me.role === "supervisor" || me.role === "team_leader" || me.role === "admin";
   const canSwitchArea = me.role !== "staff";
-  const canSeeSupervisorsCalendar = me.role === "supervisor" || me.role === "admin";
+  const canSeeSupervisorsCalendar = canUseSupervisorsCalendar(me);
   const [areas, setAreas] = useState<string[]>([]);
   const [viewArea, setViewArea] = useState<string>(
     me.role === "supervisor" || me.role === "admin" ? SUPERVISORS_AREA : (me.area ?? ""),
@@ -110,8 +109,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
   const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === me.area;
-  /** Supervisors manage their own area; admins manage every area. Not on the shared supervisors calendar. */
-  const canManage = isManagerRole && !isSupervisorsView && (me.role === "admin" || viewArea === me.area);
+  /** Supervisors manage their own area; admins manage every area including the supervisors calendar. */
+  const canManage = canManageVacationsIn(me, viewArea, SUPERVISORS_AREA);
 
   useEffect(() => {
     if (!canSwitchArea) return;
