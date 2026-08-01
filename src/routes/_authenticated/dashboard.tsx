@@ -226,9 +226,13 @@ function SchedulePage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Monthly schedule</CardTitle>
           <div className="flex flex-wrap gap-2">
-            {meStaff.role !== "staff" && (
-              <Button size="sm" variant="outline" onClick={() => exportExcel({ area: viewArea, year, month, staff: roster, shifts })}>Download Excel</Button>
-            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void exportExcel({ area: viewArea, year, month, staff: roster, shifts, layer: effectiveLayer, withSummary: meStaff.role !== "staff" })}
+            >
+              {meStaff.role === "staff" ? "Download schedule" : "Download Excel"}
+            </Button>
             <Button size="sm" variant="outline" onClick={() => exportPdf({ area: viewArea, year, month, staff: roster, shifts })}>Download PDF</Button>
           </div>
         </CardHeader>
