@@ -15,6 +15,7 @@ import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
+import { canManageArea, isAdmin } from "@/lib/permissions";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import { toISODate } from "@/lib/roster";
@@ -72,7 +73,10 @@ function SupervisorPage() {
   const [saving, setSaving] = useState(false);
 
   const role = me?.staff?.role;
-  const canManage = role === "supervisor" || role === "admin";
+  const admin = isAdmin(me?.staff);
+  const canManage = admin || role === "supervisor";
+  /** Admin bypasses area scoping entirely; supervisors are limited to their own area. */
+  const canEditViewedArea = canManageArea(me?.staff, viewArea);
 
   useEffect(() => {
     supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
