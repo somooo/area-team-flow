@@ -242,7 +242,7 @@ function SupervisorPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{role === "admin" ? "Admin" : "Supervisor"} · {viewArea}</h1>
+        <h1 className="text-2xl font-semibold">{admin ? "Admin" : "Supervisor"} · {viewArea}</h1>
         <p className="text-sm text-muted-foreground">Manage the schedule and approvals.</p>
       </div>
 
@@ -334,7 +334,7 @@ function SupervisorPage() {
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-            {role === "admin" && (
+            {admin && (
               <div className="min-w-0 flex-1">
                 <Label className="mb-1.5 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Area</Label>
                 <Select value={viewArea} onValueChange={(v) => { setPending({}); setViewArea(v); }}>
