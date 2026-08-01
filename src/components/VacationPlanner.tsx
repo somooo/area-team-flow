@@ -17,6 +17,7 @@ import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
+import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
 
 export const SUPERVISORS_AREA = "Supervisors";
 
