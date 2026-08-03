@@ -18,6 +18,8 @@ import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
+import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
+import { exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type VacationImportPayload } from "@/lib/vacation-io";
 
 export const SUPERVISORS_AREA = "Supervisors";
 
@@ -365,6 +367,61 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
         <span className="font-medium text-ink">{balance.pending}</span> · Remaining{" "}
         <span className="font-medium text-steel-700">{remaining}</span>
       </div>
+
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <ExcelImportButton<VacationImportPayload>
+            size="default"
+            title={`Import ${viewArea} vacations`}
+            description="Expected columns: Staff Name, Area, Vacation Start, Vacation End, Status. Only rows in the selected area are imported."
+            parse={async ({ rows }) => {
+              const year = cursor.getFullYear();
+              const [{ data: st }, { data: lv }] = await Promise.all([
+                isSupervisorsView
+                  ? supabase.from("staff_directory").select("id,email,name,role,area,badge_id").eq("role", "supervisor")
+                  : supabase.from("staff_directory").select("id,email,name,role,area,badge_id").eq("area", viewArea),
+                supabase.from("leave_requests").select("staff_email,start_date,end_date,status")
+                  .eq("area", viewArea).eq("leave_type", "Vacation")
+                  .lte("start_date", `${year}-12-31`).gte("end_date", `${year}-01-01`),
+              ]);
+              return planVacationImport({
+                rows,
+                area: viewArea,
+                staff: ((st ?? []) as DirectoryStaffLite[]),
+                existing: (lv ?? []) as { staff_email: string; start_date: string; end_date: string; status: string }[],
+                yearlyCap,
+              });
+            }}
+            commit={async (items: ImportItem<VacationImportPayload>[]) => {
+              const payload = items.map((i) => ({
+                staff_id: i.payload!.staff_id,
+                staff_email: i.payload!.staff_email,
+                staff_name: i.payload!.staff_name,
+                area: i.payload!.area,
+                leave_type: "Vacation" as const,
+                start_date: i.payload!.start_date,
+                end_date: i.payload!.end_date,
+                status: i.payload!.status as "Approved" | "Pending" | "Rejected",
+                approver_email: me.email,
+              }));
+              if (payload.length === 0) return;
+              const { error } = await supabase.from("leave_requests").insert(payload);
+              if (error) throw new Error(error.message);
+              await logAudit({ action: "vacations_imported", entity_type: "leave_request", area: viewArea, details: { count: payload.length } });
+              await load(); onDone();
+            }}
+          />
+          <Button
+            variant="outline"
+            onClick={async () => {
+              const n = await exportVacationsExcel(viewArea, cursor.getFullYear());
+              toast.success(`Exported ${n} vacation row${n === 1 ? "" : "s"}`);
+            }}
+          >
+            Export to Excel
+          </Button>
+        </div>
+      )}
 
       {/* Calendars */}
       <div className="grid gap-3 lg:grid-cols-2 max-w-4xl mx-auto">
