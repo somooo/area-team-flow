@@ -15,6 +15,8 @@ import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
+import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
+import { planScheduleImport, type ImportedCell } from "@/lib/schedule-import";
 import { canManageArea, isAdmin } from "@/lib/permissions";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
@@ -151,6 +153,34 @@ function SupervisorPage() {
   const stageEdit = (edit: PendingEdit) => {
     setPending((p) => ({ ...p, [keyOf(edit.staff.email, edit.date)]: edit }));
     setEditor(null);
+  };
+
+  /** Bulk apply an imported grid after the preview/confirm step. */
+  const commitScheduleImport = async (items: ImportItem<ImportedCell>[]) => {
+    for (const it of items) {
+      const cell = it.payload!;
+      if (!cell.payload) {
+        if (cell.existingId) await supabase.from("shifts").delete().eq("id", cell.existingId);
+        continue;
+      }
+      const body = {
+        staff_email: cell.staff.email, staff_name: cell.staff.name, area: viewArea, date: cell.date,
+        duty: cell.payload.duty,
+        unit_code: cell.payload.unit_code,
+        ot_type: cell.payload.ot_type,
+        is_overtime: cell.payload.ot_type !== "None",
+        sick_tag: cell.payload.sick_tag,
+        hours: cell.payload.hours,
+        shift_type: (cell.payload.duty === "Night" ? "Night" : cell.payload.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
+      };
+      const { error } = cell.existingId
+        ? await supabase.from("shifts").update(body).eq("id", cell.existingId)
+        : await supabase.from("shifts").insert(body);
+      if (error) { toast.error(error.message); return; }
+    }
+    toast.success(`Imported ${items.length} schedule cell${items.length === 1 ? "" : "s"}`);
+    setPending({});
+    await load();
   };
 
   const saveAll = async () => {
@@ -316,6 +346,23 @@ function SupervisorPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
+            <ExcelImportButton<ImportedCell>
+              title={`Import ${viewArea} schedule`}
+              description="Only cells that differ from the current schedule are listed. Re-importing an untouched export produces no changes."
+              disabled={!canEditViewedArea}
+              parse={async ({ matrix }) => planScheduleImport({
+                matrix, staff: staff as StaffLite[], shifts: mergedShifts,
+                codes: codesForLayer(codes, effectiveLayer), year, month, layer: effectiveLayer,
+              })}
+              commit={commitScheduleImport}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
+            >
+              Export to Excel
+            </Button>
             <Button
               size="sm"
               variant="outline"
