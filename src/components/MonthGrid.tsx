@@ -11,6 +11,7 @@ export type StaffLite = {
   role: string;
   area: string | null;
   department: string | null;
+  badge_id?: string | null;
 };
 
 export type MonthGridProps = {

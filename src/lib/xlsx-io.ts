@@ -1,15 +1,23 @@
 import * as XLSX from "xlsx";
 
-/** Read the first sheet of an .xlsx file both as objects (header row) and as a raw matrix. */
-export async function readSheet(file: File): Promise<{
+/** Read a sheet of an .xlsx file both as objects (header row) and as a raw matrix. */
+export async function readSheet(file: File, opts?: { sheetName?: string }): Promise<{
   rows: Record<string, unknown>[];
   matrix: unknown[][];
 }> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { cellDates: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
+  let name = wb.SheetNames[0];
+  if (opts?.sheetName) {
+    const wanted = opts.sheetName.trim().toLowerCase();
+    const found = wb.SheetNames.find((n) => n.trim().toLowerCase() === wanted);
+    if (!found) throw new Error(`This workbook has no sheet named "${opts.sheetName}"`);
+    name = found;
+  }
+  const ws = wb.Sheets[name];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "", raw: false });
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "", raw: false });
+  // raw:true keeps real dates as Date objects so day columns can be detected reliably
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "", raw: true });
   return { rows, matrix };
 }
 
