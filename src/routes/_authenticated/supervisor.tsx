@@ -348,6 +348,7 @@ function SupervisorPage() {
           <div className="flex flex-wrap items-center gap-2">
             <ExcelImportButton<ImportedCell>
               title={`Import ${viewArea} schedule`}
+              sheetName="Schedule"
               description="Only cells that differ from the current schedule are listed. Re-importing an untouched export produces no changes."
               disabled={!canEditViewedArea}
               parse={async ({ matrix }) => planScheduleImport({
