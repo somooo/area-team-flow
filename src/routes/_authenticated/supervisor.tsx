@@ -109,10 +109,10 @@ function SupervisorPage() {
     const end = toISODate(new Date(year, month + 1, 0));
     const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }, { data: tl }] = await Promise.all([
       supabase.from("shifts").select("*").eq("area", viewArea).gte("date", start).lte("date", end).order("date"),
-      supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active").eq("area", viewArea).order("name"),
+      supabase.from("staff").select("id,name,email,role,area,department,badge_id,supervisor_email,delegated_to_email,delegation_active").eq("area", viewArea).order("name"),
       supabase.from("leave_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("schedule_change_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
-      supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active").eq("role", "supervisor"),
+      supabase.from("staff").select("id,name,email,role,area,department,badge_id,supervisor_email,delegated_to_email,delegation_active").eq("role", "supervisor"),
       supabase.from("team_leader_reports").select("*").eq("area", viewArea).order("shift_date", { ascending: false }).limit(30),
     ]);
     setShifts((sh as Shift[]) ?? []);
