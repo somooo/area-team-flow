@@ -53,6 +53,17 @@ export function parseCellCode(raw: string, codes: AssignmentCode[], fallbackHour
   };
 }
 
+function cellText(v: unknown): string {
+  if (v == null) return "";
+  if (v instanceof Date) return "";
+  return String(v).trim();
+}
+
+function asDate(v: unknown): Date | null {
+  if (v instanceof Date && !isNaN(v.getTime())) return v;
+  return null;
+}
+
 /** Build the diff between an uploaded grid sheet and the schedule currently on screen. */
 export function planScheduleImport(input: {
   matrix: unknown[][];
@@ -69,40 +80,54 @@ export function planScheduleImport(input: {
   const days = monthDays(year, month);
   const items: ImportItem<ImportedCell>[] = [];
 
-  const headerIdx = matrix.findIndex((r) => String(r?.[0] ?? "").trim().toLowerCase() === "staff name");
+  // 1) header row: column A = "staff name" AND column B = "badge"
+  const headerIdx = matrix.findIndex(
+    (r) =>
+      cellText(r?.[0]).toLowerCase() === "staff name" &&
+      cellText(r?.[1]).toLowerCase().startsWith("badge"),
+  );
   if (headerIdx < 0) {
-    return [{ id: "header", label: "File", change: "—", status: "skip", reason: 'no "Staff Name" header row found' }];
+    return [{ id: "header", label: "File", change: "—", status: "skip", reason: 'no header row with "Staff Name" + "Badge" found' }];
   }
-  const header = matrix[headerIdx].map((c) => String(c ?? "").trim());
-  // day columns: header cells that are plain day numbers
+  const header = matrix[headerIdx] ?? [];
+
+  // 2) day columns: consecutive real dates starting at column C, in the selected month/year
   const dayCols = new Map<number, string>();
-  header.forEach((h, ci) => {
-    const n = Number(h);
-    if (Number.isInteger(n) && n >= 1 && n <= days.length) dayCols.set(ci, toISODate(days[n - 1]));
-  });
+  for (let ci = 2; ci < header.length; ci++) {
+    const d = asDate(header[ci]);
+    if (!d) break;
+    if (d.getFullYear() === year && d.getMonth() === month) dayCols.set(ci, toISODate(d));
+  }
   if (dayCols.size === 0) {
     return [{ id: "days", label: "File", change: "—", status: "skip", reason: "no day columns found for the selected month" }];
   }
 
   const byName = new Map(staff.map((s) => [s.name.trim().toLowerCase(), s]));
+  const byBadge = new Map(
+    staff
+      .filter((s) => (s.badge_id ?? "").trim() !== "")
+      .map((s) => [String(s.badge_id).trim().toLowerCase(), s]),
+  );
   const current = new Map<string, RosterShift>();
   for (const s of shifts) current.set(`${s.staff_email.toLowerCase()}|${s.date}`, s);
 
   for (let ri = headerIdx + 1; ri < matrix.length; ri++) {
     const row = matrix[ri] ?? [];
-    const name = String(row[0] ?? "").trim();
-    if (!name || name.toLowerCase() === "legend") continue;
-    const member = byName.get(name.toLowerCase());
+    const name = cellText(row[0]);
+    const badge = cellText(row[1]);
+    // 4) stop at the first row with no name and no badge
+    if (!name && !badge) break;
+    // zone / section label rows carry no badge — skip silently
+    if (!badge) continue;
+
+    const member = byBadge.get(badge.toLowerCase()) ?? byName.get(name.toLowerCase());
     if (!member) {
-      // zone header rows have no day values — ignore them silently
-      const hasValues = Array.from(dayCols.keys()).some((ci) => String(row[ci] ?? "").trim() !== "");
-      if (!hasValues) continue;
-      items.push({ id: `r${ri}`, label: name, change: "—", status: "skip", reason: "name not in this area" });
+      items.push({ id: `r${ri}`, label: name || badge, change: "—", status: "skip", reason: "badge/name not found in directory" });
       continue;
     }
 
     for (const [ci, date] of dayCols) {
-      const raw = String(row[ci] ?? "").trim();
+      const raw = cellText(row[ci]);
       const existing = current.get(`${member.email.toLowerCase()}|${date}`);
       const before = exportCell(existing, isWeekendDay(new Date(`${date}T00:00:00`), layer)).raw;
       if (raw === before) continue;
