@@ -32,7 +32,6 @@ export function ExcelImportButton<P>({
   parse,
   commit,
   disabled,
-  sheetName,
   size = "sm",
   variant = "outline",
   onDone,
@@ -43,8 +42,6 @@ export function ExcelImportButton<P>({
   parse: (input: ParseInput) => Promise<ImportItem<P>[]>;
   commit: (items: ImportItem<P>[]) => Promise<void>;
   disabled?: boolean;
-  /** Read only this sheet (case-insensitive) instead of the first one. */
-  sheetName?: string;
   size?: "sm" | "default";
   variant?: "outline" | "default" | "secondary";
   onDone?: () => void;
@@ -57,7 +54,7 @@ export function ExcelImportButton<P>({
   const pick = async (file: File) => {
     setBusy(true);
     try {
-      const { rows, matrix } = await readSheet(file, sheetName ? { sheetName } : undefined);
+      const { rows, matrix } = await readSheet(file);
       const parsed = await parse({ rows, matrix, file });
       if (parsed.length === 0) { toast.error("Nothing to import from this file"); return; }
       setDone(null);
