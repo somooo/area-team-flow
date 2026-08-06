@@ -18,6 +18,7 @@ import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
+import { AREAS } from "@/lib/areas";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type VacationImportPayload } from "@/lib/vacation-io";
 
@@ -87,7 +88,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const { rules } = useSystemRules();
   const canSwitchArea = me.role !== "staff";
   const canSeeSupervisorsCalendar = canUseSupervisorsCalendar(me);
-  const [areas, setAreas] = useState<string[]>([]);
+  const areas = AREAS as readonly string[];
   const [viewArea, setViewArea] = useState<string>(
     me.role === "supervisor" || me.role === "admin" ? SUPERVISORS_AREA : (me.area ?? ""),
   );
@@ -114,13 +115,6 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === me.area;
   /** Supervisors manage their own area; admins manage every area including the supervisors calendar. */
   const canManage = canManageVacationsIn(me, viewArea, SUPERVISORS_AREA);
-
-  useEffect(() => {
-    if (!canSwitchArea) return;
-    void supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
-      setAreas(Array.from(new Set((data ?? []).map((r) => r.area as string).filter(Boolean))).sort());
-    });
-  }, [canSwitchArea]);
 
   useEffect(() => {
     if (!canSeeSupervisorsCalendar) return;

@@ -23,6 +23,7 @@ import type { RosterShift } from "@/lib/roster";
 import { getServerNow } from "@/lib/server-time.functions";
 import { exportExcel, exportPdf } from "@/lib/schedule-export";
 import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
+import { AREAS } from "@/lib/areas";
 import { X } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -58,7 +59,7 @@ function SchedulePage() {
   const [month, setMonth] = useState(today.getMonth());
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [roster, setRoster] = useState<Staff[]>([]);
-  const [areas, setAreas] = useState<string[]>([]);
+  const areas = AREAS as readonly string[];
   const [viewArea, setViewArea] = useState<string>("");
   const [layer, setLayer] = useState<"all" | "day" | "night">("day");
   const [menuShift, setMenuShift] = useState<Shift | null>(null);
@@ -77,23 +78,9 @@ function SchedulePage() {
   }, []);
 
   useEffect(() => {
-    supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
-      const uniq = Array.from(new Set((data ?? []).map((r) => r.area as string).filter(Boolean))).sort();
-      const order = ["ICU", "Wards", "Assistants"];
-      uniq.sort((a, b) => {
-        const ia = order.indexOf(a), ib = order.indexOf(b);
-        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
-      });
-      setAreas(uniq);
-    });
-  }, []);
-
-  useEffect(() => {
     if (viewArea) return;
-    if (me?.staff?.area) setViewArea(me.staff.area);
-    else if (areas.includes("ICU")) setViewArea("ICU");
-    else if (areas[0]) setViewArea(areas[0]);
-  }, [me?.staff?.area, areas]);
+    setViewArea(me?.staff?.area ?? "ICU");
+  }, [me?.staff?.area]);
 
   const isAssistants = viewArea.toLowerCase() === "assistants";
   const effectiveLayer: "all" | "day" | "night" = isAssistants ? "all" : layer;
@@ -265,6 +252,11 @@ function SchedulePage() {
             </div>
           </div>
           <ReferenceTable area={viewArea} rows={reference} />
+          {roster.length === 0 ? (
+            <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No staff assigned to this area yet — use Add staff to get started.
+            </p>
+          ) : (
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
             staff={roster} shifts={shifts}
@@ -274,6 +266,7 @@ function SchedulePage() {
             onCellClick={handleCell}
             isCellClickable={cellClickable}
           />
+          )}
           {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} />}
         </CardContent>
       </Card>

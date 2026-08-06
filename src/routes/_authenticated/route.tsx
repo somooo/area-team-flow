@@ -65,7 +65,7 @@ function Shell() {
     { to: "/supervisor", label: isAdmin ? "Edit schedule" : "Supervisor", show: role === "supervisor" || role === "team_leader" || isAdmin },
     { to: "/approvals", label: "Approvals", show: role === "supervisor" || role === "team_leader" || role === "admin" },
     { to: "/reports", label: "Reports", show: role === "admin" || role === "supervisor" },
-    { to: "/directory", label: "Staff Directory", show: role === "admin" || role === "supervisor" },
+    { to: "/directory", label: "Staff Directory", show: role === "admin" },
     { to: "/settings", label: "Settings", show: role === "admin" },
     { to: "/audit", label: "Audit", show: role === "admin" },
   ];

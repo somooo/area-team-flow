@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
@@ -13,6 +13,14 @@ import { downloadSheet, field, toISODateValue } from "@/lib/xlsx-io";
 import { isAdmin } from "@/lib/permissions";
 
 export const Route = createFileRoute("/_authenticated/directory")({
+  // Route-level gate: non-admins never reach the page, even by typing the URL.
+  beforeLoad: async () => {
+    const { data: u } = await supabase.auth.getUser();
+    const email = u.user?.email ?? "";
+    if (!email) throw redirect({ to: "/auth" });
+    const { data: staff } = await supabase.from("staff").select("role").ilike("email", email).maybeSingle();
+    if ((staff as { role?: string } | null)?.role !== "admin") throw redirect({ to: "/dashboard" });
+  },
   head: () => ({
     meta: [
       { title: "Staff Directory — KADIR Staff Management" },
@@ -80,9 +88,9 @@ function DirectoryPage() {
   const [fStatus, setFStatus] = useState("");
   const [editing, setEditing] = useState<{ id: string; key: string } | null>(null);
 
-  const role = me?.staff?.role;
-  const allowed = role === "admin" || role === "supervisor";
   const admin = isAdmin(me?.staff);
+  /** Directory is admin-only; the backend view and RLS enforce the same rule. */
+  const allowed = admin;
 
   const load = useCallback(async () => {
     const [{ data: st }, { data: cc }] = await Promise.all([
@@ -236,7 +244,7 @@ function DirectoryPage() {
   };
 
   if (!me?.staff) return null;
-  if (!allowed) return <p>Admin / supervisor access only.</p>;
+  if (!allowed) return <p>Admin access only.</p>;
 
   return (
     <div className="space-y-6">
