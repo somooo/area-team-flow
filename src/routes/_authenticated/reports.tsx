@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toISODate } from "@/lib/roster";
+import { AREAS } from "@/lib/areas";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({ meta: [{ title: "Reports — KADIR Staff Management" }] }),
@@ -23,7 +24,7 @@ function ReportsPage() {
   const [start, setStart] = useState(monthAgo);
   const [end, setEnd] = useState(today);
   const [areaFilter, setAreaFilter] = useState<string>("all");
-  const [areas, setAreas] = useState<string[]>([]);
+  const [areas, setAreas] = useState<string[]>([...AREAS]);
   const [rows, setRows] = useState<Row[]>([]);
 
   const isAdmin = me?.staff?.role === "admin";
@@ -31,10 +32,7 @@ function ReportsPage() {
 
   useEffect(() => {
     if (isAdmin) {
-      supabase.from("staff").select("area").then(({ data }) => {
-        const uniq = Array.from(new Set((data ?? []).map((d: { area: string | null }) => d.area).filter(Boolean))) as string[];
-        setAreas(uniq);
-      });
+      setAreas([...AREAS]);
     } else if (isSup && me?.staff?.area) {
       setAreas([me.staff.area]);
       setAreaFilter(me.staff.area);

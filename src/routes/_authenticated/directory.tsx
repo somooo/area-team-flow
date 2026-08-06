@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
@@ -13,6 +13,14 @@ import { downloadSheet, field, toISODateValue } from "@/lib/xlsx-io";
 import { isAdmin } from "@/lib/permissions";
 
 export const Route = createFileRoute("/_authenticated/directory")({
+  // Route-level gate: non-admins never reach the page, even by typing the URL.
+  beforeLoad: async () => {
+    const { data: u } = await supabase.auth.getUser();
+    const email = u.user?.email ?? "";
+    if (!email) throw redirect({ to: "/auth" });
+    const { data: staff } = await supabase.from("staff").select("role").ilike("email", email).maybeSingle();
+    if ((staff as { role?: string } | null)?.role !== "admin") throw redirect({ to: "/dashboard" });
+  },
   head: () => ({
     meta: [
       { title: "Staff Directory — KADIR Staff Management" },
