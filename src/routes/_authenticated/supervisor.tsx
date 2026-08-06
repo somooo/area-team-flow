@@ -402,6 +402,11 @@ function SupervisorPage() {
 
           <ReferenceTable area={viewArea} rows={reference} />
 
+          {staff.length === 0 ? (
+            <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No staff assigned to this area yet — use Add staff to get started.
+            </p>
+          ) : (
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
             staff={staff} shifts={mergedShifts} meEmail={meStaff.email}
@@ -410,6 +415,7 @@ function SupervisorPage() {
             pendingKeys={pendingKeys}
             onCellClick={canEditViewedArea ? ({ staff: s, date, shift }) => setEditor({ staff: s, date, shift }) : undefined}
           />
+          )}
           <p className="mt-2 text-xs text-muted-foreground">
             Changes are staged — press <span className="font-medium">Save changes</span> to apply them.
           </p>
@@ -444,9 +450,18 @@ function SupervisorPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Staff</CardTitle>
-          <AddStaffDialog area={viewArea} supervisorEmail={meStaff.email} onDone={load} />
+          <AddStaffDialog
+            area={viewArea}
+            admin={admin}
+            canEdit={canEditViewedArea}
+            assignedEmails={staff.map((s) => s.email.toLowerCase())}
+            onDone={load}
+          />
         </CardHeader>
         <CardContent>
+          {staff.length === 0 && (
+            <p className="text-sm text-muted-foreground">No staff assigned to this area yet — use Add staff to get started.</p>
+          )}
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
             {staff.map(s => (
               <div key={s.id} className="rounded-md border p-3">
@@ -455,12 +470,13 @@ function SupervisorPage() {
                 <div className="mt-2 flex items-center justify-between">
                   <Badge variant="secondary" className="capitalize">{s.role}</Badge>
                   <Button
-                    size="sm" variant="ghost"
+                    size="sm" variant="ghost" disabled={!canEditViewedArea}
+                    title="Remove from schedule"
                     onClick={async () => {
-                      if (!confirm(`Remove ${s.name} from ${viewArea}?`)) return;
-                      const { error } = await supabase.from("staff").delete().eq("id", s.id);
+                      if (!confirm(`Remove ${s.name} from the ${viewArea} schedule? They stay in the Staff Directory.`)) return;
+                      const { error } = await supabase.from("staff").update({ area: null }).eq("id", s.id);
                       if (error) { toast.error(error.message); return; }
-                      toast.success("Staff removed"); load();
+                      toast.success("Removed from this schedule — still in the Staff Directory"); load();
                     }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
