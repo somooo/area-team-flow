@@ -18,6 +18,7 @@ import { exportExcel } from "@/lib/schedule-export";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { planScheduleImport, type ImportedCell } from "@/lib/schedule-import";
 import { canManageArea, isAdmin } from "@/lib/permissions";
+import { AREAS } from "@/lib/areas";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import { toISODate } from "@/lib/roster";
@@ -65,7 +66,7 @@ function SupervisorPage() {
   const [changes, setChanges] = useState<ChangeReq[]>([]);
   const [reports, setReports] = useState<TlReport[]>([]);
   const [supervisors, setSupervisors] = useState<Staff[]>([]);
-  const [areas, setAreas] = useState<string[]>([]);
+  const areas = AREAS as readonly string[];
   const [viewArea, setViewArea] = useState("");
   const [layer, setLayer] = useState<"day" | "night">("day");
   const [codes, setCodes] = useState<AssignmentCode[]>([]);
@@ -81,18 +82,9 @@ function SupervisorPage() {
   const canEditViewedArea = canManageArea(me?.staff, viewArea);
 
   useEffect(() => {
-    supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
-      const uniq = Array.from(new Set((data ?? []).map((r) => r.area as string).filter(Boolean))).sort();
-      setAreas(uniq);
-    });
-  }, []);
-
-  useEffect(() => {
     if (viewArea) return;
-    if (me?.staff?.area) setViewArea(me.staff.area);
-    else if (areas.includes("ICU")) setViewArea("ICU");
-    else if (areas[0]) setViewArea(areas[0]);
-  }, [me?.staff?.area, areas]);
+    setViewArea(me?.staff?.area ?? "ICU");
+  }, [me?.staff?.area]);
 
   useEffect(() => {
     if (!viewArea) return;
