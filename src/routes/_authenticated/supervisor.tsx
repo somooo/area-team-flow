@@ -698,30 +698,148 @@ function AssignmentCodesCard({ area, layer, codes, onDone }: {
   );
 }
 
-function AddStaffDialog({ area, supervisorEmail, onDone }: { area: string; supervisorEmail: string; onDone: () => void }) {
+type DirectoryPerson = {
+  id: string; name: string; email: string; badge_id: string | null;
+  assigned_to: string | null; status: string | null; area: string | null;
+};
+
+/**
+ * Assign someone who already exists in the Staff Directory to this area's
+ * schedule. Supervisors never create people — only admins may do that.
+ */
+function AddStaffDialog({ area, admin, canEdit, assignedEmails, onDone }: {
+  area: string; admin: boolean; canEdit: boolean; assignedEmails: string[]; onDone: () => void;
+}) {
   const [open, setOpen] = useState(false);
+  const [people, setPeople] = useState<DirectoryPerson[]>([]);
+  const [q, setQ] = useState("");
+  const [assignedFilter, setAssignedFilter] = useState("__all");
+  const [statusFilter, setStatusFilter] = useState("Active");
+  const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [department, setDepartment] = useState("");
-  const submit = async () => {
-    if (!name || !email) return;
-    const { error } = await supabase.from("staff").insert({
-      name, email: email.toLowerCase(), role: "staff", area, department, supervisor_email: supervisorEmail,
+
+  useEffect(() => {
+    if (!open) return;
+    void supabase
+      .from("staff")
+      .select("id,name,email,badge_id,assigned_to,status,area")
+      .order("name")
+      .then(({ data }) => setPeople((data as DirectoryPerson[]) ?? []));
+  }, [open]);
+
+  const assignedOptions = useMemo(
+    () => Array.from(new Set(people.map((p) => p.assigned_to).filter(Boolean) as string[])).sort(),
+    [people],
+  );
+
+  const taken = useMemo(() => new Set(assignedEmails.map((e) => e.toLowerCase())), [assignedEmails]);
+
+  const list = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return people.filter((p) => {
+      if (statusFilter !== "__all" && (p.status ?? "Active") !== statusFilter) return false;
+      if (assignedFilter !== "__all" && (p.assigned_to ?? "") !== assignedFilter) return false;
+      if (!needle) return true;
+      return p.name.toLowerCase().includes(needle) || (p.badge_id ?? "").toLowerCase().includes(needle);
     });
+  }, [people, q, assignedFilter, statusFilter]);
+
+  const assign = async (p: DirectoryPerson) => {
+    setBusy(true);
+    const { error } = await supabase.from("staff").update({ area }).eq("id", p.id);
+    setBusy(false);
     if (error) { toast.error(error.message); return; }
+    toast.success(`${p.name} added to the ${area} schedule`);
     setOpen(false); onDone();
   };
+
+  const createNew = async () => {
+    if (!name.trim() || !email.trim()) { toast.error("Name and email are required"); return; }
+    const { error } = await supabase.from("staff").insert({
+      name: name.trim(), email: email.trim().toLowerCase(), role: "staff", area, status: "Active",
+    });
+    if (error) { toast.error(error.message); return; }
+    setName(""); setEmail(""); setCreateOpen(false); setOpen(false); onDone();
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button size="sm" variant="outline">Add staff</Button></DialogTrigger>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Add staff to {area}</DialogTitle></DialogHeader>
+      <DialogTrigger asChild><Button size="sm" variant="outline" disabled={!canEdit}>Add staff</Button></DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle>Add staff to the {area} schedule</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-          <div><Label>Email (Google)</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div><Label>Department</Label><Input value={department} onChange={(e) => setDepartment(e.target.value)} /></div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="sm:col-span-1">
+              <Label className="text-xs">Search</Label>
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or badge number" />
+            </div>
+            <div>
+              <Label className="text-xs">Assigned to</Label>
+              <Select value={assignedFilter} onValueChange={setAssignedFilter}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">All</SelectItem>
+                  {assignedOptions.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Inactive">Inactive</SelectItem>
+                  <SelectItem value="__all">All</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="max-h-80 overflow-auto rounded-md border">
+            {list.length === 0 && <p className="p-4 text-sm text-muted-foreground">No matching staff in the directory.</p>}
+            {list.map((p) => {
+              const already = taken.has(p.email.toLowerCase());
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={already || busy}
+                  onClick={() => assign(p)}
+                  className="flex w-full items-center justify-between gap-3 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="truncate">
+                    <span className="font-medium">{p.name}</span>
+                    <span className="text-muted-foreground"> — {p.badge_id ?? "no badge"} — {p.assigned_to ?? "—"} — {p.status ?? "Active"}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {already ? "already assigned" : p.area ? `on ${p.area}` : "Add"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {admin && (
+            <div className="rounded-md border p-3">
+              {createOpen ? (
+                <div className="space-y-2">
+                  <div><Label className="text-xs">Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+                  <div><Label className="text-xs">Email (Google)</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={createNew}>Create and add</Button>
+                    <Button size="sm" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>Create new staff member</Button>
+              )}
+            </div>
+          )}
         </div>
-        <DialogFooter><Button onClick={submit}>Add</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Close</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
