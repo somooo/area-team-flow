@@ -80,9 +80,9 @@ function DirectoryPage() {
   const [fStatus, setFStatus] = useState("");
   const [editing, setEditing] = useState<{ id: string; key: string } | null>(null);
 
-  const role = me?.staff?.role;
-  const allowed = role === "admin" || role === "supervisor";
   const admin = isAdmin(me?.staff);
+  /** Directory is admin-only; the backend view and RLS enforce the same rule. */
+  const allowed = admin;
 
   const load = useCallback(async () => {
     const [{ data: st }, { data: cc }] = await Promise.all([
@@ -236,7 +236,7 @@ function DirectoryPage() {
   };
 
   if (!me?.staff) return null;
-  if (!allowed) return <p>Admin / supervisor access only.</p>;
+  if (!allowed) return <p>Admin access only.</p>;
 
   return (
     <div className="space-y-6">
