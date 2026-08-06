@@ -117,13 +117,6 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const canManage = canManageVacationsIn(me, viewArea, SUPERVISORS_AREA);
 
   useEffect(() => {
-    if (!canSwitchArea) return;
-    void supabase.from("staff").select("area").not("area", "is", null).then(({ data }) => {
-      setAreas(Array.from(new Set((data ?? []).map((r) => r.area as string).filter(Boolean))).sort());
-    });
-  }, [canSwitchArea]);
-
-  useEffect(() => {
     if (!canSeeSupervisorsCalendar) return;
     void supabase.from("staff").select("email,name,role").eq("role", "supervisor").then(({ data }) => {
       setSupervisors(((data ?? []) as { email: string; name: string }[])
