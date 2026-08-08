@@ -128,6 +128,8 @@ function DirectoryPage() {
     if (valueOf(r, col) === value) { setEditing(null); return; }
     const patch: Record<string, unknown> = col.custom
       ? { custom_fields: { ...(r.custom_fields ?? {}), [col.key]: value } }
+      : col.key === "shift_base_override"
+      ? { shift_base_override: value.trim() === "" ? null : Number(value) }
       : { [col.key]: value === "" ? (col.key === "status" ? "Active" : null) : value };
     setRows((list) => list.map((x) => (x.id === r.id ? { ...x, ...(col.custom ? { custom_fields: patch.custom_fields as Record<string, string> } : patch) } as Row : x)));
     setEditing(null);
