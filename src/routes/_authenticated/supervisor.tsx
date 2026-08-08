@@ -157,11 +157,6 @@ function SupervisorPage() {
     setEditor(null);
   };
 
-  const staffIdByEmail = useMemo(
-    () => new Map(staff.map((s) => [s.email.toLowerCase(), s.id])),
-    [staff],
-  );
-
   /** The month(s) the confirmed mapping covers, as ISO date ranges. */
   const importRanges = (config: ScheduleImportConfig | null) => {
     const seen = new Map<string, { year: number; month: number }>();
@@ -179,6 +174,7 @@ function SupervisorPage() {
     items: ImportItem<ImportedCell>[],
     { replace, setProgress }: { replace: boolean; setProgress: (t: string | null) => void },
   ) => {
+    const staffIdByEmail = new Map(staff.map((s) => [s.email.toLowerCase(), s.id]));
     const ranges = importRanges(importConfig);
     // In replace mode nothing survives to diff against, so every parsed cell is written.
     const source = replace ? replaceAllItems : items;
