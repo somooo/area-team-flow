@@ -412,12 +412,27 @@ function SupervisorPage() {
           <div className="flex flex-wrap items-center gap-2">
             <ExcelImportButton<ImportedCell>
               title={`Import ${viewArea} schedule`}
-              description="Only cells that differ from the current schedule are listed. Re-importing an untouched export produces no changes."
+              description="Read from cell text only — colour is applied by the app from the overtime type. Re-importing an untouched export produces no changes."
               disabled={!canEditViewedArea}
-              parse={async ({ matrix }) => planScheduleImport({
-                matrix, staff: staff as StaffLite[], shifts: mergedShifts,
-                codes: codesForLayer(codes, effectiveLayer), year, month, layer: effectiveLayer,
-              })}
+              configure={({ input, onConfirm, onCancel }) => (
+                <ScheduleMappingDialog
+                  input={input}
+                  area={viewArea}
+                  codes={codes}
+                  uiYear={year}
+                  uiMonth={month}
+                  onCancel={onCancel}
+                  onConfirm={(cfg) => { setImportConfig(cfg); onConfirm(cfg); }}
+                />
+              )}
+              replaceOption={{
+                label: `Replace the whole month — delete every existing shift for ${viewArea} in ${replaceInfo.label || "the imported month"} (day and night) before importing`,
+                description: `${replaceInfo.count} existing shift${replaceInfo.count === 1 ? "" : "s"} in ${viewArea} · ${replaceInfo.label || "the imported month"} will be deleted. Staff not listed in the file will be cleared too. Leave unchecked to merge only the differences.`,
+              }}
+              extraSummary={() => labelRowsSkipped > 0
+                ? <p className="text-xs text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
+                : null}
+              parse={async ({ input, config }: never) => [] as never}
               commit={commitScheduleImport}
             />
             <Button
@@ -426,13 +441,6 @@ function SupervisorPage() {
               onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
             >
               Export to Excel
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
-            >
-              Download Excel
             </Button>
             {Object.keys(pending).length > 0 && (
               <>
