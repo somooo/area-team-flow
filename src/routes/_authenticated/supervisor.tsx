@@ -410,7 +410,7 @@ function SupervisorPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
-            <ExcelImportButton<ImportedCell>
+            <ExcelImportButton<ImportedCell, ScheduleImportConfig>
               title={`Import ${viewArea} schedule`}
               description="Read from cell text only — colour is applied by the app from the overtime type. Re-importing an untouched export produces no changes."
               disabled={!canEditViewedArea}
@@ -432,7 +432,29 @@ function SupervisorPage() {
               extraSummary={() => labelRowsSkipped > 0
                 ? <p className="text-xs text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
                 : null}
-              parse={async ({ input, config }: never) => [] as never}
+              parse={async (input, config) => {
+                if (!config) return [];
+                const matrix = input.workbook.sheets[config.sheetName] ?? [];
+                const common = {
+                  matrix, blocks: config.blocks, staff: staff as StaffLite[], badges,
+                  shifts, codes, codeMap: config.codeMap,
+                };
+                const diff = planScheduleImport({ ...common, replace: false });
+                const full = planScheduleImport({ ...common, replace: true });
+                setLabelRowsSkipped(diff.labelRowsSkipped);
+                setReplaceAllItems(full.items.filter((i) => i.status !== "skip"));
+
+                const ranges = importRanges(config);
+                let count = 0;
+                for (const r of ranges) {
+                  const { count: c } = await supabase.from("shifts")
+                    .select("id", { count: "exact", head: true })
+                    .eq("area", viewArea).gte("date", r.start).lte("date", r.end);
+                  count += c ?? 0;
+                }
+                setReplaceInfo({ count, label: ranges.map((r) => r.label).join(", ") });
+                return diff.items;
+              }}
               commit={commitScheduleImport}
             />
             <Button
