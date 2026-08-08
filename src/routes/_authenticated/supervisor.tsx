@@ -17,6 +17,8 @@ import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { planScheduleImport, type ImportedCell } from "@/lib/schedule-import";
+import { ScheduleMappingDialog, type ScheduleImportConfig } from "@/components/ScheduleMappingDialog";
+import { logAudit } from "@/lib/audit";
 import { canManageArea, isAdmin } from "@/lib/permissions";
 import { AREAS } from "@/lib/areas";
 import { ReferenceTable } from "@/components/ReferenceTable";
@@ -74,6 +76,10 @@ function SupervisorPage() {
   const [editor, setEditor] = useState<{ staff: StaffLite; date: string; shift?: Shift } | null>(null);
   const [pending, setPending] = useState<Record<string, PendingEdit>>({});
   const [saving, setSaving] = useState(false);
+  const [badges, setBadges] = useState<Record<string, string>>({});
+  const [importConfig, setImportConfig] = useState<ScheduleImportConfig | null>(null);
+  const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
+  const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
 
   const role = me?.staff?.role;
   const admin = isAdmin(me?.staff);
@@ -101,14 +107,16 @@ function SupervisorPage() {
     const end = toISODate(new Date(year, month + 1, 0));
     const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }, { data: tl }] = await Promise.all([
       supabase.from("shifts").select("*").eq("area", viewArea).gte("date", start).lte("date", end).order("date"),
-      supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active").eq("area", viewArea).order("name"),
+      supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active,badge_id").eq("area", viewArea).order("name"),
       supabase.from("leave_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("schedule_change_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active").eq("role", "supervisor"),
       supabase.from("team_leader_reports").select("*").eq("area", viewArea).order("shift_date", { ascending: false }).limit(30),
     ]);
     setShifts((sh as Shift[]) ?? []);
-    setStaff((st as Staff[]) ?? []);
+    const staffRows = (st as (Staff & { badge_id?: string | null })[]) ?? [];
+    setStaff(staffRows as Staff[]);
+    setBadges(Object.fromEntries(staffRows.filter((s) => s.badge_id).map((s) => [s.email.toLowerCase(), String(s.badge_id)])));
     setLeaves((lv as LeaveReq[]) ?? []);
     setChanges((ch as ChangeReq[]) ?? []);
     setSupervisors(((sup as Staff[]) ?? []).filter(s => s.email !== me?.staff?.email));
