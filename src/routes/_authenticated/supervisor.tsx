@@ -80,6 +80,8 @@ function SupervisorPage() {
   const [importConfig, setImportConfig] = useState<ScheduleImportConfig | null>(null);
   const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
   const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
+  /** Every non-blank cell in the file, used when the import replaces the whole month. */
+  const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<ImportedCell>[]>([]);
 
   const role = me?.staff?.role;
   const admin = isAdmin(me?.staff);
@@ -178,6 +180,8 @@ function SupervisorPage() {
     { replace, setProgress }: { replace: boolean; setProgress: (t: string | null) => void },
   ) => {
     const ranges = importRanges(importConfig);
+    // In replace mode nothing survives to diff against, so every parsed cell is written.
+    const source = replace ? replaceAllItems : items;
 
     if (replace) {
       for (const r of ranges) {
@@ -189,14 +193,14 @@ function SupervisorPage() {
     }
 
     // Deletions first (merge mode only clears cells that were emptied in the file).
-    const toDelete = items.filter((i) => i.payload && !i.payload.payload && i.payload.existingId)
+    const toDelete = replace ? [] : source.filter((i) => i.payload && !i.payload.payload && i.payload.existingId)
       .map((i) => i.payload!.existingId!);
     for (let i = 0; i < toDelete.length; i += 500) {
       const { error } = await supabase.from("shifts").delete().in("id", toDelete.slice(i, i + 500));
       if (error) throw new Error(`Could not clear cells: ${error.message}`);
     }
 
-    const rows = items
+    const rows = source
       .filter((i) => i.payload?.payload)
       .map((i) => {
         const c = i.payload!;
