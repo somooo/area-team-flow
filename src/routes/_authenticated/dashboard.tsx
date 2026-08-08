@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
 import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
+import { canManageArea } from "@/lib/permissions";
 import { resolveApprover } from "@/lib/approver";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { MyChangeRequests } from "@/components/MyChangeRequests";
