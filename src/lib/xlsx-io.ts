@@ -1,5 +1,15 @@
 import * as XLSX from "xlsx";
 
+/** Every sheet of a workbook as raw matrices, keeping Date and number cell types intact. */
+export async function readWorkbook(file: File): Promise<{ sheetNames: string[]; sheets: Record<string, unknown[][]> }> {
+  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  const sheets: Record<string, unknown[][]> = {};
+  for (const name of wb.SheetNames) {
+    sheets[name] = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: "", raw: true });
+  }
+  return { sheetNames: wb.SheetNames, sheets };
+}
+
 /** Read the first sheet of an .xlsx file both as objects (header row) and as a raw matrix. */
 export async function readSheet(file: File): Promise<{
   rows: Record<string, unknown>[];

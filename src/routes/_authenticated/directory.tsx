@@ -48,6 +48,7 @@ type Row = {
   supervisor: string | null; supervisor_email: string | null;
   extension: string | null; notes: string | null;
   area: string | null;
+  shift_base_override: number | null;
   custom_fields: Record<string, string> | null;
 };
 
@@ -72,9 +73,10 @@ const BASE_COLUMNS: ColDef[] = [
   { key: "supervisor_email", label: "Supervisor Email", type: "text" },
   { key: "extension", label: "Extension", type: "text" },
   { key: "notes", label: "Notes", type: "text" },
+  { key: "shift_base_override", label: "Shift base (SANG = 14)", type: "text" },
 ];
 
-const SELECT_COLS = "id,name,first_name,last_name,position,badge_id,date_of_hire,email,assigned_to,status,supervisor,supervisor_email,extension,notes,area,custom_fields";
+const SELECT_COLS = "id,name,first_name,last_name,position,badge_id,date_of_hire,email,assigned_to,status,supervisor,supervisor_email,extension,notes,area,shift_base_override,custom_fields";
 
 type UpsertPayload = { existingId?: string; values: Record<string, unknown> };
 
@@ -126,6 +128,8 @@ function DirectoryPage() {
     if (valueOf(r, col) === value) { setEditing(null); return; }
     const patch: Record<string, unknown> = col.custom
       ? { custom_fields: { ...(r.custom_fields ?? {}), [col.key]: value } }
+      : col.key === "shift_base_override"
+      ? { shift_base_override: value.trim() === "" ? null : Number(value) }
       : { [col.key]: value === "" ? (col.key === "status" ? "Active" : null) : value };
     setRows((list) => list.map((x) => (x.id === r.id ? { ...x, ...(col.custom ? { custom_fields: patch.custom_fields as Record<string, string> } : patch) } as Row : x)));
     setEditing(null);
@@ -205,6 +209,11 @@ function DirectoryPage() {
         extension: field(row, "Extension") || null,
         notes: field(row, "Notes") || null,
       };
+      // SANG staff have a fixed regular-shift base of 14, identifiable from position or assignment.
+      const sangText = `${field(row, "Position")} ${field(row, "Assigned to", "Assigned To")}`;
+      const baseField = field(row, "Shift base", "Shift base (SANG = 14)");
+      if (baseField) values.shift_base_override = Number(baseField) || null;
+      else if (/sang/i.test(sangText)) values.shift_base_override = 14;
       const custom: Record<string, string> = {};
       for (const c of customCols) {
         const v = field(row, c.label);

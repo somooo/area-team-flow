@@ -46,9 +46,14 @@ export function cellFor(shift: RosterShift | undefined, isWeekend: boolean): Cel
     shift.duty === "Day" ? "D" :
     shift.duty === "Night" ? "N" : "";
 
+  // MedEvac OT is a standalone entry and can never be sick — checked before the sick tag.
+  if (shift.ot_type === "MedEvac") {
+    return { code: "MOT", className: "bg-[#B98F52] text-white", title: `MedEvac OT · ${shift.date}` };
+  }
+
   // Sick tag layers on top of the original assignment: keep the code, colour it red.
   if (shift.sick_tag) {
-    const base = shift.ot_type === "MedEvac" ? "MOT" : `${letter}${unit}` || "S";
+    const base = `${letter}${unit}` || "S";
     return {
       code: `s${base}`,
       className: "bg-red-500 text-white",
@@ -56,15 +61,11 @@ export function cellFor(shift: RosterShift | undefined, isWeekend: boolean): Cel
     };
   }
 
-  // MedEvac OT overrides
-  if (shift.ot_type === "MedEvac") {
-    return { code: "MOT", className: "bg-[#B98F52] text-white", title: `MedEvac OT · ${shift.date}` };
-  }
   switch (shift.duty) {
     case "Sick":
       return { code: `s${letter || "S"}${unit}`, className: "bg-red-500 text-white", title: `Sick · ${shift.date}` };
     case "Vacation":
-      return { code: "VAC", className: "bg-[#A2ABD8] text-slate-900", title: `Vacation · ${shift.date}` };
+      return { code: "V", className: "bg-[#A2ABD8] text-slate-900", title: `Vacation · ${shift.date}` };
     case "Off":
       return { code: "OFF", className: "bg-[#D3D5D7] text-slate-700", title: `Off · ${shift.date}` };
     case "Paternity":

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
 import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
+import { canManageArea } from "@/lib/permissions";
 import { resolveApprover } from "@/lib/approver";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { MyChangeRequests } from "@/components/MyChangeRequests";
@@ -23,6 +24,7 @@ import type { RosterShift } from "@/lib/roster";
 import { getServerNow } from "@/lib/server-time.functions";
 import { exportExcel, exportPdf } from "@/lib/schedule-export";
 import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
+import { useSystemRules } from "@/lib/system-rules";
 import { AREAS } from "@/lib/areas";
 import { X } from "lucide-react";
 
@@ -220,7 +222,7 @@ function SchedulePage() {
             >
               {meStaff.role === "staff" ? "Download schedule" : "Download Excel"}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => exportPdf({ area: viewArea, year, month, staff: roster, shifts })}>Download PDF</Button>
+            <Button size="sm" variant="outline" onClick={() => void exportPdf({ area: viewArea, year, month, staff: roster, shifts })}>Download PDF</Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -267,7 +269,7 @@ function SchedulePage() {
             isCellClickable={cellClickable}
           />
           )}
-          {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} />}
+          {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} area={viewArea} year={year} month={month} canEdit={canManageArea(meStaff, viewArea)} actor={meStaff.email} />}
         </CardContent>
       </Card>
 
@@ -559,8 +561,48 @@ function GiveOtDialog({ me, shift, roster, onClose, onDone }: {
   );
 }
 
-function TotalsTable({ staff, shifts }: { staff: Staff[]; shifts: Shift[] }) {
+function TotalsTable({ staff, shifts, area, year, month, canEdit, actor }: { staff: Staff[]; shifts: Shift[]; area: string; year: number; month: number; canEdit: boolean; actor: string }) {
   const byStaff = useMemo(() => groupByStaff(shifts), [shifts]);
+  const { rules } = useSystemRules();
+  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  const [bases, setBases] = useState<Record<string, { base: number | null; area: string | null }>>({});
+
+  useEffect(() => {
+    void (async () => {
+      const [{ data: ovr }, { data: st }] = await Promise.all([
+        supabase.from("regular_shift_overrides").select("staff_id,regular_shifts").eq("area", area).eq("year", year).eq("month", month),
+        supabase.from("staff").select("id,shift_base_override,area").in("id", staff.map((s) => s.id).length ? staff.map((s) => s.id) : ["00000000-0000-0000-0000-000000000000"]),
+      ]);
+      setOverrides(Object.fromEntries(((ovr as { staff_id: string; regular_shifts: number }[]) ?? []).map((o) => [o.staff_id, o.regular_shifts])));
+      setBases(Object.fromEntries(((st as { id: string; shift_base_override: number | null; area: string | null }[]) ?? []).map((r) => [r.id, { base: r.shift_base_override, area: r.area }])));
+    })();
+  }, [area, year, month, staff.length]);
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const saveOverride = async (staffId: string, computed: number) => {
+    const raw = draft.trim();
+    if (raw === "") {
+      await supabase.from("regular_shift_overrides").delete()
+        .eq("staff_id", staffId).eq("area", area).eq("year", year).eq("month", month);
+      setOverrides((o) => { const next = { ...o }; delete next[staffId]; return next; });
+      await logAudit({ action: "regular_shifts_override_cleared", entity_type: "regular_shift_override", entity_id: staffId, actor_email: actor, area, details: { area, year, month, computed } });
+    } else {
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) { toast.error("Enter a whole number of shifts"); return; }
+      const { error } = await supabase.from("regular_shift_overrides").upsert(
+        { staff_id: staffId, area, year, month, regular_shifts: n, set_by: actor },
+        { onConflict: "staff_id,area,year,month" },
+      );
+      if (error) { toast.error(error.message); return; }
+      setOverrides((o) => ({ ...o, [staffId]: n }));
+      await logAudit({ action: "regular_shifts_override_set", entity_type: "regular_shift_override", entity_id: staffId, actor_email: actor, area, details: { area, year, month, regular_shifts: n, computed } });
+    }
+    setEditing(null);
+  };
+
   return (
     <div className="mt-4 overflow-x-auto">
       <table className="w-full text-xs border rounded-md">
@@ -568,18 +610,61 @@ function TotalsTable({ staff, shifts }: { staff: Staff[]; shifts: Shift[] }) {
           <tr>
             <th className="p-2 text-left">Staff</th>
             <th className="p-2">Day</th><th className="p-2">Night</th>
+            <th className="p-2">Duty</th><th className="p-2">R/Shifts</th><th className="p-2">OT shifts</th>
+            <th className="p-2">Sick on OT (not counted as duty)</th>
             <th className="p-2">Hours</th><th className="p-2">OT h</th>
             <th className="p-2">Sick</th><th className="p-2">Vacation</th>
           </tr>
         </thead>
         <tbody>
           {staff.map((s) => {
-            const t = totalsForStaff(byStaff.get(s.email.toLowerCase()) ?? []);
+            const info = bases[s.id];
+            const t = totalsForStaff(byStaff.get(s.email.toLowerCase()) ?? [], {
+              daysInMonth,
+              sickOtExcludedFromDuty: rules["sick_ot_excluded_from_duty"] === true,
+              baseOverride: info?.base ?? null,
+              staffArea: info?.area ?? s.area,
+              scheduleArea: area,
+              regularShiftsOverride: overrides[s.id] ?? null,
+              benefitDaysMinHolidays: Number(rules["benefit_days_min_holidays"] ?? 5),
+            });
             return (
               <tr key={s.id} className="border-t">
-                <td className="p-2 text-left">{s.name}</td>
+                <td className="p-2 text-left">
+                  {s.name}
+                  {t.cross_area && <span className="ml-2 text-[10px] text-muted-foreground">{info?.area ?? s.area} staff — overtime only</span>}
+                </td>
                 <td className="p-2 text-center">{t.day}</td>
                 <td className="p-2 text-center">{t.night}</td>
+                <td className="p-2 text-center">{t.duty_shifts}</td>
+                <td className="p-2 text-center" title={t.override_applied ? `Manual override · computed ${t.computed_regular_shifts}` : undefined}>
+                  {editing === s.id ? (
+                    <input
+                      autoFocus
+                      className="w-14 rounded border px-1 text-center"
+                      value={draft}
+                      placeholder="clear"
+                      onChange={(e) => setDraft(e.target.value)}
+                      onBlur={() => void saveOverride(s.id, t.computed_regular_shifts)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void saveOverride(s.id, t.computed_regular_shifts);
+                        if (e.key === "Escape") setEditing(null);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      className={canEdit ? "underline decoration-dotted" : undefined}
+                      onClick={() => { setDraft(t.override_applied ? String(t.regular_shifts) : ""); setEditing(s.id); }}
+                    >
+                      {t.regular_shifts}
+                      {t.override_applied && <span className="ml-1 text-muted-foreground line-through">{t.computed_regular_shifts}</span>}
+                    </button>
+                  )}
+                </td>
+                <td className="p-2 text-center">{t.ot_shifts}</td>
+                <td className="p-2 text-center">{t.sick_on_ot}</td>
                 <td className="p-2 text-center">{t.hours}</td>
                 <td className="p-2 text-center">{t.ot_hours}</td>
                 <td className="p-2 text-center">{t.sick}</td>

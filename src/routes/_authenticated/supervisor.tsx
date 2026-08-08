@@ -17,6 +17,8 @@ import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { planScheduleImport, type ImportedCell } from "@/lib/schedule-import";
+import { ScheduleMappingDialog, type ScheduleImportConfig } from "@/components/ScheduleMappingDialog";
+import { logAudit } from "@/lib/audit";
 import { canManageArea, isAdmin } from "@/lib/permissions";
 import { AREAS } from "@/lib/areas";
 import { ReferenceTable } from "@/components/ReferenceTable";
@@ -74,6 +76,12 @@ function SupervisorPage() {
   const [editor, setEditor] = useState<{ staff: StaffLite; date: string; shift?: Shift } | null>(null);
   const [pending, setPending] = useState<Record<string, PendingEdit>>({});
   const [saving, setSaving] = useState(false);
+  const [badges, setBadges] = useState<Record<string, string>>({});
+  const [importConfig, setImportConfig] = useState<ScheduleImportConfig | null>(null);
+  const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
+  const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
+  /** Every non-blank cell in the file, used when the import replaces the whole month. */
+  const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<ImportedCell>[]>([]);
 
   const role = me?.staff?.role;
   const admin = isAdmin(me?.staff);
@@ -101,14 +109,16 @@ function SupervisorPage() {
     const end = toISODate(new Date(year, month + 1, 0));
     const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }, { data: tl }] = await Promise.all([
       supabase.from("shifts").select("*").eq("area", viewArea).gte("date", start).lte("date", end).order("date"),
-      supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active").eq("area", viewArea).order("name"),
+      supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active,badge_id").eq("area", viewArea).order("name"),
       supabase.from("leave_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("schedule_change_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active").eq("role", "supervisor"),
       supabase.from("team_leader_reports").select("*").eq("area", viewArea).order("shift_date", { ascending: false }).limit(30),
     ]);
     setShifts((sh as Shift[]) ?? []);
-    setStaff((st as Staff[]) ?? []);
+    const staffRows = (st as (Staff & { badge_id?: string | null })[]) ?? [];
+    setStaff(staffRows as Staff[]);
+    setBadges(Object.fromEntries(staffRows.filter((s) => s.badge_id).map((s) => [s.email.toLowerCase(), String(s.badge_id)])));
     setLeaves((lv as LeaveReq[]) ?? []);
     setChanges((ch as ChangeReq[]) ?? []);
     setSupervisors(((sup as Staff[]) ?? []).filter(s => s.email !== me?.staff?.email));
@@ -147,30 +157,92 @@ function SupervisorPage() {
     setEditor(null);
   };
 
-  /** Bulk apply an imported grid after the preview/confirm step. */
-  const commitScheduleImport = async (items: ImportItem<ImportedCell>[]) => {
-    for (const it of items) {
-      const cell = it.payload!;
-      if (!cell.payload) {
-        if (cell.existingId) await supabase.from("shifts").delete().eq("id", cell.existingId);
-        continue;
+  /** The month(s) the confirmed mapping covers, as ISO date ranges. */
+  const importRanges = (config: ScheduleImportConfig | null) => {
+    const seen = new Map<string, { year: number; month: number }>();
+    for (const b of config?.blocks ?? []) seen.set(`${b.year}-${b.month}`, { year: b.year, month: b.month });
+    return Array.from(seen.values()).map((m) => ({
+      ...m,
+      start: toISODate(new Date(m.year, m.month, 1)),
+      end: toISODate(new Date(m.year, m.month + 1, 0)),
+      label: new Date(m.year, m.month, 1).toLocaleString(undefined, { month: "long", year: "numeric" }),
+    }));
+  };
+
+  /** Bulk apply an imported grid after the mapping and preview steps. */
+  const commitScheduleImport = async (
+    items: ImportItem<ImportedCell>[],
+    { replace, setProgress }: { replace: boolean; setProgress: (t: string | null) => void },
+  ) => {
+    const staffIdByEmail = new Map(staff.map((s) => [s.email.toLowerCase(), s.id]));
+    const ranges = importRanges(importConfig);
+    // In replace mode nothing survives to diff against, so every parsed cell is written.
+    const source = replace ? replaceAllItems : items;
+
+    if (replace) {
+      for (const r of ranges) {
+        setProgress(`Clearing ${viewArea} · ${r.label}…`);
+        const { error } = await supabase.from("shifts").delete()
+          .eq("area", viewArea).gte("date", r.start).lte("date", r.end);
+        if (error) throw new Error(`Could not clear ${r.label}: ${error.message}`);
       }
-      const body = {
-        staff_email: cell.staff.email, staff_name: cell.staff.name, area: viewArea, date: cell.date,
-        duty: cell.payload.duty,
-        unit_code: cell.payload.unit_code,
-        ot_type: cell.payload.ot_type,
-        is_overtime: cell.payload.ot_type !== "None",
-        sick_tag: cell.payload.sick_tag,
-        hours: cell.payload.hours,
-        shift_type: (cell.payload.duty === "Night" ? "Night" : cell.payload.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
-      };
-      const { error } = cell.existingId
-        ? await supabase.from("shifts").update(body).eq("id", cell.existingId)
-        : await supabase.from("shifts").insert(body);
-      if (error) { toast.error(error.message); return; }
     }
-    toast.success(`Imported ${items.length} schedule cell${items.length === 1 ? "" : "s"}`);
+
+    // Deletions first (merge mode only clears cells that were emptied in the file).
+    const toDelete = replace ? [] : source.filter((i) => i.payload && !i.payload.payload && i.payload.existingId)
+      .map((i) => i.payload!.existingId!);
+    for (let i = 0; i < toDelete.length; i += 500) {
+      const { error } = await supabase.from("shifts").delete().in("id", toDelete.slice(i, i + 500));
+      if (error) throw new Error(`Could not clear cells: ${error.message}`);
+    }
+
+    const rows = source
+      .filter((i) => i.payload?.payload)
+      .map((i) => {
+        const c = i.payload!;
+        const p = c.payload!;
+        return {
+          staff_email: c.staff.email.toLowerCase(),
+          staff_name: c.staff.name,
+          staff_id: staffIdByEmail.get(c.staff.email.toLowerCase()) ?? null,
+          area: viewArea,
+          date: c.date,
+          duty: p.duty,
+          unit_code: p.unit_code,
+          ot_type: p.ot_type,
+          is_overtime: p.ot_type !== "None",
+          sick_tag: p.sick_tag,
+          hours: p.hours,
+          shift_type: (p.duty === "Night" ? "Night" : p.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
+        };
+      });
+
+    const CHUNK = 500;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      setProgress(`Writing ${Math.min(i + CHUNK, rows.length)} / ${rows.length}…`);
+      const { error } = await supabase.from("shifts").upsert(chunk, { onConflict: "staff_id,date" });
+      if (error) throw new Error(`Failed while writing rows ${i + 1}–${i + chunk.length}: ${error.message}`);
+    }
+    setProgress(null);
+
+    if (replace) {
+      for (const r of ranges) {
+        await logAudit({
+          action: "schedule_month_replaced", entity_type: "schedule", entity_id: `${viewArea}-${r.year}-${r.month}`,
+          actor_email: me?.staff?.email, actor_role: me?.staff?.role, area: viewArea,
+          details: {
+            area: viewArea, year: r.year, month: r.month,
+            cells_written: rows.length,
+            staff_rows: new Set(rows.map((x) => x.staff_email)).size,
+            blocks: importConfig?.blocks.length ?? 0,
+            profile_used: importConfig?.sheetName ?? null,
+          },
+        });
+      }
+    }
+
+    toast.success(`Imported ${rows.length} schedule cell${rows.length === 1 ? "" : "s"}`);
     setPending({});
     await load();
   };
@@ -338,14 +410,51 @@ function SupervisorPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
-            <ExcelImportButton<ImportedCell>
+            <ExcelImportButton<ImportedCell, ScheduleImportConfig>
               title={`Import ${viewArea} schedule`}
-              description="Only cells that differ from the current schedule are listed. Re-importing an untouched export produces no changes."
+              description="Read from cell text only — colour is applied by the app from the overtime type. Re-importing an untouched export produces no changes."
               disabled={!canEditViewedArea}
-              parse={async ({ matrix }) => planScheduleImport({
-                matrix, staff: staff as StaffLite[], shifts: mergedShifts,
-                codes: codesForLayer(codes, effectiveLayer), year, month, layer: effectiveLayer,
-              })}
+              configure={({ input, onConfirm, onCancel }) => (
+                <ScheduleMappingDialog
+                  input={input}
+                  area={viewArea}
+                  codes={codes}
+                  uiYear={year}
+                  uiMonth={month}
+                  onCancel={onCancel}
+                  onConfirm={(cfg) => { setImportConfig(cfg); onConfirm(cfg); }}
+                />
+              )}
+              replaceOption={{
+                label: `Replace the whole month — delete every existing shift for ${viewArea} in ${replaceInfo.label || "the imported month"} (day and night) before importing`,
+                description: `${replaceInfo.count} existing shift${replaceInfo.count === 1 ? "" : "s"} in ${viewArea} · ${replaceInfo.label || "the imported month"} will be deleted. Staff not listed in the file will be cleared too. Leave unchecked to merge only the differences.`,
+              }}
+              extraSummary={() => labelRowsSkipped > 0
+                ? <p className="text-xs text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
+                : null}
+              parse={async (input, config) => {
+                if (!config) return [];
+                const matrix = input.workbook.sheets[config.sheetName] ?? [];
+                const common = {
+                  matrix, blocks: config.blocks, staff: staff as StaffLite[], badges,
+                  shifts, codes, codeMap: config.codeMap,
+                };
+                const diff = planScheduleImport({ ...common, replace: false });
+                const full = planScheduleImport({ ...common, replace: true });
+                setLabelRowsSkipped(diff.labelRowsSkipped);
+                setReplaceAllItems(full.items.filter((i) => i.status !== "skip"));
+
+                const ranges = importRanges(config);
+                let count = 0;
+                for (const r of ranges) {
+                  const { count: c } = await supabase.from("shifts")
+                    .select("id", { count: "exact", head: true })
+                    .eq("area", viewArea).gte("date", r.start).lte("date", r.end);
+                  count += c ?? 0;
+                }
+                setReplaceInfo({ count, label: ranges.map((r) => r.label).join(", ") });
+                return diff.items;
+              }}
               commit={commitScheduleImport}
             />
             <Button
@@ -354,13 +463,6 @@ function SupervisorPage() {
               onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
             >
               Export to Excel
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
-            >
-              Download Excel
             </Button>
             {Object.keys(pending).length > 0 && (
               <>

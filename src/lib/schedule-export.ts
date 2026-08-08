@@ -3,7 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { cellFor, monthDays, toISODate, isWeekendDay, LEGEND, type RosterShift } from "@/lib/roster";
-import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
+import { totalsForStaff, groupByStaff, type TotalsOptions } from "@/lib/roster-totals";
 import type { StaffLite } from "@/components/MonthGrid";
 import type { ZoneReferenceRow } from "@/lib/assignments";
 
@@ -39,7 +39,12 @@ export function exportCell(shift: RosterShift | undefined, isWeekend: boolean): 
   if (!shift) return { display: "", raw: "", fill: isWeekend ? FILL.weekend : undefined };
   const unit = shift.unit_code ?? "";
   const letter = shift.duty === "Day" ? "D" : shift.duty === "Night" ? "N" : "";
-  const base = shift.ot_type === "MedEvac" ? (unit ? `${letter}${unit}` : "MOT") : `${letter}${unit}`;
+  const base = `${letter}${unit}`;
+
+  // MedEvac is always a standalone MOT entry: no ward code, never sick.
+  if (shift.ot_type === "MedEvac" && (shift.duty === "Day" || shift.duty === "Night")) {
+    return { display: "MOT", raw: "MOT", fill: FILL.mot, light: true };
+  }
 
   if (shift.sick_tag) {
     const b = base || "S";
@@ -51,13 +56,12 @@ export function exportCell(shift: RosterShift | undefined, isWeekend: boolean): 
       return { display: b, raw: `s${b}`, fill: FILL.sick, light: true };
     }
     case "Vacation":
-      return { display: "VAC", raw: "VAC", fill: FILL.vac };
+      return { display: "V", raw: "V", fill: FILL.vac };
     case "Off":
       return { display: "OFF", raw: "OFF", fill: FILL.off };
     case "Paternity":
       return { display: "P", raw: "P", fill: FILL.pat, light: true };
     default: {
-      if (shift.ot_type === "MedEvac") return { display: base || "MOT", raw: `${base || "MOT"}|MOT`, fill: FILL.mot, light: true };
       if (shift.ot_type === "BuiltIn") return { display: base, raw: `${base}|BOT`, fill: FILL.bot };
       if (shift.ot_type === "Additional") return { display: base, raw: `${base}|AOT`, fill: FILL.aot };
       return { display: base, raw: base, fill: isWeekend ? FILL.weekend : undefined };
@@ -72,19 +76,25 @@ function maskFormat(display: string): string {
 
 /* ------------------------------------------------------------------ */
 
-async function loadExtras(area: string, emails: string[]) {
-  const [{ data: ref }, { data: st }, { data: rules }] = await Promise.all([
+async function loadExtras(area: string, emails: string[], year: number, month: number) {
+  const [{ data: ref }, { data: st }, { data: rules }, { data: ovr }] = await Promise.all([
     supabase.from("zone_reference").select("*").eq("area", area).order("sort_order"),
-    supabase.from("staff").select("email,badge_id").in("email", emails.length ? emails : ["__none__"]),
+    supabase.from("staff").select("id,email,badge_id,area,shift_base_override").in("email", emails.length ? emails : ["__none__"]),
     supabase.from("system_rules").select("key,value"),
+    supabase.from("regular_shift_overrides").select("staff_id,regular_shifts").eq("area", area).eq("year", year).eq("month", month),
   ]);
   const badges = new Map<string, string>();
-  for (const s of (st as { email: string; badge_id: string | null }[]) ?? []) {
+  const profile = new Map<string, { id: string; area: string | null; base: number | null }>();
+  type StaffRow = { id: string; email: string; badge_id: string | null; area: string | null; shift_base_override: number | null };
+  for (const s of (st as StaffRow[]) ?? []) {
     if (s.badge_id) badges.set(s.email.toLowerCase(), s.badge_id);
+    profile.set(s.email.toLowerCase(), { id: s.id, area: s.area, base: s.shift_base_override });
   }
+  const overrides = new Map<string, number>();
+  for (const o of ((ovr as { staff_id: string; regular_shifts: number }[]) ?? [])) overrides.set(o.staff_id, o.regular_shifts);
   const ruleMap = new Map<string, unknown>();
   for (const r of (rules as { key: string; value: unknown }[]) ?? []) ruleMap.set(r.key, r.value);
-  return { ref: ((ref as ZoneReferenceRow[]) ?? []), badges, ruleMap };
+  return { ref: ((ref as ZoneReferenceRow[]) ?? []), badges, ruleMap, profile, overrides };
 }
 
 type UnitGroup = { zone: string; unit: string; assignments: string[]; extension: string };
@@ -111,10 +121,23 @@ export async function exportExcel(input: ExportInput) {
   const layer = input.layer ?? "all";
   const days = monthDays(year, month);
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
-  const { ref, badges, ruleMap } = await loadExtras(area, staff.map((s) => s.email));
+  const { ref, badges, ruleMap, profile, overrides } = await loadExtras(area, staff.map((s) => s.email), year, month);
+  const totalsOptionsFor = (email: string): TotalsOptions => {
+    const p = profile.get(email.toLowerCase());
+    return {
+      daysInMonth: days.length,
+      sickOtExcludedFromDuty: ruleMap.get("sick_ot_excluded_from_duty") === true,
+      baseOverride: p?.base ?? null,
+      staffArea: p?.area ?? null,
+      scheduleArea: area,
+      regularShiftsOverride: p ? overrides.get(p.id) ?? null : null,
+      benefitDaysMinHolidays: Number(ruleMap.get("benefit_days_min_holidays") ?? 5),
+    };
+  };
 
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet(`${area} ${monthLabel}`.slice(0, 31), { views: [{ state: "frozen", xSplit: 2, ySplit: 0 }] });
+  // The importer looks for a sheet named "Schedule"; the pretty label lives in the title row.
+  const ws = wb.addWorksheet("Schedule", { views: [{ state: "frozen", xSplit: 2, ySplit: 0 }] });
   ws.properties.defaultRowHeight = 16;
   const lastCol = 2 + days.length;
 
@@ -196,11 +219,13 @@ export async function exportExcel(input: ExportInput) {
   }
 
   // 3. Staff schedule grid
-  const headRow = ws.addRow(["Staff Name", "Badge", ...days.map((d) => d.getDate())]);
+  // Real Date values so a re-import reads the month with "certain" confidence; numFmt keeps them showing as 1, 2, 3…
+  const headRow = ws.addRow(["Staff Name", "Badge", ...days]);
   headRow.eachCell((c, n) => {
     c.font = { name: "Arial", bold: true, size: 9 };
     c.alignment = { horizontal: "center", vertical: "middle" };
     c.border = BORDER;
+    if (n > 2) c.numFmt = "d";
     const wknd = n > 2 && isWeekendDay(days[n - 3], layer);
     c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: wknd ? "FFCBD5E1" : "FFE2E8F0" } };
   });
@@ -268,20 +293,34 @@ export async function exportExcel(input: ExportInput) {
   // Optional supervisor summary sheet
   if (withSummary) {
     const sum = wb.addWorksheet("OT Summary");
-    const head = sum.addRow(["Staff", "Badge", "Department", "Day", "Night", "Hours", "OT hours", "Sick", "Vacation"]);
+    const head = sum.addRow([
+      "Staff", "Badge", "Department", "Day", "Night", "Hours", "OT hours",
+      "Duty shifts", "R/Shifts", "OT shifts", "Sick on OT (not counted as duty)",
+      "Sick", "Vacation", "Note",
+    ]);
     head.eachCell((c) => {
       c.font = { name: "Arial", bold: true, size: 10 };
       c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
       c.border = BORDER;
     });
     for (const s of staff) {
-      const t = totalsForStaff(byStaff.get(s.email.toLowerCase()) ?? []);
-      const r = sum.addRow([s.name, badges.get(s.email.toLowerCase()) ?? "", s.department ?? "", t.day, t.night, t.hours, t.ot_hours, t.sick, t.vacation]);
+      const t = totalsForStaff(byStaff.get(s.email.toLowerCase()) ?? [], totalsOptionsFor(s.email));
+      const note = t.cross_area
+        ? `${profile.get(s.email.toLowerCase())?.area ?? "Other"} staff — overtime only`
+        : t.override_applied ? `Override (computed ${t.computed_regular_shifts})` : "";
+      const r = sum.addRow([
+        s.name, badges.get(s.email.toLowerCase()) ?? "", s.department ?? "",
+        t.day, t.night, t.hours, t.ot_hours,
+        t.duty_shifts, t.regular_shifts, t.ot_shifts, t.sick_on_ot,
+        t.sick, t.vacation, note,
+      ]);
       r.eachCell((c) => { c.font = { name: "Arial", size: 10 }; c.border = BORDER; });
     }
     sum.getColumn(1).width = 24;
     sum.getColumn(3).width = 18;
-    for (let c = 4; c <= 9; c++) sum.getColumn(c).width = 10;
+    for (let c = 4; c <= 13; c++) sum.getColumn(c).width = 10;
+    sum.getColumn(11).width = 16;
+    sum.getColumn(14).width = 26;
   }
 
   const buf = await wb.xlsx.writeBuffer();
@@ -296,18 +335,32 @@ export async function exportExcel(input: ExportInput) {
 
 /* ------------------------------- PDF ------------------------------- */
 
-export function exportPdf(input: ExportInput) {
+export async function exportPdf(input: ExportInput) {
   const { year, month, staff, shifts } = input;
   const days = monthDays(year, month);
   const byStaff = groupByStaff(shifts);
+  const { ruleMap, profile, overrides } = await loadExtras(input.area, staff.map((s) => s.email), year, month);
+  const optionsFor = (email: string): TotalsOptions => {
+    const p = profile.get(email.toLowerCase());
+    return {
+      daysInMonth: days.length,
+      sickOtExcludedFromDuty: ruleMap.get("sick_ot_excluded_from_duty") === true,
+      baseOverride: p?.base ?? null,
+      staffArea: p?.area ?? null,
+      scheduleArea: input.area,
+      regularShiftsOverride: p ? overrides.get(p.id) ?? null : null,
+      benefitDaysMinHolidays: Number(ruleMap.get("benefit_days_min_holidays") ?? 5),
+    };
+  };
   const header = ["Staff", "Department", ...days.map((d) => String(d.getDate())),
-    "Day", "Night", "Hours", "OT h", "Sick", "Vacation"];
+    "Duty", "R/Sh", "OT", "Sick on OT", "Hours", "OT h", "Sick", "Vacation"];
   const body: (string | number)[][] = staff.map((s) => {
     const own = byStaff.get(s.email.toLowerCase()) ?? [];
     const idx = new Map(own.map((x) => [x.date, x] as const));
-    const t = totalsForStaff(own);
+    const t = totalsForStaff(own, optionsFor(s.email));
     const cells = days.map((d) => cellFor(idx.get(toISODate(d)), isWeekendDay(d, input.layer ?? "all")).code || "");
-    return [s.name, s.department ?? "", ...cells, t.day, t.night, t.hours, t.ot_hours, t.sick, t.vacation];
+    const label = t.cross_area ? `${s.name} (overtime only)` : s.name;
+    return [label, s.department ?? "", ...cells, t.duty_shifts, t.regular_shifts, t.ot_shifts, t.sick_on_ot, t.hours, t.ot_hours, t.sick, t.vacation];
   });
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a3" });
