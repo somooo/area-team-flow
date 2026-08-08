@@ -293,20 +293,34 @@ export async function exportExcel(input: ExportInput) {
   // Optional supervisor summary sheet
   if (withSummary) {
     const sum = wb.addWorksheet("OT Summary");
-    const head = sum.addRow(["Staff", "Badge", "Department", "Day", "Night", "Hours", "OT hours", "Sick", "Vacation"]);
+    const head = sum.addRow([
+      "Staff", "Badge", "Department", "Day", "Night", "Hours", "OT hours",
+      "Duty shifts", "R/Shifts", "OT shifts", "Sick on OT (not counted as duty)",
+      "Sick", "Vacation", "Note",
+    ]);
     head.eachCell((c) => {
       c.font = { name: "Arial", bold: true, size: 10 };
       c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
       c.border = BORDER;
     });
     for (const s of staff) {
-      const t = totalsForStaff(byStaff.get(s.email.toLowerCase()) ?? []);
-      const r = sum.addRow([s.name, badges.get(s.email.toLowerCase()) ?? "", s.department ?? "", t.day, t.night, t.hours, t.ot_hours, t.sick, t.vacation]);
+      const t = totalsForStaff(byStaff.get(s.email.toLowerCase()) ?? [], totalsOptionsFor(s.email));
+      const note = t.cross_area
+        ? `${profile.get(s.email.toLowerCase())?.area ?? "Other"} staff — overtime only`
+        : t.override_applied ? `Override (computed ${t.computed_regular_shifts})` : "";
+      const r = sum.addRow([
+        s.name, badges.get(s.email.toLowerCase()) ?? "", s.department ?? "",
+        t.day, t.night, t.hours, t.ot_hours,
+        t.duty_shifts, t.regular_shifts, t.ot_shifts, t.sick_on_ot,
+        t.sick, t.vacation, note,
+      ]);
       r.eachCell((c) => { c.font = { name: "Arial", size: 10 }; c.border = BORDER; });
     }
     sum.getColumn(1).width = 24;
     sum.getColumn(3).width = 18;
-    for (let c = 4; c <= 9; c++) sum.getColumn(c).width = 10;
+    for (let c = 4; c <= 13; c++) sum.getColumn(c).width = 10;
+    sum.getColumn(11).width = 16;
+    sum.getColumn(14).width = 26;
   }
 
   const buf = await wb.xlsx.writeBuffer();
