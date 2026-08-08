@@ -16,7 +16,14 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 type RuleType = "boolean" | "number" | "string" | "array";
-type Rule = { id: string; key: string; value: unknown; description: string | null; type: RuleType; group: string };
+type Rule = {
+  id: string;
+  key: string;
+  value: unknown;
+  description: string | null;
+  type: RuleType;
+  group: string;
+};
 
 const GROUP_ORDER = ["Vacation", "Pre-schedule", "Overtime", "Import", "General"];
 
@@ -41,13 +48,20 @@ function SettingsPage() {
 
   const load = async () => {
     const { data } = await supabase.from("system_rules").select("*").order("key");
-    const list = ((data ?? []) as unknown as Rule[]).map((r) => ({ ...r, type: (r.type ?? "string") as RuleType, group: r.group ?? "General" }));
+    const list = ((data ?? []) as unknown as Rule[]).map((r) => ({
+      ...r,
+      type: (r.type ?? "string") as RuleType,
+      group: r.group ?? "General",
+    }));
     setRules(list);
     const d: Record<string, string> = {};
-    for (const r of list) d[r.key] = typeof r.value === "string" ? r.value : JSON.stringify(r.value);
+    for (const r of list)
+      d[r.key] = typeof r.value === "string" ? r.value : JSON.stringify(r.value);
     setDraft(d);
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
   const grouped = useMemo(() => {
     const m = new Map<string, Rule[]>();
@@ -62,12 +76,21 @@ function SettingsPage() {
   if ((me?.staff?.role as string) !== "admin") return <p>Admins only.</p>;
 
   const persist = async (r: Rule, parsed: unknown) => {
-    const { error } = await supabase.from("system_rules")
-      .update({ value: parsed as never, updated_by: me?.staff?.email }).eq("id", r.id);
-    if (error) { toast.error(error.message); return; }
+    const { error } = await supabase
+      .from("system_rules")
+      .update({ value: parsed as never, updated_by: me?.staff?.email })
+      .eq("id", r.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     await logAudit({
-      action: "rule_updated", entity_type: "system_rule", entity_id: r.id,
-      actor_email: me?.staff?.email, actor_role: "admin", details: { key: r.key, value: parsed },
+      action: "rule_updated",
+      entity_type: "system_rule",
+      entity_id: r.id,
+      actor_email: me?.staff?.email,
+      actor_role: "admin",
+      details: { key: r.key, value: parsed },
     });
     toast.success(`Saved ${r.key}`);
     void load();
@@ -77,13 +100,24 @@ function SettingsPage() {
     const raw = draft[r.key] ?? "";
     if (r.type === "number") {
       const n = Number(raw);
-      if (!Number.isFinite(n)) { toast.error(`${r.key} must be a number`); return; }
+      if (!Number.isFinite(n)) {
+        toast.error(`${r.key} must be a number`);
+        return;
+      }
       void persist(r, n);
       return;
     }
-    if (r.type === "string") { void persist(r, raw); return; }
+    if (r.type === "string") {
+      void persist(r, raw);
+      return;
+    }
     let parsed: unknown;
-    try { parsed = JSON.parse(raw); } catch { toast.error(`Invalid JSON for ${r.key}`); return; }
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      toast.error(`Invalid JSON for ${r.key}`);
+      return;
+    }
     void persist(r, parsed);
   };
 
@@ -91,22 +125,31 @@ function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">System rules</h1>
-        <p className="text-sm text-muted-foreground">Vacation caps, auto-approve window, OT limits and other operational rules.</p>
+        <p className="text-sm text-muted-foreground">
+          Vacation caps, auto-approve window, OT limits and other operational rules.
+        </p>
       </div>
 
       {grouped.map(([group, list]) => (
         <Card key={group}>
-          <CardHeader><CardTitle>{group}</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>{group}</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-5">
             {list.map((r) => {
               const help = HELP[r.key];
               if (r.type === "boolean") {
                 const on = r.value === true;
                 return (
-                  <div key={r.id} className="flex items-start justify-between gap-4 rounded-md border p-3">
+                  <div
+                    key={r.id}
+                    className="flex items-start justify-between gap-4 rounded-md border p-3"
+                  >
                     <div>
                       <Label className="text-sm">{help?.title ?? r.key}</Label>
-                      <p className="mt-1 text-xs text-muted-foreground">{help?.body ?? r.description}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {help?.body ?? r.description}
+                      </p>
                       <p className="mt-1 text-[10px] text-muted-foreground/70">{r.key}</p>
                     </div>
                     <Switch checked={on} onCheckedChange={(v) => void persist(r, v)} />
@@ -117,7 +160,9 @@ function SettingsPage() {
                 <div key={r.id} className="grid sm:grid-cols-[240px_1fr_auto] gap-2 items-start">
                   <div>
                     <Label className="text-xs">{help?.title ?? r.key}</Label>
-                    <div className="text-[11px] text-muted-foreground">{help?.body ?? r.description}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {help?.body ?? r.description}
+                    </div>
                     {help && <div className="text-[10px] text-muted-foreground/70">{r.key}</div>}
                   </div>
                   <Input
@@ -125,7 +170,9 @@ function SettingsPage() {
                     value={draft[r.key] ?? ""}
                     onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))}
                   />
-                  <Button size="sm" onClick={() => saveTyped(r)}>Save</Button>
+                  <Button size="sm" onClick={() => saveTyped(r)}>
+                    Save
+                  </Button>
                 </div>
               );
             })}

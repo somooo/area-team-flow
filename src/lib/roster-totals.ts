@@ -1,7 +1,12 @@
 import type { RosterShift } from "@/lib/roster";
 
 export type StaffTotals = {
-  day: number; night: number; hours: number; ot_hours: number; sick: number; vacation: number;
+  day: number;
+  night: number;
+  hours: number;
+  ot_hours: number;
+  sick: number;
+  vacation: number;
   paternity: number;
   /** Total duty days after the sick-on-OT rule. */
   duty_shifts: number;
@@ -54,7 +59,11 @@ export function baseShiftsFor(daysInMonth: number, baseOverride?: number | null)
  * R/Shifts = max(0, round_half_up((days_in_month − leave_days) / days_in_month × base))
  * `leaveDays` is the post-benefit-days figure (see `leaveDaysFor`).
  */
-export function regularShifts(input: { daysInMonth: number; leaveDays: number; base?: number | null }): number {
+export function regularShifts(input: {
+  daysInMonth: number;
+  leaveDays: number;
+  base?: number | null;
+}): number {
   const { daysInMonth } = input;
   if (!daysInMonth) return 0;
   const base = baseShiftsFor(daysInMonth, input.base);
@@ -75,10 +84,22 @@ export function totalsForStaff(shifts: RosterShift[], options: TotalsOptions = {
   const excludeSickOt = options.sickOtExcludedFromDuty ?? false;
 
   const t: StaffTotals = {
-    day: 0, night: 0, hours: 0, ot_hours: 0, sick: 0, vacation: 0, paternity: 0,
-    duty_shifts: 0, regular_shifts: 0, ot_shifts: 0, sick_on_ot: 0,
-    leave_cells: 0, leave_days: 0, cross_area: false,
-    override_applied: false, computed_regular_shifts: 0,
+    day: 0,
+    night: 0,
+    hours: 0,
+    ot_hours: 0,
+    sick: 0,
+    vacation: 0,
+    paternity: 0,
+    duty_shifts: 0,
+    regular_shifts: 0,
+    ot_shifts: 0,
+    sick_on_ot: 0,
+    leave_cells: 0,
+    leave_days: 0,
+    cross_area: false,
+    override_applied: false,
+    computed_regular_shifts: 0,
   };
 
   for (const s of shifts) {
@@ -95,7 +116,10 @@ export function totalsForStaff(shifts: RosterShift[], options: TotalsOptions = {
     if (!isWorking(s)) continue;
     // MedEvac is exempt: the person came in on their off day, so it is always duty.
     const otExcludable = s.ot_type === "BuiltIn" || s.ot_type === "Additional";
-    if (excludeSickOt && isSick(s) && otExcludable) { t.sick_on_ot++; continue; }
+    if (excludeSickOt && isSick(s) && otExcludable) {
+      t.sick_on_ot++;
+      continue;
+    }
     t.duty_shifts++;
   }
 

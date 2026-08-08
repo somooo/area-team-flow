@@ -1,19 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ParseInput } from "@/components/ExcelImportButton";
 import {
-  detectScheduleLayout, collectUnknownCodes, cellText, colLetter,
-  type DetectedBlock, type ColumnConfidence, type CodeMap, type MonthSource,
+  detectScheduleLayout,
+  collectUnknownCodes,
+  cellText,
+  colLetter,
+  type DetectedBlock,
+  type ColumnConfidence,
+  type CodeMap,
+  type MonthSource,
 } from "@/lib/schedule-import";
 import { codesForLayer, type AssignmentCode } from "@/lib/assignments";
 import { monthDays, toISODate } from "@/lib/roster";
@@ -28,19 +46,28 @@ const SOURCE_TEXT: Record<MonthSource, string> = {
   "date-headers": "read from the date headers",
   "weekday-row": "inferred from the weekday row — please confirm",
   "title-text": "inferred from the sheet title — please confirm",
-  "filename": "inferred from the filename — please confirm",
+  filename: "inferred from the filename — please confirm",
   "ui-selection": "taken from the month you have open — please confirm",
 };
 
 function Chip({ level }: { level: ColumnConfidence }) {
-  const cls = level === "certain" ? "bg-muted text-muted-foreground"
-    : level === "inferred" ? "bg-amber-100 text-amber-900"
-    : "bg-destructive/15 text-destructive";
+  const cls =
+    level === "certain"
+      ? "bg-muted text-muted-foreground"
+      : level === "inferred"
+        ? "bg-amber-100 text-amber-900"
+        : "bg-destructive/15 text-destructive";
   return <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] uppercase ${cls}`}>{level}</span>;
 }
 
 export function ScheduleMappingDialog({
-  input, area, codes, uiYear, uiMonth, onConfirm, onCancel,
+  input,
+  area,
+  codes,
+  uiYear,
+  uiMonth,
+  onConfirm,
+  onCancel,
 }: {
   input: ParseInput;
   area: string;
@@ -61,7 +88,13 @@ export function ScheduleMappingDialog({
   const [reviewing, setReviewing] = useState(false);
 
   const detected = useMemo(
-    () => detectScheduleLayout(input.workbook, input.file.name, { year: uiYear, month: uiMonth }, sheetName || undefined),
+    () =>
+      detectScheduleLayout(
+        input.workbook,
+        input.file.name,
+        { year: uiYear, month: uiMonth },
+        sheetName || undefined,
+      ),
     [input, uiYear, uiMonth, sheetName],
   );
 
@@ -75,28 +108,36 @@ export function ScheduleMappingDialog({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase.from("import_profiles").select("name,layout,code_map").eq("area", area);
+      const { data } = await supabase
+        .from("import_profiles")
+        .select("name,layout,code_map")
+        .eq("area", area);
       if (cancelled || !data?.length) return;
       for (const p of data as { name: string; layout: unknown; code_map: unknown }[]) {
         const layout = p.layout as { sheetName: string; blocks: DetectedBlock[] } | null;
         if (!layout?.blocks?.length) continue;
-        const fits = layout.blocks.every((b, i) => {
-          const d = detected.blocks[i];
-          return d && d.headerRow === b.headerRow && d.dayStartCol === b.dayStartCol;
-        }) && layout.blocks.length === detected.blocks.length;
+        const fits =
+          layout.blocks.every((b, i) => {
+            const d = detected.blocks[i];
+            return d && d.headerRow === b.headerRow && d.dayStartCol === b.dayStartCol;
+          }) && layout.blocks.length === detected.blocks.length;
         if (!fits) continue;
         setProfileMatched(p.name);
         setCodeMap((p.code_map as CodeMap) ?? {});
-        setBlocks(detected.blocks.map((d, i) => ({
-          ...d,
-          nameCol: layout.blocks[i].nameCol,
-          badgeCol: layout.blocks[i].badgeCol,
-          layer: layout.blocks[i].layer,
-        })));
+        setBlocks(
+          detected.blocks.map((d, i) => ({
+            ...d,
+            nameCol: layout.blocks[i].nameCol,
+            badgeCol: layout.blocks[i].badgeCol,
+            layer: layout.blocks[i].layer,
+          })),
+        );
         break;
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [area, detected]);
 
   const matrix = input.workbook.sheets[sheetName] ?? [];
@@ -112,8 +153,14 @@ export function ScheduleMappingDialog({
   const monthBlocked = blocks.some((b) => b.confidence.month === "guess" && !touchedMonth[b.id]);
 
   const continueFromMapping = () => {
-    if (monthBlocked) { toast.error("Confirm the month for every block before continuing"); return; }
-    if (unknown.length) { setStep("codes"); return; }
+    if (monthBlocked) {
+      toast.error("Confirm the month for every block before continuing");
+      return;
+    }
+    if (unknown.length) {
+      setStep("codes");
+      return;
+    }
     void finish({});
   };
 
@@ -121,10 +168,12 @@ export function ScheduleMappingDialog({
     const finalMap = { ...codeMap, ...extraMap };
     if (rememberProfile) {
       const name = `${area} monthly profile`;
-      const { error } = await supabase.from("import_profiles").upsert(
-        { area, name, layout: { sheetName, blocks } as never, code_map: finalMap as never },
-        { onConflict: "area,name" },
-      );
+      const { error } = await supabase
+        .from("import_profiles")
+        .upsert(
+          { area, name, layout: { sheetName, blocks } as never, code_map: finalMap as never },
+          { onConflict: "area,name" },
+        );
       if (error) toast.error(`Mapping saved locally only: ${error.message}`);
     }
     onConfirm({ sheetName, blocks, codeMap: finalMap });
@@ -133,7 +182,10 @@ export function ScheduleMappingDialog({
   const columnOptions = (b: DetectedBlock) =>
     Array.from({ length: Math.max(1, b.dayStartCol) }, (_, c) => {
       const sample = cellText(matrix[b.firstDataRow]?.[c]);
-      return { value: String(c), label: `${colLetter(c)}${sample ? ` — "${sample.slice(0, 24)}"` : ""}` };
+      return {
+        value: String(c),
+        label: `${colLetter(c)}${sample ? ` — "${sample.slice(0, 24)}"` : ""}`,
+      };
     });
 
   const preview = (b: DetectedBlock) => {
@@ -153,43 +205,66 @@ export function ScheduleMappingDialog({
 
   if (step === "codes") {
     return (
-      <Dialog open onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <Dialog
+        open
+        onOpenChange={(o) => {
+          if (!o) onCancel();
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {unknown.length} code{unknown.length === 1 ? "" : "s"} in this file aren&apos;t in the {area} code list. Tell us what each one means.
+              {unknown.length} code{unknown.length === 1 ? "" : "s"} in this file aren&apos;t in the{" "}
+              {area} code list. Tell us what each one means.
             </DialogTitle>
           </DialogHeader>
           <div className="max-h-96 space-y-3 overflow-auto">
             {unknown.map((u) => (
-              <div key={u.code} className="grid gap-2 sm:grid-cols-[1fr_220px] items-center rounded-md border p-3">
+              <div
+                key={u.code}
+                className="grid gap-2 sm:grid-cols-[1fr_220px] items-center rounded-md border p-3"
+              >
                 <div>
-                  <div className="font-medium text-sm">{u.code} <span className="text-muted-foreground">· {u.count} cells</span></div>
+                  <div className="font-medium text-sm">
+                    {u.code} <span className="text-muted-foreground">· {u.count} cells</span>
+                  </div>
                   <div className="text-[11px] text-muted-foreground">{u.samples.join(" · ")}</div>
                 </div>
                 <Select
                   value={codeMap[u.code.toUpperCase()] ?? ""}
                   onValueChange={(v) => setCodeMap((m) => ({ ...m, [u.code.toUpperCase()]: v }))}
                 >
-                  <SelectTrigger><SelectValue placeholder="Choose a meaning" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a meaning" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="VAC">Vacation</SelectItem>
                     <SelectItem value="OFF">Off</SelectItem>
                     <SelectItem value="SICK">Sick</SelectItem>
                     <SelectItem value="PAT">Paternity</SelectItem>
                     <SelectItem value="SKIP">Skip these cells</SelectItem>
-                    {codes.map((c) => <SelectItem key={c.id} value={c.code}>{c.code}{c.unit ? ` — ${c.unit}` : ""}</SelectItem>)}
+                    {codes.map((c) => (
+                      <SelectItem key={c.id} value={c.code}>
+                        {c.code}
+                        {c.unit ? ` — ${c.unit}` : ""}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             ))}
           </div>
           <label className="flex items-center gap-2 text-xs">
-            <Checkbox checked={rememberProfile} onCheckedChange={(v) => setRememberProfile(v === true)} />
+            <Checkbox
+              checked={rememberProfile}
+              onCheckedChange={(v) => setRememberProfile(v === true)}
+            />
             Remember these mappings for {area}
           </label>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setStep("map")}>Back</Button>
+            <Button variant="outline" onClick={() => setStep("map")}>
+              Back
+            </Button>
             <Button
               disabled={unknown.some((u) => !codeMap[u.code.toUpperCase()])}
               onClick={() => void finish({})}
@@ -204,15 +279,26 @@ export function ScheduleMappingDialog({
 
   if (profileMatched && !reviewing) {
     return (
-      <Dialog open onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <Dialog
+        open
+        onOpenChange={(o) => {
+          if (!o) onCancel();
+        }}
+      >
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Confirm import mapping</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Confirm import mapping</DialogTitle>
+          </DialogHeader>
           <p className="text-sm">
             Matched your saved <span className="font-medium">{profileMatched}</span> ·{" "}
-            <button className="underline" onClick={() => setReviewing(true)}>Review mapping</button>
+            <button className="underline" onClick={() => setReviewing(true)}>
+              Review mapping
+            </button>
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={onCancel}>Cancel</Button>
+            <Button variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
             <Button onClick={continueFromMapping}>Continue</Button>
           </DialogFooter>
         </DialogContent>
@@ -221,16 +307,27 @@ export function ScheduleMappingDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onCancel(); }}>
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onCancel();
+      }}
+    >
       <DialogContent className="max-w-3xl">
-        <DialogHeader><DialogTitle>Confirm import mapping</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Confirm import mapping</DialogTitle>
+        </DialogHeader>
 
         <div className="max-h-[70vh] space-y-4 overflow-auto pr-1">
           {warnings.length > 0 && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                <ul className="list-disc pl-4 text-xs">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                <ul className="list-disc pl-4 text-xs">
+                  {warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
               </AlertDescription>
             </Alert>
           )}
@@ -239,9 +336,15 @@ export function ScheduleMappingDialog({
             <div>
               <Label className="text-xs">Sheet</Label>
               <Select value={sheetName} onValueChange={setSheetName}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {input.workbook.sheetNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  {input.workbook.sheetNames.map((n) => (
+                    <SelectItem key={n} value={n}>
+                      {n}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -252,18 +355,29 @@ export function ScheduleMappingDialog({
             return (
               <div key={b.id} className="space-y-3 rounded-md border p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">Rows {b.firstDataRow + 1}–{b.lastDataRow + 1}</Badge>
+                  <Badge variant="secondary">
+                    Rows {b.firstDataRow + 1}–{b.lastDataRow + 1}
+                  </Badge>
                   <span className="text-xs text-muted-foreground">
-                    Day columns {colLetter(b.dayStartCol)} … {colLetter(b.dayStartCol + b.dayCount - 1)} · {b.dayCount} days
+                    Day columns {colLetter(b.dayStartCol)} …{" "}
+                    {colLetter(b.dayStartCol + b.dayCount - 1)} · {b.dayCount} days
                     <Chip level={b.confidence.days} />
                   </span>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
-                    <Label className="text-xs">This grid is<Chip level={b.confidence.layer} /></Label>
-                    <Select value={b.layer} onValueChange={(v) => patch(b.id, { layer: v as "day" | "night" })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Label className="text-xs">
+                      This grid is
+                      <Chip level={b.confidence.layer} />
+                    </Label>
+                    <Select
+                      value={b.layer}
+                      onValueChange={(v) => patch(b.id, { layer: v as "day" | "night" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="day">Day</SelectItem>
                         <SelectItem value="night">Night</SelectItem>
@@ -272,25 +386,48 @@ export function ScheduleMappingDialog({
                   </div>
 
                   <div>
-                    <Label className="text-xs">Name column<Chip level={b.confidence.name} /></Label>
-                    <Select value={String(b.nameCol)} onValueChange={(v) => patch(b.id, { nameCol: Number(v) })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Label className="text-xs">
+                      Name column
+                      <Chip level={b.confidence.name} />
+                    </Label>
+                    <Select
+                      value={String(b.nameCol)}
+                      onValueChange={(v) => patch(b.id, { nameCol: Number(v) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
-                        {columnOptions(b).map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                        {columnOptions(b).map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label className="text-xs">Badge column<Chip level={b.confidence.badge} /></Label>
+                    <Label className="text-xs">
+                      Badge column
+                      <Chip level={b.confidence.badge} />
+                    </Label>
                     <Select
                       value={b.badgeCol == null ? "none" : String(b.badgeCol)}
-                      onValueChange={(v) => patch(b.id, { badgeCol: v === "none" ? null : Number(v) })}
+                      onValueChange={(v) =>
+                        patch(b.id, { badgeCol: v === "none" ? null : Number(v) })
+                      }
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None (match on name)</SelectItem>
-                        {columnOptions(b).map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                        {columnOptions(b).map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -300,7 +437,10 @@ export function ScheduleMappingDialog({
                     <Input
                       value={colLetter(b.dayStartCol)}
                       onChange={(e) => {
-                        const letters = e.target.value.trim().toUpperCase().replace(/[^A-Z]/g, "");
+                        const letters = e.target.value
+                          .trim()
+                          .toUpperCase()
+                          .replace(/[^A-Z]/g, "");
                         if (!letters) return;
                         let n = 0;
                         for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
@@ -312,13 +452,28 @@ export function ScheduleMappingDialog({
                   <div>
                     <Label className="text-xs">Rows</Label>
                     <div className="flex gap-2">
-                      <Input type="number" value={b.firstDataRow + 1} onChange={(e) => patch(b.id, { firstDataRow: Math.max(0, Number(e.target.value) - 1) })} />
-                      <Input type="number" value={b.lastDataRow + 1} onChange={(e) => patch(b.id, { lastDataRow: Math.max(0, Number(e.target.value) - 1) })} />
+                      <Input
+                        type="number"
+                        value={b.firstDataRow + 1}
+                        onChange={(e) =>
+                          patch(b.id, { firstDataRow: Math.max(0, Number(e.target.value) - 1) })
+                        }
+                      />
+                      <Input
+                        type="number"
+                        value={b.lastDataRow + 1}
+                        onChange={(e) =>
+                          patch(b.id, { lastDataRow: Math.max(0, Number(e.target.value) - 1) })
+                        }
+                      />
                     </div>
                   </div>
 
                   <div>
-                    <Label className="text-xs">Month<Chip level={b.confidence.month} /></Label>
+                    <Label className="text-xs">
+                      Month
+                      <Chip level={b.confidence.month} />
+                    </Label>
                     <Input
                       type="month"
                       value={`${b.year}-${String(b.month + 1).padStart(2, "0")}`}
@@ -329,7 +484,9 @@ export function ScheduleMappingDialog({
                         patch(b.id, { year: y, month: m - 1 });
                       }}
                     />
-                    <p className="mt-1 text-[11px] text-muted-foreground">{SOURCE_TEXT[b.monthSource]}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {SOURCE_TEXT[b.monthSource]}
+                    </p>
                   </div>
                 </div>
 
@@ -339,7 +496,11 @@ export function ScheduleMappingDialog({
                       <tr>
                         <th className="p-1 text-left">Name</th>
                         <th className="p-1 text-left">Badge</th>
-                        {days.map((d) => <th key={d.toISOString()} className="p-1">{toISODate(d).slice(5)}</th>)}
+                        {days.map((d) => (
+                          <th key={d.toISOString()} className="p-1">
+                            {toISODate(d).slice(5)}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -347,14 +508,19 @@ export function ScheduleMappingDialog({
                         <tr key={i} className="border-t">
                           <td className="p-1">{r.name}</td>
                           <td className="p-1">{r.badge}</td>
-                          {r.cells.map((c, ci) => <td key={ci} className="p-1 text-center">{c || "—"}</td>)}
+                          {r.cells.map((c, ci) => (
+                            <td key={ci} className="p-1 text-center">
+                              {c || "—"}
+                            </td>
+                          ))}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Codes are read from {codesForLayer(codes, b.layer).length} {b.layer} assignment codes for {area}.
+                  Codes are read from {codesForLayer(codes, b.layer).length} {b.layer} assignment
+                  codes for {area}.
                 </p>
               </div>
             );
@@ -363,11 +529,18 @@ export function ScheduleMappingDialog({
 
         <DialogFooter>
           <label className="mr-auto flex items-center gap-2 text-xs">
-            <Checkbox checked={rememberProfile} onCheckedChange={(v) => setRememberProfile(v === true)} />
+            <Checkbox
+              checked={rememberProfile}
+              onCheckedChange={(v) => setRememberProfile(v === true)}
+            />
             Remember this mapping for {area}
           </label>
-          <Button variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button onClick={continueFromMapping} disabled={blocks.length === 0 || monthBlocked}>Continue</Button>
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button onClick={continueFromMapping} disabled={blocks.length === 0 || monthBlocked}>
+            Continue
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,6 +1,13 @@
 import type { ImportItem } from "@/components/ExcelImportButton";
 import { exportCell } from "@/lib/schedule-export";
-import { isWeekendDay, monthDays, toISODate, type Duty, type OtType, type RosterShift } from "@/lib/roster";
+import {
+  isWeekendDay,
+  monthDays,
+  toISODate,
+  type Duty,
+  type OtType,
+  type RosterShift,
+} from "@/lib/roster";
 import { codesForLayer, type AssignmentCode } from "@/lib/assignments";
 import type { StaffLite } from "@/components/MonthGrid";
 
@@ -10,7 +17,12 @@ import type { StaffLite } from "@/components/MonthGrid";
 
 export type ColumnConfidence = "certain" | "inferred" | "guess";
 export type Layer = "day" | "night";
-export type MonthSource = "date-headers" | "weekday-row" | "title-text" | "filename" | "ui-selection";
+export type MonthSource =
+  | "date-headers"
+  | "weekday-row"
+  | "title-text"
+  | "filename"
+  | "ui-selection";
 
 export type DetectedBlock = {
   id: string;
@@ -46,7 +58,13 @@ export type ImportedCell = {
   date: string;
   existingId?: string;
   /** null = clear the cell */
-  payload: null | { duty: Duty; unit_code: string | null; ot_type: OtType; hours: number; sick_tag: boolean };
+  payload: null | {
+    duty: Duty;
+    unit_code: string | null;
+    ot_type: OtType;
+    hours: number;
+    sick_tag: boolean;
+  };
 };
 
 /** Where an unknown code should be sent. */
@@ -57,8 +75,21 @@ export type CodeMap = Record<string, CodeMapTarget>;
 /* Cell helpers                                                        */
 /* ------------------------------------------------------------------ */
 
-const MONTH_NAMES = ["january","february","march","april","may","june","july","august","september","october","november","december"];
-const WEEKDAYS = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+const MONTH_NAMES = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 export const cellText = (v: unknown): string => {
   if (v == null) return "";
@@ -82,8 +113,13 @@ const sameDay = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 8
 
 /** Column index → Excel letter (0 → A). */
 export function colLetter(i: number): string {
-  let n = i + 1, out = "";
-  while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
+  let n = i + 1,
+    out = "";
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    out = String.fromCharCode(65 + r) + out;
+    n = Math.floor((n - 1) / 26);
+  }
   return out;
 }
 
@@ -98,11 +134,13 @@ type DayRun = { start: number; count: number; kind: "date" | "number"; first?: D
 function dateRunAt(row: unknown[], c: number): DayRun | null {
   const first = asDate(row[c]);
   if (!first) return null;
-  let count = 1, prev = first;
+  let count = 1,
+    prev = first;
   for (let i = c + 1; i < row.length && count < 31; i++) {
     const d = asDate(row[i]);
     if (!d || sameDay(prev, d) !== 1 || d.getMonth() !== first.getMonth()) break;
-    prev = d; count++;
+    prev = d;
+    count++;
   }
   return { start: c, count, kind: "date", first };
 }
@@ -132,38 +170,61 @@ export function findDayRun(row: unknown[]): DayRun | null {
 /* Name / badge column detection                                       */
 /* ------------------------------------------------------------------ */
 
-const looksBadge = (s: string) => /^\d{4,8}$/.test(s.replace(/\D/g, "")) && s.replace(/\D/g, "").length >= 4;
+const looksBadge = (s: string) =>
+  /^\d{4,8}$/.test(s.replace(/\D/g, "")) && s.replace(/\D/g, "").length >= 4;
 const looksName = (s: string) => /[A-Za-z]{3,}/.test(s) && !looksBadge(s);
 
-function pickNameBadge(matrix: unknown[][], headerRow: number, firstDataRow: number, lastDataRow: number, dayStart: number) {
+function pickNameBadge(
+  matrix: unknown[][],
+  headerRow: number,
+  firstDataRow: number,
+  lastDataRow: number,
+  dayStart: number,
+) {
   const header = matrix[headerRow] ?? [];
-  let nameCol = -1, badgeCol: number | null = null;
-  let nameConf: ColumnConfidence = "guess", badgeConf: ColumnConfidence = "guess";
+  let nameCol = -1,
+    badgeCol: number | null = null;
+  let nameConf: ColumnConfidence = "guess",
+    badgeConf: ColumnConfidence = "guess";
 
   for (let c = 0; c < dayStart; c++) {
     const label = cellText(header[c]);
-    if (nameCol < 0 && /name/i.test(label)) { nameCol = c; nameConf = "certain"; }
-    if (badgeCol == null && /badge|id\s*no|employee/i.test(label)) { badgeCol = c; badgeConf = "certain"; }
+    if (nameCol < 0 && /name/i.test(label)) {
+      nameCol = c;
+      nameConf = "certain";
+    }
+    if (badgeCol == null && /badge|id\s*no|employee/i.test(label)) {
+      badgeCol = c;
+      badgeConf = "certain";
+    }
   }
 
   if (nameCol < 0 || badgeCol == null) {
     const scores: { c: number; name: number; badge: number }[] = [];
     for (let c = 0; c < dayStart; c++) {
-      let name = 0, badge = 0;
+      let name = 0,
+        badge = 0;
       for (let r = firstDataRow; r <= lastDataRow; r++) {
         const v = cellText(matrix[r]?.[c]);
         if (!v) continue;
-        if (looksBadge(v)) badge++; else if (looksName(v)) name++;
+        if (looksBadge(v)) badge++;
+        else if (looksName(v)) name++;
       }
       scores.push({ c, name, badge });
     }
     if (nameCol < 0) {
       const best = scores.slice().sort((a, b) => b.name - a.name)[0];
-      if (best && best.name > 0) { nameCol = best.c; nameConf = "inferred"; }
+      if (best && best.name > 0) {
+        nameCol = best.c;
+        nameConf = "inferred";
+      }
     }
     if (badgeCol == null) {
       const best = scores.filter((s) => s.c !== nameCol).sort((a, b) => b.badge - a.badge)[0];
-      if (best && best.badge > 0) { badgeCol = best.c; badgeConf = "inferred"; }
+      if (best && best.badge > 0) {
+        badgeCol = best.c;
+        badgeConf = "inferred";
+      }
     }
   }
   if (nameCol < 0) nameCol = 0;
@@ -174,7 +235,11 @@ function pickNameBadge(matrix: unknown[][], headerRow: number, firstDataRow: num
 /* Month / year resolution                                             */
 /* ------------------------------------------------------------------ */
 
-function weekdayRowAbove(matrix: unknown[][], headerRow: number, dayStart: number): string[] | null {
+function weekdayRowAbove(
+  matrix: unknown[][],
+  headerRow: number,
+  dayStart: number,
+): string[] | null {
   for (const r of [headerRow - 1, headerRow + 1]) {
     const row = matrix[r];
     if (!row) continue;
@@ -190,7 +255,11 @@ function weekdayIndexOf(token: string): number {
   return WEEKDAYS.findIndex((w) => w.startsWith(t));
 }
 
-function monthFromWeekday(firstWeekday: number, uiYear: number, uiMonth: number): { year: number; month: number } | null {
+function monthFromWeekday(
+  firstWeekday: number,
+  uiYear: number,
+  uiMonth: number,
+): { year: number; month: number } | null {
   for (let delta = 0; delta <= 6; delta++) {
     for (const sign of delta === 0 ? [0] : [-1, 1]) {
       const d = new Date(uiYear, uiMonth + sign * delta, 1);
@@ -200,10 +269,15 @@ function monthFromWeekday(firstWeekday: number, uiYear: number, uiMonth: number)
   return null;
 }
 
-function monthFromTitle(matrix: unknown[][], headerRow: number): { year: number; month: number } | null {
+function monthFromTitle(
+  matrix: unknown[][],
+  headerRow: number,
+): { year: number; month: number } | null {
   for (let r = Math.max(0, headerRow - 14); r < headerRow; r++) {
     for (const cell of matrix[r] ?? []) {
-      const m = cellText(cell).match(/(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i);
+      const m = cellText(cell).match(
+        /(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i,
+      );
       if (m) return { month: MONTH_NAMES.indexOf(m[1].toLowerCase()), year: Number(m[2]) };
     }
   }
@@ -216,7 +290,9 @@ function monthFromFilename(filename: string): { year: number; month: number } | 
     const mo = Number(m[2]) - 1;
     if (mo >= 0 && mo <= 11) return { year: Number(m[1]), month: mo };
   }
-  const t = filename.match(/(january|february|march|april|may|june|july|august|september|october|november|december)\s*(\d{4})/i);
+  const t = filename.match(
+    /(january|february|march|april|may|june|july|august|september|october|november|december)\s*(\d{4})/i,
+  );
   if (t) return { month: MONTH_NAMES.indexOf(t[1].toLowerCase()), year: Number(t[2]) };
   return null;
 }
@@ -225,12 +301,17 @@ function monthFromFilename(filename: string): { year: number; month: number } | 
 /* Layer detection                                                     */
 /* ------------------------------------------------------------------ */
 
-function detectLayer(matrix: unknown[][], headerRow: number, order: number): { layer: Layer; confidence: ColumnConfidence } {
+function detectLayer(
+  matrix: unknown[][],
+  headerRow: number,
+  order: number,
+): { layer: Layer; confidence: ColumnConfidence } {
   for (let r = Math.max(0, headerRow - 12); r <= headerRow + 4; r++) {
     for (const cell of matrix[r] ?? []) {
       const s = cellText(cell);
       if (/night/i.test(s)) return { layer: "night", confidence: "inferred" };
-      if (/\bday\b/i.test(s) && !/day coverage|days/i.test(s)) return { layer: "day", confidence: "inferred" };
+      if (/\bday\b/i.test(s) && !/day coverage|days/i.test(s))
+        return { layer: "day", confidence: "inferred" };
     }
   }
   return { layer: order === 0 ? "day" : "night", confidence: "guess" };
@@ -255,9 +336,14 @@ export function detectScheduleLayout(
   ui: { year: number; month: number },
   preferredSheet?: string,
 ): DetectedLayout {
-  const sheetName = preferredSheet && workbook.sheets[preferredSheet]
-    ? preferredSheet
-    : workbook.sheetNames.slice().sort((a, b) => scoreSheet(workbook.sheets[b] ?? []) - scoreSheet(workbook.sheets[a] ?? []))[0];
+  const sheetName =
+    preferredSheet && workbook.sheets[preferredSheet]
+      ? preferredSheet
+      : workbook.sheetNames
+          .slice()
+          .sort(
+            (a, b) => scoreSheet(workbook.sheets[b] ?? []) - scoreSheet(workbook.sheets[a] ?? []),
+          )[0];
   const matrix = workbook.sheets[sheetName] ?? [];
   const warnings: string[] = [];
   const possibleMissedBlockRows: number[] = [];
@@ -275,9 +361,11 @@ export function detectScheduleLayout(
     const dayStart = run.start;
 
     const weekdays = weekdayRowAbove(matrix, headerRow, dayStart);
-    const weekdayIsBelow = !!weekdays && !!matrix[headerRow + 1] &&
+    const weekdayIsBelow =
+      !!weekdays &&
+      !!matrix[headerRow + 1] &&
       weekdayIndexOf(cellText(matrix[headerRow + 1][dayStart]).toLowerCase()) >= 0;
-    let firstDataRow = headerRow + (weekdayIsBelow ? 2 : 1);
+    const firstDataRow = headerRow + (weekdayIsBelow ? 2 : 1);
 
     // Block ends at the next header, or the first row with no name, no badge and no day cells.
     let lastDataRow = firstDataRow - 1;
@@ -292,27 +380,50 @@ export function detectScheduleLayout(
     }
     if (lastDataRow < firstDataRow) lastDataRow = firstDataRow;
 
-    const { nameCol, badgeCol, nameConf, badgeConf } = pickNameBadge(matrix, headerRow, firstDataRow, lastDataRow, dayStart);
+    const { nameCol, badgeCol, nameConf, badgeConf } = pickNameBadge(
+      matrix,
+      headerRow,
+      firstDataRow,
+      lastDataRow,
+      dayStart,
+    );
 
     // Month / year, in priority order.
-    let month = ui.month, year = ui.year;
+    let month = ui.month,
+      year = ui.year;
     let monthSource: MonthSource = "ui-selection";
     let monthConf: ColumnConfidence = "guess";
     const blockWarnings: string[] = [];
 
     if (run.kind === "date" && run.first) {
-      month = run.first.getMonth(); year = run.first.getFullYear();
-      monthSource = "date-headers"; monthConf = "certain";
+      month = run.first.getMonth();
+      year = run.first.getFullYear();
+      monthSource = "date-headers";
+      monthConf = "certain";
     } else if (weekdays && weekdayIndexOf(weekdays[0] ?? "") >= 0) {
       const resolved = monthFromWeekday(weekdayIndexOf(weekdays[0]), ui.year, ui.month);
-      if (resolved) { month = resolved.month; year = resolved.year; monthSource = "weekday-row"; monthConf = "inferred"; }
+      if (resolved) {
+        month = resolved.month;
+        year = resolved.year;
+        monthSource = "weekday-row";
+        monthConf = "inferred";
+      }
     }
     if (monthSource === "ui-selection") {
       const t = monthFromTitle(matrix, headerRow);
-      if (t) { month = t.month; year = t.year; monthSource = "title-text"; monthConf = "inferred"; }
-      else {
+      if (t) {
+        month = t.month;
+        year = t.year;
+        monthSource = "title-text";
+        monthConf = "inferred";
+      } else {
         const f = monthFromFilename(filename);
-        if (f) { month = f.month; year = f.year; monthSource = "filename"; monthConf = "guess"; }
+        if (f) {
+          month = f.month;
+          year = f.year;
+          monthSource = "filename";
+          monthConf = "guess";
+        }
       }
     }
 
@@ -331,11 +442,17 @@ export function detectScheduleLayout(
 
     return {
       id: `block-${idx}`,
-      headerRow, firstDataRow, lastDataRow,
-      nameCol, badgeCol,
+      headerRow,
+      firstDataRow,
+      lastDataRow,
+      nameCol,
+      badgeCol,
       dayStartCol: dayStart,
       dayCount: Math.min(run.count, 31),
-      month, year, layer, monthSource,
+      month,
+      year,
+      layer,
+      monthSource,
       confidence: {
         header: "certain",
         name: nameConf,
@@ -366,14 +483,22 @@ export function detectScheduleLayout(
 type ParseResult = { ok: true; cell: ImportedCell["payload"] } | { ok: false; reason: string };
 
 const LEAVE: Record<string, Duty> = {
-  V: "Vacation", VAC: "Vacation",
+  V: "Vacation",
+  VAC: "Vacation",
   OFF: "Off",
-  S: "Sick", SL: "Sick",
-  P: "Paternity", PL: "Paternity",
+  S: "Sick",
+  SL: "Sick",
+  P: "Paternity",
+  PL: "Paternity",
 };
 
-const leaveCell = (duty: Duty): ImportedCell["payload"] =>
-  ({ duty, unit_code: null, ot_type: "None", hours: 0, sick_tag: false });
+const leaveCell = (duty: Duty): ImportedCell["payload"] => ({
+  duty,
+  unit_code: null,
+  ot_type: "None",
+  hours: 0,
+  sick_tag: false,
+});
 
 /** Lookup keys for an assignment code: its own code and its exported form (letter + unit). */
 function codeKeys(c: AssignmentCode): string[] {
@@ -402,7 +527,10 @@ export function parseCellCode(
   const tag = (parts[1] ?? "").trim().toUpperCase();
 
   let sick = false;
-  if (/^s[A-Za-z]/.test(base) && base.toUpperCase() !== "SL") { sick = true; base = base.slice(1); }
+  if (/^s[A-Za-z]/.test(base) && base.toUpperCase() !== "SL") {
+    sick = true;
+    base = base.slice(1);
+  }
   const upper = base.toUpperCase();
 
   // MedEvac is a standalone entry: no ward code, never sick.
@@ -411,10 +539,14 @@ export function parseCellCode(
     if (sick) return { ok: false, reason: "MedEvac OT cannot be sick leave" };
     if (tag && tag !== "MOT") return { ok: false, reason: `unrecognised tag "${tag}"` };
     const duty: Duty = (codes[0]?.duty as Duty) ?? "Day";
-    return { ok: true, cell: { duty, unit_code: null, ot_type: "MedEvac", hours: fallbackHours, sick_tag: false } };
+    return {
+      ok: true,
+      cell: { duty, unit_code: null, ot_type: "MedEvac", hours: fallbackHours, sick_tag: false },
+    };
   }
 
-  if (tag && !["BOT", "AOT"].includes(tag)) return { ok: false, reason: `unrecognised tag "${tag}"` };
+  if (tag && !["BOT", "AOT"].includes(tag))
+    return { ok: false, reason: `unrecognised tag "${tag}"` };
   const otType: OtType = tag === "BOT" ? "BuiltIn" : tag === "AOT" ? "Additional" : "None";
 
   if (!sick && !tag && LEAVE[upper]) return { ok: true, cell: leaveCell(LEAVE[upper]) };
@@ -427,7 +559,9 @@ export function parseCellCode(
     if (mapped === "SICK") return { ok: true, cell: leaveCell("Sick") };
     if (mapped === "PAT") return { ok: true, cell: leaveCell("Paternity") };
   }
-  const target = (mapped && !["SKIP", "VAC", "OFF", "SICK", "PAT"].includes(mapped) ? mapped : base).toUpperCase();
+  const target = (
+    mapped && !["SKIP", "VAC", "OFF", "SICK", "PAT"].includes(mapped) ? mapped : base
+  ).toUpperCase();
 
   const known = codes.find((c) => codeKeys(c).includes(target));
   if (!known) return { ok: false, reason: `unrecognised code "${value}"` };
@@ -525,7 +659,8 @@ export function planScheduleImport(input: PlanInput): PlanResult {
       const row = matrix[r] ?? [];
       const name = cellText(row[b.nameCol]);
       const badge = b.badgeCol == null ? "" : cellText(row[b.badgeCol]);
-      const member = (badge ? byBadge.get(badge) : undefined) ?? byName.get(name.trim().toLowerCase());
+      const member =
+        (badge ? byBadge.get(badge) : undefined) ?? byName.get(name.trim().toLowerCase());
 
       if (!member) {
         // Zone labels and footer rows: a name (or nothing) with no matching badge.
@@ -537,11 +672,18 @@ export function planScheduleImport(input: PlanInput): PlanResult {
         const date = toISODate(days[i]);
         const raw = cellText(row[b.dayStartCol + i]);
         const existing = current.get(`${member.email.toLowerCase()}|${date}`);
-        const before = input.replace ? "" : exportCell(existing, isWeekendDay(new Date(`${date}T00:00:00`), b.layer)).raw;
+        const before = input.replace
+          ? ""
+          : exportCell(existing, isWeekendDay(new Date(`${date}T00:00:00`), b.layer)).raw;
         if (!input.replace && raw === before) continue;
         if (input.replace && !raw) continue;
 
-        const parsed = parseCellCode(raw, layerCodes, existing?.hours ?? defaultHours, input.codeMap ?? {});
+        const parsed = parseCellCode(
+          raw,
+          layerCodes,
+          existing?.hours ?? defaultHours,
+          input.codeMap ?? {},
+        );
         const id = `${b.id}-${r}-${i}`;
         const change = `${date}: ${before || "—"} → ${raw || "—"}`;
         if (!parsed.ok) {
@@ -549,10 +691,13 @@ export function planScheduleImport(input: PlanInput): PlanResult {
           continue;
         }
         items.push({
-          id, label: member.name, change,
+          id,
+          label: member.name,
+          change,
           status: input.replace || !existing ? "add" : "update",
           payload: {
-            staff: member, date,
+            staff: member,
+            date,
             existingId: input.replace ? undefined : existing?.id,
             payload: parsed.cell,
           },
