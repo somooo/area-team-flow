@@ -268,7 +268,7 @@ function SchedulePage() {
             isCellClickable={cellClickable}
           />
           )}
-          {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} area={viewArea} year={year} month={month} />}
+          {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} area={viewArea} year={year} month={month} canEdit={canManageArea(meStaff, viewArea)} actor={meStaff.email} />}
         </CardContent>
       </Card>
 
@@ -560,7 +560,7 @@ function GiveOtDialog({ me, shift, roster, onClose, onDone }: {
   );
 }
 
-function TotalsTable({ staff, shifts, area, year, month }: { staff: Staff[]; shifts: Shift[]; area: string; year: number; month: number }) {
+function TotalsTable({ staff, shifts, area, year, month, canEdit, actor }: { staff: Staff[]; shifts: Shift[]; area: string; year: number; month: number; canEdit: boolean; actor: string }) {
   const byStaff = useMemo(() => groupByStaff(shifts), [shifts]);
   const { rules } = useSystemRules();
   const [overrides, setOverrides] = useState<Record<string, number>>({});
@@ -578,6 +578,29 @@ function TotalsTable({ staff, shifts, area, year, month }: { staff: Staff[]; shi
   }, [area, year, month, staff.length]);
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const saveOverride = async (staffId: string, computed: number) => {
+    const raw = draft.trim();
+    if (raw === "") {
+      await supabase.from("regular_shift_overrides").delete()
+        .eq("staff_id", staffId).eq("area", area).eq("year", year).eq("month", month);
+      setOverrides((o) => { const next = { ...o }; delete next[staffId]; return next; });
+      await logAudit({ action: "regular_shifts_override_cleared", entity_type: "regular_shift_override", entity_id: staffId, actor_email: actor, area, details: { area, year, month, computed } });
+    } else {
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) { toast.error("Enter a whole number of shifts"); return; }
+      const { error } = await supabase.from("regular_shift_overrides").upsert(
+        { staff_id: staffId, area, year, month, regular_shifts: n, set_by: actor },
+        { onConflict: "staff_id,area,year,month" },
+      );
+      if (error) { toast.error(error.message); return; }
+      setOverrides((o) => ({ ...o, [staffId]: n }));
+      await logAudit({ action: "regular_shifts_override_set", entity_type: "regular_shift_override", entity_id: staffId, actor_email: actor, area, details: { area, year, month, regular_shifts: n, computed } });
+    }
+    setEditing(null);
+  };
 
   return (
     <div className="mt-4 overflow-x-auto">
@@ -613,9 +636,31 @@ function TotalsTable({ staff, shifts, area, year, month }: { staff: Staff[]; shi
                 <td className="p-2 text-center">{t.day}</td>
                 <td className="p-2 text-center">{t.night}</td>
                 <td className="p-2 text-center">{t.duty_shifts}</td>
-                <td className="p-2 text-center" title={t.override_applied ? "Manual override" : undefined}>
-                  {t.regular_shifts}
-                  {t.override_applied && <span className="ml-1 text-muted-foreground line-through">{t.computed_regular_shifts}</span>}
+                <td className="p-2 text-center" title={t.override_applied ? `Manual override · computed ${t.computed_regular_shifts}` : undefined}>
+                  {editing === s.id ? (
+                    <input
+                      autoFocus
+                      className="w-14 rounded border px-1 text-center"
+                      value={draft}
+                      placeholder="clear"
+                      onChange={(e) => setDraft(e.target.value)}
+                      onBlur={() => void saveOverride(s.id, t.computed_regular_shifts)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void saveOverride(s.id, t.computed_regular_shifts);
+                        if (e.key === "Escape") setEditing(null);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      className={canEdit ? "underline decoration-dotted" : undefined}
+                      onClick={() => { setDraft(t.override_applied ? String(t.regular_shifts) : ""); setEditing(s.id); }}
+                    >
+                      {t.regular_shifts}
+                      {t.override_applied && <span className="ml-1 text-muted-foreground line-through">{t.computed_regular_shifts}</span>}
+                    </button>
+                  )}
                 </td>
                 <td className="p-2 text-center">{t.ot_shifts}</td>
                 <td className="p-2 text-center">{t.sick_on_ot}</td>
