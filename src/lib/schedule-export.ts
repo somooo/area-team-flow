@@ -3,7 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { cellFor, monthDays, toISODate, isWeekendDay, LEGEND, type RosterShift } from "@/lib/roster";
-import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
+import { totalsForStaff, groupByStaff, type TotalsOptions } from "@/lib/roster-totals";
 import type { StaffLite } from "@/components/MonthGrid";
 import type { ZoneReferenceRow } from "@/lib/assignments";
 
@@ -39,7 +39,12 @@ export function exportCell(shift: RosterShift | undefined, isWeekend: boolean): 
   if (!shift) return { display: "", raw: "", fill: isWeekend ? FILL.weekend : undefined };
   const unit = shift.unit_code ?? "";
   const letter = shift.duty === "Day" ? "D" : shift.duty === "Night" ? "N" : "";
-  const base = shift.ot_type === "MedEvac" ? (unit ? `${letter}${unit}` : "MOT") : `${letter}${unit}`;
+  const base = `${letter}${unit}`;
+
+  // MedEvac is always a standalone MOT entry: no ward code, never sick.
+  if (shift.ot_type === "MedEvac" && (shift.duty === "Day" || shift.duty === "Night")) {
+    return { display: "MOT", raw: "MOT", fill: FILL.mot, light: true };
+  }
 
   if (shift.sick_tag) {
     const b = base || "S";
@@ -51,13 +56,12 @@ export function exportCell(shift: RosterShift | undefined, isWeekend: boolean): 
       return { display: b, raw: `s${b}`, fill: FILL.sick, light: true };
     }
     case "Vacation":
-      return { display: "VAC", raw: "VAC", fill: FILL.vac };
+      return { display: "V", raw: "V", fill: FILL.vac };
     case "Off":
       return { display: "OFF", raw: "OFF", fill: FILL.off };
     case "Paternity":
       return { display: "P", raw: "P", fill: FILL.pat, light: true };
     default: {
-      if (shift.ot_type === "MedEvac") return { display: base || "MOT", raw: `${base || "MOT"}|MOT`, fill: FILL.mot, light: true };
       if (shift.ot_type === "BuiltIn") return { display: base, raw: `${base}|BOT`, fill: FILL.bot };
       if (shift.ot_type === "Additional") return { display: base, raw: `${base}|AOT`, fill: FILL.aot };
       return { display: base, raw: base, fill: isWeekend ? FILL.weekend : undefined };
@@ -72,19 +76,25 @@ function maskFormat(display: string): string {
 
 /* ------------------------------------------------------------------ */
 
-async function loadExtras(area: string, emails: string[]) {
-  const [{ data: ref }, { data: st }, { data: rules }] = await Promise.all([
+async function loadExtras(area: string, emails: string[], year: number, month: number) {
+  const [{ data: ref }, { data: st }, { data: rules }, { data: ovr }] = await Promise.all([
     supabase.from("zone_reference").select("*").eq("area", area).order("sort_order"),
-    supabase.from("staff").select("email,badge_id").in("email", emails.length ? emails : ["__none__"]),
+    supabase.from("staff").select("id,email,badge_id,area,shift_base_override").in("email", emails.length ? emails : ["__none__"]),
     supabase.from("system_rules").select("key,value"),
+    supabase.from("regular_shift_overrides").select("staff_id,regular_shifts").eq("area", area).eq("year", year).eq("month", month),
   ]);
   const badges = new Map<string, string>();
-  for (const s of (st as { email: string; badge_id: string | null }[]) ?? []) {
+  const profile = new Map<string, { id: string; area: string | null; base: number | null }>();
+  type StaffRow = { id: string; email: string; badge_id: string | null; area: string | null; shift_base_override: number | null };
+  for (const s of (st as StaffRow[]) ?? []) {
     if (s.badge_id) badges.set(s.email.toLowerCase(), s.badge_id);
+    profile.set(s.email.toLowerCase(), { id: s.id, area: s.area, base: s.shift_base_override });
   }
+  const overrides = new Map<string, number>();
+  for (const o of ((ovr as { staff_id: string; regular_shifts: number }[]) ?? [])) overrides.set(o.staff_id, o.regular_shifts);
   const ruleMap = new Map<string, unknown>();
   for (const r of (rules as { key: string; value: unknown }[]) ?? []) ruleMap.set(r.key, r.value);
-  return { ref: ((ref as ZoneReferenceRow[]) ?? []), badges, ruleMap };
+  return { ref: ((ref as ZoneReferenceRow[]) ?? []), badges, ruleMap, profile, overrides };
 }
 
 type UnitGroup = { zone: string; unit: string; assignments: string[]; extension: string };
