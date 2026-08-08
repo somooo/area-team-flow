@@ -121,10 +121,23 @@ export async function exportExcel(input: ExportInput) {
   const layer = input.layer ?? "all";
   const days = monthDays(year, month);
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
-  const { ref, badges, ruleMap } = await loadExtras(area, staff.map((s) => s.email));
+  const { ref, badges, ruleMap, profile, overrides } = await loadExtras(area, staff.map((s) => s.email), year, month);
+  const totalsOptionsFor = (email: string): TotalsOptions => {
+    const p = profile.get(email.toLowerCase());
+    return {
+      daysInMonth: days.length,
+      sickOtExcludedFromDuty: ruleMap.get("sick_ot_excluded_from_duty") === true,
+      baseOverride: p?.base ?? null,
+      staffArea: p?.area ?? null,
+      scheduleArea: area,
+      regularShiftsOverride: p ? overrides.get(p.id) ?? null : null,
+      benefitDaysMinHolidays: Number(ruleMap.get("benefit_days_min_holidays") ?? 5),
+    };
+  };
 
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet(`${area} ${monthLabel}`.slice(0, 31), { views: [{ state: "frozen", xSplit: 2, ySplit: 0 }] });
+  // The importer looks for a sheet named "Schedule"; the pretty label lives in the title row.
+  const ws = wb.addWorksheet("Schedule", { views: [{ state: "frozen", xSplit: 2, ySplit: 0 }] });
   ws.properties.defaultRowHeight = 16;
   const lastCol = 2 + days.length;
 
@@ -206,11 +219,13 @@ export async function exportExcel(input: ExportInput) {
   }
 
   // 3. Staff schedule grid
-  const headRow = ws.addRow(["Staff Name", "Badge", ...days.map((d) => d.getDate())]);
+  // Real Date values so a re-import reads the month with "certain" confidence; numFmt keeps them showing as 1, 2, 3…
+  const headRow = ws.addRow(["Staff Name", "Badge", ...days]);
   headRow.eachCell((c, n) => {
     c.font = { name: "Arial", bold: true, size: 9 };
     c.alignment = { horizontal: "center", vertical: "middle" };
     c.border = BORDER;
+    if (n > 2) c.numFmt = "d";
     const wknd = n > 2 && isWeekendDay(days[n - 3], layer);
     c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: wknd ? "FFCBD5E1" : "FFE2E8F0" } };
   });
