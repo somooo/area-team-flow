@@ -110,6 +110,39 @@ export type Database = {
         }
         Relationships: []
       }
+      import_profiles: {
+        Row: {
+          area: string
+          code_map: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          layout: Json
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          area: string
+          code_map?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          layout: Json
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          area?: string
+          code_map?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          layout?: Json
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       leave_requests: {
         Row: {
           approver_email: string | null
@@ -298,6 +331,60 @@ export type Database = {
           },
           {
             foreignKeyName: "preschedule_requests_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      regular_shift_overrides: {
+        Row: {
+          area: string
+          created_at: string
+          id: string
+          month: number
+          reason: string | null
+          regular_shifts: number
+          set_by: string | null
+          staff_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          area: string
+          created_at?: string
+          id?: string
+          month: number
+          reason?: string | null
+          regular_shifts: number
+          set_by?: string | null
+          staff_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          area?: string
+          created_at?: string
+          id?: string
+          month?: number
+          reason?: string | null
+          regular_shifts?: number
+          set_by?: string | null
+          staff_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regular_shift_overrides_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "regular_shift_overrides_staff_id_fkey"
             columns: ["staff_id"]
             isOneToOne: false
             referencedRelation: "staff_directory"
@@ -514,6 +601,7 @@ export type Database = {
           password_hash: string | null
           position: string | null
           role: Database["public"]["Enums"]["app_role"]
+          shift_base_override: number | null
           status: string
           supervisor: string | null
           supervisor_email: string | null
@@ -538,6 +626,7 @@ export type Database = {
           password_hash?: string | null
           position?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          shift_base_override?: number | null
           status?: string
           supervisor?: string | null
           supervisor_email?: string | null
@@ -562,6 +651,7 @@ export type Database = {
           password_hash?: string | null
           position?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          shift_base_override?: number | null
           status?: string
           supervisor?: string | null
           supervisor_email?: string | null
@@ -598,24 +688,30 @@ export type Database = {
       system_rules: {
         Row: {
           description: string | null
+          group: string
           id: string
           key: string
+          type: string
           updated_at: string
           updated_by: string | null
           value: Json
         }
         Insert: {
           description?: string | null
+          group?: string
           id?: string
           key: string
+          type?: string
           updated_at?: string
           updated_by?: string | null
           value: Json
         }
         Update: {
           description?: string | null
+          group?: string
           id?: string
           key?: string
+          type?: string
           updated_at?: string
           updated_by?: string | null
           value?: Json
