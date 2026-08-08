@@ -335,18 +335,32 @@ export async function exportExcel(input: ExportInput) {
 
 /* ------------------------------- PDF ------------------------------- */
 
-export function exportPdf(input: ExportInput) {
+export async function exportPdf(input: ExportInput) {
   const { year, month, staff, shifts } = input;
   const days = monthDays(year, month);
   const byStaff = groupByStaff(shifts);
+  const { ruleMap, profile, overrides } = await loadExtras(input.area, staff.map((s) => s.email), year, month);
+  const optionsFor = (email: string): TotalsOptions => {
+    const p = profile.get(email.toLowerCase());
+    return {
+      daysInMonth: days.length,
+      sickOtExcludedFromDuty: ruleMap.get("sick_ot_excluded_from_duty") === true,
+      baseOverride: p?.base ?? null,
+      staffArea: p?.area ?? null,
+      scheduleArea: input.area,
+      regularShiftsOverride: p ? overrides.get(p.id) ?? null : null,
+      benefitDaysMinHolidays: Number(ruleMap.get("benefit_days_min_holidays") ?? 5),
+    };
+  };
   const header = ["Staff", "Department", ...days.map((d) => String(d.getDate())),
-    "Day", "Night", "Hours", "OT h", "Sick", "Vacation"];
+    "Duty", "R/Sh", "OT", "Sick on OT", "Hours", "OT h", "Sick", "Vacation"];
   const body: (string | number)[][] = staff.map((s) => {
     const own = byStaff.get(s.email.toLowerCase()) ?? [];
     const idx = new Map(own.map((x) => [x.date, x] as const));
-    const t = totalsForStaff(own);
+    const t = totalsForStaff(own, optionsFor(s.email));
     const cells = days.map((d) => cellFor(idx.get(toISODate(d)), isWeekendDay(d, input.layer ?? "all")).code || "");
-    return [s.name, s.department ?? "", ...cells, t.day, t.night, t.hours, t.ot_hours, t.sick, t.vacation];
+    const label = t.cross_area ? `${s.name} (overtime only)` : s.name;
+    return [label, s.department ?? "", ...cells, t.duty_shifts, t.regular_shifts, t.ot_shifts, t.sick_on_ot, t.hours, t.ot_hours, t.sick, t.vacation];
   });
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a3" });
