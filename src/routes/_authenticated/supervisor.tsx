@@ -155,30 +155,94 @@ function SupervisorPage() {
     setEditor(null);
   };
 
-  /** Bulk apply an imported grid after the preview/confirm step. */
-  const commitScheduleImport = async (items: ImportItem<ImportedCell>[]) => {
-    for (const it of items) {
-      const cell = it.payload!;
-      if (!cell.payload) {
-        if (cell.existingId) await supabase.from("shifts").delete().eq("id", cell.existingId);
-        continue;
+  const staffIdByEmail = useMemo(
+    () => new Map(staff.map((s) => [s.email.toLowerCase(), s.id])),
+    [staff],
+  );
+
+  /** The month(s) the confirmed mapping covers, as ISO date ranges. */
+  const importRanges = (config: ScheduleImportConfig | null) => {
+    const seen = new Map<string, { year: number; month: number }>();
+    for (const b of config?.blocks ?? []) seen.set(`${b.year}-${b.month}`, { year: b.year, month: b.month });
+    return Array.from(seen.values()).map((m) => ({
+      ...m,
+      start: toISODate(new Date(m.year, m.month, 1)),
+      end: toISODate(new Date(m.year, m.month + 1, 0)),
+      label: new Date(m.year, m.month, 1).toLocaleString(undefined, { month: "long", year: "numeric" }),
+    }));
+  };
+
+  /** Bulk apply an imported grid after the mapping and preview steps. */
+  const commitScheduleImport = async (
+    items: ImportItem<ImportedCell>[],
+    { replace, setProgress }: { replace: boolean; setProgress: (t: string | null) => void },
+  ) => {
+    const ranges = importRanges(importConfig);
+
+    if (replace) {
+      for (const r of ranges) {
+        setProgress(`Clearing ${viewArea} · ${r.label}…`);
+        const { error } = await supabase.from("shifts").delete()
+          .eq("area", viewArea).gte("date", r.start).lte("date", r.end);
+        if (error) throw new Error(`Could not clear ${r.label}: ${error.message}`);
       }
-      const body = {
-        staff_email: cell.staff.email, staff_name: cell.staff.name, area: viewArea, date: cell.date,
-        duty: cell.payload.duty,
-        unit_code: cell.payload.unit_code,
-        ot_type: cell.payload.ot_type,
-        is_overtime: cell.payload.ot_type !== "None",
-        sick_tag: cell.payload.sick_tag,
-        hours: cell.payload.hours,
-        shift_type: (cell.payload.duty === "Night" ? "Night" : cell.payload.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
-      };
-      const { error } = cell.existingId
-        ? await supabase.from("shifts").update(body).eq("id", cell.existingId)
-        : await supabase.from("shifts").insert(body);
-      if (error) { toast.error(error.message); return; }
     }
-    toast.success(`Imported ${items.length} schedule cell${items.length === 1 ? "" : "s"}`);
+
+    // Deletions first (merge mode only clears cells that were emptied in the file).
+    const toDelete = items.filter((i) => i.payload && !i.payload.payload && i.payload.existingId)
+      .map((i) => i.payload!.existingId!);
+    for (let i = 0; i < toDelete.length; i += 500) {
+      const { error } = await supabase.from("shifts").delete().in("id", toDelete.slice(i, i + 500));
+      if (error) throw new Error(`Could not clear cells: ${error.message}`);
+    }
+
+    const rows = items
+      .filter((i) => i.payload?.payload)
+      .map((i) => {
+        const c = i.payload!;
+        const p = c.payload!;
+        return {
+          staff_email: c.staff.email.toLowerCase(),
+          staff_name: c.staff.name,
+          staff_id: staffIdByEmail.get(c.staff.email.toLowerCase()) ?? null,
+          area: viewArea,
+          date: c.date,
+          duty: p.duty,
+          unit_code: p.unit_code,
+          ot_type: p.ot_type,
+          is_overtime: p.ot_type !== "None",
+          sick_tag: p.sick_tag,
+          hours: p.hours,
+          shift_type: (p.duty === "Night" ? "Night" : p.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
+        };
+      });
+
+    const CHUNK = 500;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      setProgress(`Writing ${Math.min(i + CHUNK, rows.length)} / ${rows.length}…`);
+      const { error } = await supabase.from("shifts").upsert(chunk, { onConflict: "staff_id,date" });
+      if (error) throw new Error(`Failed while writing rows ${i + 1}–${i + chunk.length}: ${error.message}`);
+    }
+    setProgress(null);
+
+    if (replace) {
+      for (const r of ranges) {
+        await logAudit({
+          action: "schedule_month_replaced", entity_type: "schedule", entity_id: `${viewArea}-${r.year}-${r.month}`,
+          actor_email: me?.staff?.email, actor_role: me?.staff?.role, area: viewArea,
+          details: {
+            area: viewArea, year: r.year, month: r.month,
+            cells_written: rows.length,
+            staff_rows: new Set(rows.map((x) => x.staff_email)).size,
+            blocks: importConfig?.blocks.length ?? 0,
+            profile_used: importConfig?.sheetName ?? null,
+          },
+        });
+      }
+    }
+
+    toast.success(`Imported ${rows.length} schedule cell${rows.length === 1 ? "" : "s"}`);
     setPending({});
     await load();
   };
