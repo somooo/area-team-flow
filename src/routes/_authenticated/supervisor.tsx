@@ -179,15 +179,6 @@ function SupervisorPage() {
     // In replace mode nothing survives to diff against, so every parsed cell is written.
     const source = replace ? replaceAllItems : items;
 
-    if (replace) {
-      for (const r of ranges) {
-        setProgress(`Clearing ${viewArea} · ${r.label}…`);
-        const { error } = await supabase.from("shifts").delete()
-          .eq("area", viewArea).gte("date", r.start).lte("date", r.end);
-        if (error) throw new Error(`Could not clear ${r.label}: ${error.message}`);
-      }
-    }
-
     // Deletions first (merge mode only clears cells that were emptied in the file).
     const toDelete = replace ? [] : source.filter((i) => i.payload && !i.payload.payload && i.payload.existingId)
       .map((i) => i.payload!.existingId!);
@@ -217,12 +208,31 @@ function SupervisorPage() {
         };
       });
 
-    const CHUNK = 500;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
-      setProgress(`Writing ${Math.min(i + CHUNK, rows.length)} / ${rows.length}…`);
-      const { error } = await supabase.from("shifts").upsert(chunk, { onConflict: "staff_id,date" });
-      if (error) throw new Error(`Failed while writing rows ${i + 1}–${i + chunk.length}: ${error.message}`);
+    // One transactional RPC per month: delete + insert either fully apply or fully roll back.
+    const targets = replace
+      ? ranges
+      : [{ year: 0, month: 0, start: "1900-01-01", end: "2999-12-31", label: "schedule" }];
+    let written = 0;
+    for (let idx = 0; idx < targets.length; idx++) {
+      const r = targets[idx];
+      const chunk = replace ? rows.filter((x) => x.date >= r.start && x.date <= r.end) : rows;
+      setProgress(
+        `Writing ${r.label} — ${chunk.length} row${chunk.length === 1 ? "" : "s"} (${idx + 1} of ${targets.length})…`,
+      );
+      const { data, error } = await supabase.rpc("import_schedule_month", {
+        _area: viewArea,
+        _start: r.start,
+        _end: r.end,
+        _replace: replace,
+        _rows: chunk,
+      });
+      if (error) {
+        console.error("[schedule import] RPC failed", { area: viewArea, range: r, rows: chunk.length, error });
+        throw new Error(
+          `Import failed while writing ${chunk.length} rows for ${r.label}: ${error.message}${error.hint ? ` (${error.hint})` : ""}`,
+        );
+      }
+      written += Number(data ?? 0);
     }
     setProgress(null);
 
@@ -242,7 +252,7 @@ function SupervisorPage() {
       }
     }
 
-    toast.success(`Imported ${rows.length} schedule cell${rows.length === 1 ? "" : "s"}`);
+    toast.success(`Import complete — ${written} shift${written === 1 ? "" : "s"} written`);
     setPending({});
     await load();
   };
