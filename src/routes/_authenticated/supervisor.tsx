@@ -233,8 +233,15 @@ function SupervisorPage() {
         );
       }
       written += Number(data ?? 0);
+      if (chunk.length > 0 && Number(data ?? 0) === 0) {
+        console.error("[schedule import] RPC wrote 0 rows", { area: viewArea, range: r, rows: chunk.length });
+        throw new Error(
+          `Import wrote 0 of ${chunk.length} rows for ${r.label}. This usually means your account is not allowed to write this area's schedule.`,
+        );
+      }
     }
     setProgress(null);
+    toast.success(`${written} shift${written === 1 ? "" : "s"} imported into ${viewArea}`);
 
     if (replace) {
       for (const r of ranges) {
@@ -860,9 +867,22 @@ function AddStaffDialog({ area, admin, canEdit, assignedEmails, onDone }: {
 
   const assign = async (p: DirectoryPerson) => {
     setBusy(true);
-    const { error } = await supabase.from("staff").update({ area }).eq("id", p.id);
+    const { data, error } = await supabase
+      .from("staff")
+      .update({ area })
+      .eq("id", p.id)
+      .select("id");
     setBusy(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      console.error("[add staff] update failed", { staffId: p.id, area, error });
+      toast.error(`Could not add ${p.name}: ${error.message}${error.hint ? ` (${error.hint})` : ""}`);
+      return;
+    }
+    if (!data || data.length === 0) {
+      console.error("[add staff] update affected 0 rows — blocked by access rules", { staffId: p.id, area });
+      toast.error(`Could not add ${p.name} — your account is not allowed to assign staff to ${area}.`);
+      return;
+    }
     toast.success(`${p.name} added to the ${area} schedule`);
     setOpen(false); onDone();
   };
