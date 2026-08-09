@@ -37,11 +37,18 @@ export const setBadgePassword = createServerFn({ method: "POST" })
     const saltB64 = btoa(String.fromCharCode(...saltBytes));
     const hash = await pbkdf2(data.password, saltB64);
     const stored = `pbkdf2$100000$${saltB64}$${hash}`;
-    const { error } = await supabaseAdmin
+    const { data: staffRow, error } = await supabaseAdmin
       .from("staff")
-      .update({ badge_id: data.badgeId, password_hash: stored })
-      .ilike("email", data.email);
+      .update({ badge_id: data.badgeId })
+      .ilike("email", data.email)
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(error.message);
+    if (!staffRow?.id) throw new Error("Staff not found");
+    const { error: secErr } = await supabaseAdmin
+      .from("staff_secrets")
+      .upsert({ staff_id: staffRow.id, password_hash: stored }, { onConflict: "staff_id" });
+    if (secErr) throw new Error(secErr.message);
     return { ok: true as const };
   });
 
@@ -63,11 +70,14 @@ export const badgeSignIn = createServerFn({ method: "POST" })
     };
     const { data: row } = await supabaseAdmin
       .from("staff")
-      .select("email,password_hash")
+      .select("id,email")
       .eq("badge_id", data.badgeId)
       .maybeSingle();
-    if (!row?.password_hash) { await record(false); return { ok: false as const, error: "Invalid badge or password" }; }
-    const parts = row.password_hash.split("$");
+    const { data: secret } = row?.id
+      ? await supabaseAdmin.from("staff_secrets").select("password_hash").eq("staff_id", row.id).maybeSingle()
+      : { data: null as { password_hash: string | null } | null };
+    if (!row || !secret?.password_hash) { await record(false); return { ok: false as const, error: "Invalid badge or password" }; }
+    const parts = secret.password_hash.split("$");
     if (parts.length !== 4 || parts[0] !== "pbkdf2") { await record(false); return { ok: false as const, error: "Invalid credential format" }; }
     const computed = await pbkdf2(data.password, parts[2]);
     if (!timingEq(computed, parts[3])) { await record(false); return { ok: false as const, error: "Invalid badge or password" }; }
