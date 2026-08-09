@@ -372,8 +372,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
               const year = cursor.getFullYear();
               const [{ data: st }, { data: lv }] = await Promise.all([
                 isSupervisorsView
-                  ? supabase.from("staff_directory").select("id,email,name,role,area,badge_id").eq("role", "supervisor")
-                  : supabase.from("staff_directory").select("id,email,name,role,area,badge_id").eq("area", viewArea),
+                  ? supabase.from("staff").select("id,email,name,role,area,badge_id").eq("role", "supervisor")
+                  : supabase.from("staff").select("id,email,name,role,area,badge_id").eq("area", viewArea),
                 supabase.from("leave_requests").select("staff_email,start_date,end_date,status")
                   .eq("area", viewArea).eq("leave_type", "Vacation")
                   .lte("start_date", `${year}-12-31`).gte("end_date", `${year}-01-01`),
@@ -381,7 +381,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
               return planVacationImport({
                 rows,
                 area: viewArea,
-                staff: ((st ?? []) as DirectoryStaffLite[]),
+                staff: ((st ?? []) as unknown as DirectoryStaffLite[]),
                 existing: (lv ?? []) as { staff_email: string; start_date: string; end_date: string; status: string }[],
                 yearlyCap,
               });

@@ -203,13 +203,6 @@ export type Database = {
             referencedRelation: "staff"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "leave_requests_staff_id_fkey"
-            columns: ["staff_id"]
-            isOneToOne: false
-            referencedRelation: "staff_directory"
-            referencedColumns: ["id"]
-          },
         ]
       }
       notifications: {
@@ -246,13 +239,6 @@ export type Database = {
             columns: ["recipient_staff_id"]
             isOneToOne: false
             referencedRelation: "staff"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_recipient_staff_id_fkey"
-            columns: ["recipient_staff_id"]
-            isOneToOne: false
-            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -329,13 +315,6 @@ export type Database = {
             referencedRelation: "staff"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "preschedule_requests_staff_id_fkey"
-            columns: ["staff_id"]
-            isOneToOne: false
-            referencedRelation: "staff_directory"
-            referencedColumns: ["id"]
-          },
         ]
       }
       regular_shift_overrides: {
@@ -381,13 +360,6 @@ export type Database = {
             columns: ["staff_id"]
             isOneToOne: false
             referencedRelation: "staff"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "regular_shift_overrides_staff_id_fkey"
-            columns: ["staff_id"]
-            isOneToOne: false
-            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -462,24 +434,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "schedule_change_requests_requester_staff_id_fkey"
-            columns: ["requester_staff_id"]
-            isOneToOne: false
-            referencedRelation: "staff_directory"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "schedule_change_requests_target_staff_id_fkey"
             columns: ["target_staff_id"]
             isOneToOne: false
             referencedRelation: "staff"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "schedule_change_requests_target_staff_id_fkey"
-            columns: ["target_staff_id"]
-            isOneToOne: false
-            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -571,13 +529,6 @@ export type Database = {
             referencedRelation: "staff"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "shifts_staff_id_fkey"
-            columns: ["staff_id"]
-            isOneToOne: false
-            referencedRelation: "staff_directory"
-            referencedColumns: ["id"]
-          },
         ]
       }
       staff: {
@@ -598,7 +549,6 @@ export type Database = {
           last_name: string | null
           name: string
           notes: string | null
-          password_hash: string | null
           position: string | null
           role: Database["public"]["Enums"]["app_role"]
           shift_base_override: number | null
@@ -623,7 +573,6 @@ export type Database = {
           last_name?: string | null
           name: string
           notes?: string | null
-          password_hash?: string | null
           position?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           shift_base_override?: number | null
@@ -648,7 +597,6 @@ export type Database = {
           last_name?: string | null
           name?: string
           notes?: string | null
-          password_hash?: string | null
           position?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           shift_base_override?: number | null
@@ -684,6 +632,35 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      staff_secrets: {
+        Row: {
+          created_at: string
+          password_hash: string | null
+          staff_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          password_hash?: string | null
+          staff_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          password_hash?: string | null
+          staff_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_secrets_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: true
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_rules: {
         Row: {
@@ -819,66 +796,7 @@ export type Database = {
       }
     }
     Views: {
-      staff_directory: {
-        Row: {
-          area: string | null
-          assigned_to: string | null
-          badge_id: string | null
-          custom_fields: Json | null
-          date_of_hire: string | null
-          email: string | null
-          extension: string | null
-          first_name: string | null
-          id: string | null
-          last_name: string | null
-          name: string | null
-          notes: string | null
-          position: string | null
-          role: Database["public"]["Enums"]["app_role"] | null
-          status: string | null
-          supervisor: string | null
-          supervisor_email: string | null
-        }
-        Insert: {
-          area?: string | null
-          assigned_to?: string | null
-          badge_id?: string | null
-          custom_fields?: Json | null
-          date_of_hire?: string | null
-          email?: string | null
-          extension?: string | null
-          first_name?: string | null
-          id?: string | null
-          last_name?: string | null
-          name?: string | null
-          notes?: string | null
-          position?: string | null
-          role?: Database["public"]["Enums"]["app_role"] | null
-          status?: string | null
-          supervisor?: string | null
-          supervisor_email?: string | null
-        }
-        Update: {
-          area?: string | null
-          assigned_to?: string | null
-          badge_id?: string | null
-          custom_fields?: Json | null
-          date_of_hire?: string | null
-          email?: string | null
-          extension?: string | null
-          first_name?: string | null
-          id?: string | null
-          last_name?: string | null
-          name?: string | null
-          notes?: string | null
-          position?: string | null
-          role?: Database["public"]["Enums"]["app_role"] | null
-          status?: string | null
-          supervisor?: string | null
-          supervisor_email?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       apply_absence_to_shifts: {
