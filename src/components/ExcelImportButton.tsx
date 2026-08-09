@@ -84,6 +84,7 @@ export function ExcelImportButton<P, C = unknown>({
   const [progress, setProgress] = useState<string | null>(null);
   const [replace, setReplace] = useState(true);
   const [confirmDestructive, setConfirmDestructive] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const [done, setDone] = useState<{ committed: number; skipped: number } | null>(null);
 
   const runParse = async (input: ParseInput, config?: C) => {
@@ -128,6 +129,7 @@ export function ExcelImportButton<P, C = unknown>({
   const runCommit = async () => {
     if (!items) return;
     setBusy(true);
+    setFailure(null);
     try {
       await commit(applicable, { replace: destructive, setProgress });
       setDone({ committed: applicable.length, skipped: skipped.length });
@@ -135,7 +137,10 @@ export function ExcelImportButton<P, C = unknown>({
       setConfirmDestructive(false);
       onDone?.();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      console.error("[import] commit failed", e);
+      const message = e instanceof Error ? e.message : String(e);
+      setFailure(message);
+      toast.error(message);
     } finally {
       setBusy(false);
       setProgress(null);
@@ -185,7 +190,10 @@ export function ExcelImportButton<P, C = unknown>({
       <Dialog
         open={!!items}
         onOpenChange={(o) => {
-          if (!o) setItems(null);
+          if (!o && !busy) {
+            setItems(null);
+            setFailure(null);
+          }
         }}
       >
         <DialogContent className="max-w-2xl">
@@ -249,13 +257,25 @@ export function ExcelImportButton<P, C = unknown>({
               )}
             </div>
             {progress && <p className="text-xs text-muted-foreground">{progress}</p>}
+            {failure && (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                Import failed: {failure}
+              </p>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setItems(null)} disabled={busy}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setItems(null);
+                setFailure(null);
+              }}
+              disabled={busy}
+            >
               Cancel
             </Button>
             <Button onClick={confirm} disabled={busy || applicable.length === 0}>
-              Confirm {applicable.length} change{applicable.length === 1 ? "" : "s"}
+              {failure ? "Retry" : `Confirm ${applicable.length} change${applicable.length === 1 ? "" : "s"}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -264,7 +284,7 @@ export function ExcelImportButton<P, C = unknown>({
       <Dialog
         open={confirmDestructive}
         onOpenChange={(o) => {
-          if (!o) setConfirmDestructive(false);
+          if (!o && !busy) setConfirmDestructive(false);
         }}
       >
         <DialogContent className="max-w-md">
@@ -276,12 +296,17 @@ export function ExcelImportButton<P, C = unknown>({
             {applicable.length} cells will be written afterwards.
           </p>
           {progress && <p className="text-xs text-muted-foreground">{progress}</p>}
+          {failure && (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+              Import failed: {failure}
+            </p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDestructive(false)} disabled={busy}>
               Cancel
             </Button>
             <Button variant="destructive" onClick={() => void runCommit()} disabled={busy}>
-              Delete and import
+              {failure ? "Retry" : "Delete and import"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -812,6 +812,16 @@ export type Database = {
         Returns: undefined
       }
       current_email: { Args: never; Returns: string }
+      import_schedule_month: {
+        Args: {
+          _area: string
+          _end: string
+          _replace: boolean
+          _rows: Json
+          _start: string
+        }
+        Returns: number
+      }
       is_admin: { Args: never; Returns: boolean }
       is_area_manager_of: { Args: { _area: string }; Returns: boolean }
       is_supervisor_of: { Args: { _area: string }; Returns: boolean }
