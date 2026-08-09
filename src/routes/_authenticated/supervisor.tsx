@@ -889,10 +889,15 @@ function AddStaffDialog({ area, admin, canEdit, assignedEmails, onDone }: {
 
   const createNew = async () => {
     if (!name.trim() || !email.trim()) { toast.error("Name and email are required"); return; }
-    const { error } = await supabase.from("staff").insert({
+    const { data, error } = await supabase.from("staff").insert({
       name: name.trim(), email: email.trim().toLowerCase(), role: "staff", area, status: "Active",
-    });
-    if (error) { toast.error(error.message); return; }
+    }).select("id");
+    if (error) { console.error("[create staff] failed", error); toast.error(error.message); return; }
+    if (!data || data.length === 0) {
+      toast.error("Could not create this person — your account is not allowed to add staff.");
+      return;
+    }
+    toast.success(`${name.trim()} added to the ${area} schedule`);
     setName(""); setEmail(""); setCreateOpen(false); setOpen(false); onDone();
   };
 
