@@ -91,12 +91,12 @@ function DirectoryPage() {
   const [editing, setEditing] = useState<{ id: string; key: string } | null>(null);
 
   const admin = isAdmin(me?.staff);
-  /** Directory is admin-only; the backend view and RLS enforce the same rule. */
+  /** Directory is admin-only; route gate and RLS enforce the same rule. */
   const allowed = admin;
 
   const load = useCallback(async () => {
     const [{ data: st }, { data: cc }] = await Promise.all([
-      supabase.from("staff_directory").select(SELECT_COLS).order("name"),
+      supabase.from("staff").select(SELECT_COLS).order("name"),
       supabase.from("staff_custom_columns").select("*").order("sort_order"),
     ]);
     setRows(((st ?? []) as unknown as Row[]).map((r) => ({ ...r, custom_fields: (r.custom_fields ?? {}) as Record<string, string> })));
