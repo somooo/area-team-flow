@@ -20,7 +20,7 @@ import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
 import { AREAS } from "@/lib/areas";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
-import { exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type VacationImportPayload } from "@/lib/vacation-io";
+import { commitVacationImport, exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type ExistingLeave, type VacationImportPayload } from "@/lib/vacation-io";
 
 export const SUPERVISORS_AREA = "Supervisors";
 
@@ -367,42 +367,43 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
           <ExcelImportButton<VacationImportPayload>
             size="default"
             title={`Import ${viewArea} vacations`}
-            description="Expected columns: Staff Name, Area, Vacation Start, Vacation End, Status. Only rows in the selected area are imported."
-            parse={async ({ rows }) => {
-              const year = cursor.getFullYear();
+            description="Required columns: Badge, Vacation Start, Vacation End. Staff Name / Area / Status are optional — names and areas always come from the staff directory, matched by badge number."
+            toggles={[{ key: "allAreas", label: "Import all areas", description: "Ignore the area filter and import every badge found in the directory." }]}
+            parse={async ({ rows, toggles }) => {
+              const allAreas = !!toggles["allAreas"];
               const [{ data: st }, { data: lv }] = await Promise.all([
-                isSupervisorsView
-                  ? supabase.from("staff").select("id,email,name,role,area,badge_id").eq("role", "supervisor")
-                  : supabase.from("staff").select("id,email,name,role,area,badge_id").eq("area", viewArea),
-                supabase.from("leave_requests").select("staff_email,start_date,end_date,status")
-                  .eq("area", viewArea).eq("leave_type", "Vacation")
-                  .lte("start_date", `${year}-12-31`).gte("end_date", `${year}-01-01`),
+                supabase.from("staff").select("id,email,name,role,area,badge_id"),
+                supabase.from("leave_requests")
+                  .select("id,staff_id,staff_email,start_date,end_date,status")
+                  .eq("leave_type", "Vacation"),
               ]);
+              const staff = ((st ?? []) as unknown as DirectoryStaffLite[]).filter((m) =>
+                isSupervisorsView ? m.role === "supervisor" : true,
+              );
               return planVacationImport({
                 rows,
                 area: viewArea,
-                staff: ((st ?? []) as unknown as DirectoryStaffLite[]),
-                existing: (lv ?? []) as { staff_email: string; start_date: string; end_date: string; status: string }[],
-                yearlyCap,
+                allAreas: allAreas || isSupervisorsView,
+                staff,
+                existing: (lv ?? []) as ExistingLeave[],
               });
             }}
-            commit={async (items: ImportItem<VacationImportPayload>[]) => {
-              const payload = items.map((i) => ({
-                staff_id: i.payload!.staff_id,
-                staff_email: i.payload!.staff_email,
-                staff_name: i.payload!.staff_name,
-                area: i.payload!.area,
-                leave_type: "Vacation" as const,
-                start_date: i.payload!.start_date,
-                end_date: i.payload!.end_date,
-                status: i.payload!.status as "Approved" | "Pending" | "Rejected",
-                approver_email: me.email,
-              }));
-              if (payload.length === 0) return;
-              const { error } = await supabase.from("leave_requests").insert(payload);
-              if (error) throw new Error(error.message);
-              await logAudit({ action: "vacations_imported", entity_type: "leave_request", area: viewArea, details: { count: payload.length } });
-              await load(); onDone();
+            commit={async (items: ImportItem<VacationImportPayload>[], { setProgress }) => {
+              if (items.length === 0) return { written: 0, failures: [] };
+              const { written, errors } = await commitVacationImport(items, {
+                approverEmail: me.email,
+                setProgress,
+              });
+              if (written > 0) {
+                await logAudit({ action: "vacations_imported", entity_type: "leave_request", area: viewArea, details: { count: written } });
+                toast.success(`${written} vacation row${written === 1 ? "" : "s"} imported`);
+                await load(); onDone();
+              }
+              if (errors.length > 0) console.error("[vacation import] row failures", errors);
+              return {
+                written,
+                failures: errors.map((e) => `Badge ${e.badge} · ${e.name} · ${e.range} — ${e.message}`),
+              };
             }}
           />
           <Button
