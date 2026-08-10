@@ -23,6 +23,12 @@ export type ImportItem<P = unknown> = {
   status: ImportStatus;
   /** Why the row is skipped. */
   reason?: string;
+  /** Badge / identifier shown in the preview. */
+  badge?: string;
+  /** Resolved area shown in the preview. */
+  area?: string;
+  /** Non-blocking note shown under the row. */
+  warning?: string;
   payload?: P;
 };
 
@@ -32,6 +38,8 @@ export type ParseInput = {
   file: File;
   /** All sheets, cell types preserved — used by adaptive layout detection. */
   workbook: { sheetNames: string[]; sheets: Record<string, unknown[][]> };
+  /** State of the importer's toggle checkboxes, keyed by toggle key. */
+  toggles: Record<string, boolean>;
 };
 
 export type CommitOptions = {
@@ -56,12 +64,16 @@ export function ExcelImportButton<P, C = unknown>({
   configure,
   replaceOption,
   extraSummary,
+  toggles,
 }: {
   title: string;
   buttonLabel?: string;
   description?: string;
   parse: (input: ParseInput, config?: C) => Promise<ImportItem<P>[]>;
-  commit: (items: ImportItem<P>[], options: CommitOptions) => Promise<void>;
+  commit: (
+    items: ImportItem<P>[],
+    options: CommitOptions,
+  ) => Promise<void | { written: number; failures: string[] }>;
   disabled?: boolean;
   size?: "sm" | "default";
   variant?: "outline" | "default" | "secondary";
@@ -76,6 +88,8 @@ export function ExcelImportButton<P, C = unknown>({
   replaceOption?: { label: string; description: string };
   /** Extra line above the preview table, e.g. "12 label rows skipped". */
   extraSummary?: (items: ImportItem<P>[]) => ReactNode;
+  /** Checkboxes that change how the file is parsed; toggling re-runs the parse. */
+  toggles?: { key: string; label: string; description?: string }[];
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<ImportItem<P>[] | null>(null);
@@ -85,7 +99,11 @@ export function ExcelImportButton<P, C = unknown>({
   const [replace, setReplace] = useState(true);
   const [confirmDestructive, setConfirmDestructive] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [done, setDone] = useState<{ committed: number; skipped: number } | null>(null);
+  const [done, setDone] = useState<{ committed: number; skipped: number; failures: string[] } | null>(null);
+  const [toggleState, setToggleState] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries((toggles ?? []).map((t) => [t.key, false])),
+  );
+  const [lastInput, setLastInput] = useState<ParseInput | null>(null);
 
   const runParse = async (input: ParseInput, config?: C) => {
     setBusy(true);
@@ -108,7 +126,8 @@ export function ExcelImportButton<P, C = unknown>({
     setBusy(true);
     try {
       const [{ rows, matrix }, workbook] = await Promise.all([readSheet(file), readWorkbook(file)]);
-      const input: ParseInput = { rows, matrix, file, workbook };
+      const input: ParseInput = { rows, matrix, file, workbook, toggles: toggleState };
+      setLastInput(input);
       setReplace(true);
       if (configure) {
         setConfigInput(input);
@@ -131,8 +150,13 @@ export function ExcelImportButton<P, C = unknown>({
     setBusy(true);
     setFailure(null);
     try {
-      await commit(applicable, { replace: destructive, setProgress });
-      setDone({ committed: applicable.length, skipped: skipped.length });
+      const result = await commit(applicable, { replace: destructive, setProgress });
+      const failures = result?.failures ?? [];
+      const written = result?.written ?? applicable.length;
+      if (failures.length > 0 && written === 0) {
+        throw new Error(failures.slice(0, 5).join("\n"));
+      }
+      setDone({ committed: written, skipped: skipped.length, failures });
       setItems(null);
       setConfirmDestructive(false);
       onDone?.();
@@ -215,7 +239,63 @@ export function ExcelImportButton<P, C = unknown>({
                 </span>
               </label>
             )}
+            {(toggles ?? []).map((t) => (
+              <label key={t.key} className="flex gap-2 items-start rounded-md border p-3 text-xs">
+                <Checkbox
+                  checked={!!toggleState[t.key]}
+                  disabled={busy}
+                  onCheckedChange={(v) => {
+                    const next = { ...toggleState, [t.key]: v === true };
+                    setToggleState(next);
+                    if (lastInput) {
+                      const input = { ...lastInput, toggles: next };
+                      setLastInput(input);
+                      void runParse(input);
+                    }
+                  }}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium block">{t.label}</span>
+                  {t.description && <span className="text-muted-foreground">{t.description}</span>}
+                </span>
+              </label>
+            ))}
             {extraSummary?.(items ?? [])}
+            {skipped.length > 0 && (
+              <div className="rounded-md border p-2 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Skipped rows by reason</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-xs"
+                    onClick={() => {
+                      const text = skipped
+                        .map((i) => [i.badge ?? "", i.label, i.area ?? "", i.change, i.reason ?? ""].join("\t"))
+                        .join("\n");
+                      void navigator.clipboard.writeText(text);
+                      toast.success(`Copied ${skipped.length} skipped row${skipped.length === 1 ? "" : "s"}`);
+                    }}
+                  >
+                    Copy skipped rows
+                  </Button>
+                </div>
+                {Object.entries(
+                  skipped.reduce<Record<string, number>>((acc, i) => {
+                    const key = i.reason ?? "Skipped";
+                    const bucket = /not found in staff directory/.test(key) ? "Badge not found in staff directory" : key;
+                    acc[bucket] = (acc[bucket] ?? 0) + 1;
+                    return acc;
+                  }, {}),
+                ).map(([reason, count]) => (
+                  <div key={reason} className="flex justify-between text-muted-foreground">
+                    <span>{reason}</span>
+                    <span>{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 text-xs">
               <Badge variant="default">
                 {applicable.filter((i) => i.status === "add").length} to add
@@ -229,7 +309,9 @@ export function ExcelImportButton<P, C = unknown>({
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-muted/60">
                   <tr className="text-left">
+                    <th className="p-2">Badge</th>
                     <th className="p-2">Row</th>
+                    <th className="p-2">Area</th>
                     <th className="p-2">Change</th>
                     <th className="p-2">Result</th>
                   </tr>
@@ -237,7 +319,14 @@ export function ExcelImportButton<P, C = unknown>({
                 <tbody>
                   {(items ?? []).slice(0, 400).map((i) => (
                     <tr key={i.id} className="border-t align-top">
-                      <td className="p-2 font-medium">{i.label}</td>
+                      <td className="p-2 tabular-nums">{i.badge ?? "—"}</td>
+                      <td className="p-2 font-medium">
+                        {i.label}
+                        {i.warning && (
+                          <span className="block font-normal text-[11px] text-copper-700">{i.warning}</span>
+                        )}
+                      </td>
+                      <td className="p-2 text-muted-foreground">{i.area ?? "—"}</td>
                       <td className="p-2 text-muted-foreground">{i.change}</td>
                       <td className="p-2">
                         {i.status === "skip" ? (
@@ -318,7 +407,7 @@ export function ExcelImportButton<P, C = unknown>({
           if (!o) setDone(null);
         }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Import complete</DialogTitle>
           </DialogHeader>
@@ -331,6 +420,12 @@ export function ExcelImportButton<P, C = unknown>({
               <span className="text-muted-foreground">Rows skipped</span>
               <span className="font-semibold">{done?.skipped ?? 0}</span>
             </div>
+            {(done?.failures.length ?? 0) > 0 && (
+              <div className="mt-2 max-h-48 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                <div className="font-medium">{done?.failures.length} row(s) failed</div>
+                {done?.failures.map((f, idx) => <div key={idx}>{f}</div>)}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button onClick={() => setDone(null)}>Close</Button>
