@@ -743,6 +743,83 @@ export type Database = {
         }
         Relationships: []
       }
+      vacation_caps: {
+        Row: {
+          area: string
+          cap_pct: number
+          id: string
+          updated_at: string
+          updated_by: string | null
+          warn_pct: number
+        }
+        Insert: {
+          area: string
+          cap_pct?: number
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          warn_pct?: number
+        }
+        Update: {
+          area?: string
+          cap_pct?: number
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          warn_pct?: number
+        }
+        Relationships: []
+      }
+      vacation_change_requests: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          leave_request_id: string
+          new_end_date: string | null
+          new_start_date: string | null
+          reason: string | null
+          requested_by: string
+          status: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          leave_request_id: string
+          new_end_date?: string | null
+          new_start_date?: string | null
+          reason?: string | null
+          requested_by: string
+          status?: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          leave_request_id?: string
+          new_end_date?: string | null
+          new_start_date?: string | null
+          reason?: string | null
+          requested_by?: string
+          status?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vacation_change_requests_leave_request_id_fkey"
+            columns: ["leave_request_id"]
+            isOneToOne: false
+            referencedRelation: "leave_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zone_reference: {
         Row: {
           area: string
