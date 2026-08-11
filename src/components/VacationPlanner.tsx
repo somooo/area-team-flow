@@ -227,7 +227,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (!routeTo) { toast.error("No approver available"); return; }
     setBusy(true);
     const { data: inserted, error } = await supabase.from("leave_requests").insert({
-      staff_email: me.email, staff_name: me.name,
+      staff_email: me.email.toLowerCase(), staff_name: me.name,
       area: isSupervisorsView ? SUPERVISORS_AREA : me.area!,
       leave_type: "Vacation",
       staff_id: me.id, start_date: s, end_date: e, reason, approver_email: routeTo,
