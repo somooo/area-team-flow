@@ -74,6 +74,7 @@ function SchedulePage() {
   const [serverNow, setServerNow] = useState<Date | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [reference, setReference] = useState<ZoneReferenceRow[]>([]);
+  const [zones, setZones] = useState<ZoneAssignment[]>([]);
   const [tlOpen, setTlOpen] = useState(false);
 
   useEffect(() => {
