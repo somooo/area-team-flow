@@ -796,6 +796,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 const capBlocked = isOwnArea && full && !past && !(canManage && dayRows.length > 0);
                 const visible = dayRows.slice(0, 3);
                 const overflow = dayRows.length - visible.length;
+                const coveringHere = coveringByDay.get(iso);
                 return (
                   <div
                     key={i}
@@ -848,8 +849,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                       )}
                     </div>
                     <div className="flex flex-col gap-px w-full min-w-0 overflow-y-auto">
+                      {coveringHere && (
+                        <div className="flex items-center gap-1 rounded bg-emerald-100 px-1 py-px w-full min-w-0" title={`Covering ${coveringHere.staff_name}`}>
+                          <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-emerald-900">
+                            Covering {coveringHere.staff_name}
+                          </span>
+                        </div>
+                      )}
                       {visible.map((r) => {
                         const mine = r.staff_email.toLowerCase() === me.email.toLowerCase();
+                        const cov = isSupervisorsView ? coverName(r.covering_supervisor_email) : null;
                         return (
                           <TooltipProvider key={r.id} delayDuration={200}>
                             <Tooltip>
@@ -858,7 +867,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                   "flex items-center gap-1 rounded px-1 py-px w-full min-w-0",
                                   mine ? "bg-steel-100" : "bg-muted/40",
                                 ].join(" ")}>
-                                  <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-ink">{r.staff_name}</span>
+                                  <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-ink">
+                                    {r.staff_name}{cov ? ` — covered by ${cov}` : ""}
+                                  </span>
                                   {changeByLeave[r.id] && (
                                     <span className="shrink-0 rounded bg-copper/60 px-1 text-[8px] font-semibold leading-[13px] text-ink">C</span>
                                   )}
@@ -870,7 +881,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                               </TooltipTrigger>
                               <TooltipContent className="max-w-56">
                                 <div className="text-xs">
-                                  {r.staff_name} — {r.status}
+                                  {r.staff_name} — {stageLabel(r)}
+                                  {cov ? ` · covered by ${cov}` : ""}
                                   {changeByLeave[r.id] ? ` · Change pending (${changeByLeave[r.id].type})` : ""}
                                 </div>
                               </TooltipContent>
