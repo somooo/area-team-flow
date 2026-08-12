@@ -530,7 +530,7 @@ function DirectoryPage() {
                           size="sm"
                           variant="ghost"
                           disabled={prot && !admin}
-                          title={prot ? "Protected test record" : undefined}
+                          title={prot ? "Protected test record — deleting requires typing the badge number" : undefined}
                           onClick={() => void askDelete(r)}
                           aria-label={`Delete ${r.name}`}
                         >

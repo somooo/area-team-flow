@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { SUPERVISORS_TEAM, UNASSIGNED_AREA } from "@/lib/areas";
 
 type Cap = { id: string; area: string; cap_pct: number; warn_pct: number };
-type StaffRow = { area: string | null; role: string; status: string | null };
+type StaffRow = { area: string | null; role: string; status: string | null; name?: string | null; first_name?: string | null };
 
 export function maxOffPerDay(activeStaff: number, capPct: number): number {
   return Math.max(1, Math.floor((activeStaff * capPct) / 100));
