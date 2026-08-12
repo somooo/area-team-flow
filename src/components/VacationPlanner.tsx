@@ -370,6 +370,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
         )}
       </div>
 
+      {isUnassignedView && (
+        <div className="rounded-lg border border-copper/40 bg-copper/10 px-3 py-2 text-xs text-ink">
+          These vacations belong to staff who are missing from the directory, inactive, or have no
+          area assigned. They stay visible here until the directory is fixed.{" "}
+          {me.role === "admin" && (
+            <Link to="/directory" className="underline font-medium">Open Staff Directory</Link>
+          )}
+        </div>
+      )}
+
       {/* Selection bar */}
       <div className="rounded-xl border bg-card px-4 py-3 flex flex-wrap items-center gap-4">
         <div>
