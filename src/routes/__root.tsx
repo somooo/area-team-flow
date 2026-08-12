@@ -34,10 +34,32 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+/** Stale-deploy guard: after a redeploy the old page asks for chunk files that no
+ * longer exist. The failed dynamic import rejects with a non-Error value, which
+ * surfaces as "Uncaught undefined" and a blank screen. Reload once to pick up the
+ * new bundle. */
+function isChunkLoadError(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return /dynamically imported module|Importing a module script failed|ChunkLoadError|Loading chunk|Failed to fetch/i.test(
+    message,
+  );
+}
+
+function reloadOnceForStaleBundle(): boolean {
+  if (typeof window === "undefined") return false;
+  const key = "kadir:chunk-reload";
+  if (sessionStorage.getItem(key)) return false;
+  sessionStorage.setItem(key, String(Date.now()));
+  window.location.reload();
+  return true;
+}
+
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
+    if (isChunkLoadError(error) && reloadOnceForStaleBundle()) return;
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
