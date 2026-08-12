@@ -609,6 +609,8 @@ function SupervisorPage() {
                   {(sheetSummary?.perSheet ?? []).map((s) => (
                     <p key={s.side} className="text-muted-foreground">
                       <span className="font-medium text-foreground capitalize">{s.side}</span> · sheet “{s.sheetName}” ·{" "}
+                      <span className="font-medium text-foreground">{s.monthLabel}</span> ·{" "}
+                      <span className="font-medium text-foreground">{s.firstDate} to {s.lastDate}</span> ·{" "}
                       {s.dateCols} date columns · {s.rows} staff rows · {s.matched} matched to the directory
                       {s.blankRowsSkipped > 0 ? ` · ${s.blankRowsSkipped} blank rows skipped` : ""}
                     </p>
