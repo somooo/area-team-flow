@@ -60,6 +60,10 @@ export type VacationImportPayload = {
   badge: string;
   staff_id: string; staff_email: string; staff_name: string; area: string;
   start_date: string; end_date: string; status: string;
+  /** Row exceeds the area's daily cap and is imported as an explicit override. */
+  over_cap?: boolean;
+  /** Dates in this row that were at capacity. */
+  over_cap_dates?: string[];
 };
 
 /**
@@ -88,7 +92,19 @@ function mapStatus(raw: string): string {
 export type ExistingLeave = {
   id: string; staff_id: string | null; staff_email: string;
   start_date: string; end_date: string; status: string;
+  area?: string | null;
 };
+
+function eachISO(start: string, end: string): string[] {
+  const out: string[] = [];
+  const cur = new Date(start + "T00:00:00");
+  const last = new Date(end + "T00:00:00");
+  while (cur <= last) {
+    out.push(cur.toISOString().slice(0, 10));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
 
 /**
  * Badge-driven vacation import planning, shared by every area.
@@ -101,8 +117,14 @@ export function planVacationImport(input: {
   allAreas?: boolean;
   staff: DirectoryStaffLite[];
   existing: ExistingLeave[];
+  /** Max staff off per day, keyed by area. Areas without an entry are unlimited. */
+  capByArea?: Record<string, number>;
+  /** Whether Pending rows count toward the cap (system rule). */
+  countsPending?: boolean;
+  /** Import rows that exceed the cap as explicit overrides instead of skipping them. */
+  overrideCap?: boolean;
 }): ImportItem<VacationImportPayload>[] {
-  const { rows, area, allAreas = false, staff, existing } = input;
+  const { rows, area, allAreas = false, staff, existing, capByArea = {}, countsPending = true, overrideCap = false } = input;
   const byBadge = new Map<string, DirectoryStaffLite>();
   for (const s of staff) {
     const key = normalizeBadge(s.badge_id);
@@ -111,7 +133,30 @@ export function planVacationImport(input: {
 
   const planned: { staffId: string; start: string; end: string }[] = [];
 
-  return rows.map((row, i) => {
+  // Day usage per area from what is already booked, so the preview sees the same
+  // numbers the calendar and the database trigger use.
+  const usage = new Map<string, number>();
+  const usedKey = (a: string, iso: string) => `${a}\u0000${iso}`;
+  for (const r of existing) {
+    if (r.status === "Rejected") continue;
+    if (!countsPending && r.status !== "Approved") continue;
+    const a = r.area ?? area;
+    for (const iso of eachISO(r.start_date, r.end_date)) {
+      usage.set(usedKey(a, iso), (usage.get(usedKey(a, iso)) ?? 0) + 1);
+    }
+  }
+
+  // Deterministic results: evaluate rows in start-date order so cap slots are
+  // handed out earliest-first regardless of the file's row order.
+  const ordered = rows
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => {
+      const sa = toISODateValue(field(a.row, "Vacation Start", "Start", "Start Date", "From")) ?? "9999-12-31";
+      const sb = toISODateValue(field(b.row, "Vacation Start", "Start", "Start Date", "From")) ?? "9999-12-31";
+      return sa === sb ? a.i - b.i : sa < sb ? -1 : 1;
+    });
+
+  return ordered.map(({ row, i }) => {
     const rawBadge = field(row, "Badge", "Badge No", "Badge Number", "BadgeID", "Employee ID", "Emp ID", "ID");
     const badge = normalizeBadge(rawBadge);
     const fileName = field(row, "Staff Name", "Full Name", "Name");
@@ -152,11 +197,34 @@ export function planVacationImport(input: {
     if (planned.some((p) => p.staffId === member.id && p.start === start && p.end === end)) {
       return { ...base, label, area: memberArea, status: "skip", reason: "Duplicate row in file" };
     }
+
+    const rowArea = member.area ?? area;
+    const cap = capByArea[rowArea];
+    const days = eachISO(start, end);
+    const countsTowardCap = countsPending || status === "Approved";
+    let blocked: string[] = [];
+    if (typeof cap === "number" && cap > 0 && !exact) {
+      blocked = days.filter((iso) => (usage.get(usedKey(rowArea, iso)) ?? 0) >= cap);
+    }
+    if (blocked.length > 0 && !overrideCap) {
+      return {
+        ...base, label, area: memberArea, status: "skip",
+        reason: `Exceeds ${rowArea} cap on ${blocked.join(", ")}`,
+      };
+    }
+
     planned.push({ staffId: member.id, start, end });
+    if (countsTowardCap && !exact) {
+      for (const iso of days) usage.set(usedKey(rowArea, iso), (usage.get(usedKey(rowArea, iso)) ?? 0) + 1);
+    }
+    if (blocked.length > 0) {
+      warnings.push(`Over cap on ${blocked.join(", ")} — imported as override`);
+    }
 
     const payload: VacationImportPayload = {
       badge, staff_id: member.id, staff_email: member.email, staff_name: member.name,
       area: member.area ?? area, start_date: start, end_date: end, status,
+      ...(blocked.length > 0 ? { over_cap: true, over_cap_dates: blocked } : {}),
       ...(exact ? { existing_id: exact.id } : {}),
     };
 
@@ -183,7 +251,7 @@ export type VacationCommitResult = {
  */
 export async function commitVacationImport(
   items: ImportItem<VacationImportPayload>[],
-  opts: { approverEmail: string; setProgress?: (t: string | null) => void },
+  opts: { approverEmail: string; setProgress?: (t: string | null) => void; overrideReason?: string },
 ): Promise<VacationCommitResult> {
   const rows = items.map((i) => i.payload!).filter(Boolean);
   const errors: VacationCommitResult["errors"] = [];
@@ -214,6 +282,8 @@ export async function commitVacationImport(
       start_date: p.start_date, end_date: p.end_date,
       status: p.status as "Approved" | "Pending" | "Rejected",
       approver_email: opts.approverEmail,
+      over_cap_override: !!p.over_cap,
+      over_cap_reason: p.over_cap ? (opts.overrideReason?.trim() || null) : null,
     });
     const { error, data } = await supabase.from("leave_requests").insert(chunk.map(toRow)).select("id");
     if (!error && data && data.length === chunk.length) { written += data.length; continue; }

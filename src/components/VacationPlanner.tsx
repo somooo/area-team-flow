@@ -115,6 +115,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
+  const [importOverrideReason, setImportOverrideReason] = useState("");
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
   const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === me.area;
@@ -449,32 +450,84 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
             size="default"
             title={`Import ${viewArea} vacations`}
             description="Required columns: Badge, Vacation Start, Vacation End. Staff Name / Area / Status are optional — names and areas always come from the staff directory, matched by badge number."
-            toggles={[{ key: "allAreas", label: "Import all areas", description: "Ignore the area filter and import every badge found in the directory." }]}
+            toggles={[
+              { key: "allAreas", label: "Import all areas", description: "Ignore the area filter and import every badge found in the directory." },
+              ...(me.role === "admin"
+                ? [{ key: "overrideCap", label: "Import over cap as override", description: "Import rows that exceed an area's daily cap. A reason is required and every override is logged to Audit." }]
+                : []),
+            ]}
+            extraSummary={(items) => {
+              const overrides = items.filter((i) => i.status !== "skip" && i.payload?.over_cap);
+              if (overrides.length === 0) return null;
+              return (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-1">
+                  <p className="text-[11px] text-destructive">
+                    {overrides.length} row{overrides.length === 1 ? "" : "s"} exceed the area cap and will be imported as over-cap overrides.
+                  </p>
+                  <Label className="text-xs">Override reason (required)</Label>
+                  <Input value={importOverrideReason} onChange={(e) => setImportOverrideReason(e.target.value)} placeholder="Why is the cap being exceeded?" />
+                </div>
+              );
+            }}
             parse={async ({ rows, toggles }) => {
               const allAreas = !!toggles["allAreas"];
-              const [{ data: st }, { data: lv }] = await Promise.all([
+              const [{ data: st }, { data: lv }, { data: capRows }] = await Promise.all([
                 supabase.from("staff").select("id,email,name,role,area,badge_id"),
                 supabase.from("leave_requests")
-                  .select("id,staff_id,staff_email,start_date,end_date,status")
+                  .select("id,staff_id,staff_email,area,start_date,end_date,status")
                   .eq("leave_type", "Vacation"),
+                supabase.from("vacation_caps").select("area,cap_pct"),
               ]);
               const staff = ((st ?? []) as unknown as DirectoryStaffLite[]).filter((m) =>
                 isSupervisorsView ? m.role === "supervisor" : true,
               );
+              const all = (st ?? []) as unknown as DirectoryStaffLite[];
+              const capByArea: Record<string, number> = {};
+              for (const c of ((capRows ?? []) as { area: string; cap_pct: number }[])) {
+                const target = c.area === "Supervisor" ? SUPERVISORS_AREA : c.area;
+                const hc = target === SUPERVISORS_AREA
+                  ? all.filter((m) => m.role === "supervisor").length
+                  : all.filter((m) => m.area === target).length;
+                capByArea[target] = maxOffPerDay(hc, c.cap_pct);
+              }
               return planVacationImport({
                 rows,
                 area: viewArea,
                 allAreas: allAreas || isSupervisorsView,
                 staff,
                 existing: (lv ?? []) as ExistingLeave[],
+                capByArea,
+                countsPending,
+                overrideCap: me.role === "admin" && !!toggles["overrideCap"],
               });
             }}
             commit={async (items: ImportItem<VacationImportPayload>[], { setProgress }) => {
               if (items.length === 0) return { written: 0, failures: [] };
+              const overrides = items.filter((i) => i.payload?.over_cap);
+              if (overrides.length > 0 && !importOverrideReason.trim()) {
+                throw new Error("An override reason is required to import rows over the cap");
+              }
               const { written, errors } = await commitVacationImport(items, {
                 approverEmail: me.email,
                 setProgress,
+                overrideReason: importOverrideReason,
               });
+              for (const o of overrides) {
+                await logAudit({
+                  action: "vacation_cap_override",
+                  entity_type: "leave_request",
+                  area: o.payload!.area,
+                  details: {
+                    source: "excel_import",
+                    badge: o.payload!.badge,
+                    staff_name: o.payload!.staff_name,
+                    start_date: o.payload!.start_date,
+                    end_date: o.payload!.end_date,
+                    blocked_dates: o.payload!.over_cap_dates ?? [],
+                    reason: importOverrideReason.trim(),
+                  },
+                });
+              }
               if (written > 0) {
                 await logAudit({ action: "vacations_imported", entity_type: "leave_request", area: viewArea, details: { count: written } });
                 toast.success(`${written} vacation row${written === 1 ? "" : "s"} imported`);
