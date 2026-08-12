@@ -149,9 +149,15 @@ function ApprovalsPage() {
         </CardContent>
       </Card>
 
+      {(role === "supervisor" || role === "admin") && me?.staff && (
+        <VacationChangeApprovals
+          actor={{ email: me.staff.email, name: me.staff.name, role: role! }}
+          onDecided={load}
+        />
+      )}
+
       <Card>
         <CardHeader><CardTitle>Team Leader reports</CardTitle></CardHeader>
-*** PLACEHOLDER ***
         <CardContent className="space-y-2">
           {reports.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
           {reports.map(r => (
