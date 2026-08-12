@@ -100,13 +100,18 @@ export type ExistingLeave = {
   area?: string | null;
 };
 
+/** Walk an inclusive ISO date range using calendar arithmetic only — no timezone conversion. */
 function eachISO(start: string, end: string): string[] {
   const out: string[] = [];
-  const cur = new Date(start + "T00:00:00");
-  const last = new Date(end + "T00:00:00");
-  while (cur <= last) {
-    out.push(cur.toISOString().slice(0, 10));
-    cur.setDate(cur.getDate() + 1);
+  const [sy, sm, sd] = start.split("-").map(Number);
+  let [y, m, d] = [sy, sm, sd];
+  const iso = () => `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  let guard = 0;
+  while (iso() <= end && guard++ < 1000) {
+    out.push(iso());
+    d++;
+    if (d > new Date(y, m, 0).getDate()) { d = 1; m++; }
+    if (m > 12) { m = 1; y++; }
   }
   return out;
 }
