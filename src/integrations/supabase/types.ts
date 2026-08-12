@@ -148,6 +148,8 @@ export type Database = {
           approver_email: string | null
           area: string
           auto_approve_at: string | null
+          cover_accepted_at: string | null
+          cover_decline_reason: string | null
           covering_supervisor_email: string | null
           created_at: string
           end_date: string
@@ -168,6 +170,8 @@ export type Database = {
           approver_email?: string | null
           area?: string
           auto_approve_at?: string | null
+          cover_accepted_at?: string | null
+          cover_decline_reason?: string | null
           covering_supervisor_email?: string | null
           created_at?: string
           end_date: string
@@ -188,6 +192,8 @@ export type Database = {
           approver_email?: string | null
           area?: string
           auto_approve_at?: string | null
+          cover_accepted_at?: string | null
+          cover_decline_reason?: string | null
           covering_supervisor_email?: string | null
           created_at?: string
           end_date?: string
