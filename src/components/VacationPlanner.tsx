@@ -296,6 +296,11 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (own) { setDetail(own); return; }
     if (!isOwnArea) return;
     if (iso < todayISO) return;
+    const cov = coveringByDay.get(iso);
+    if (cov) {
+      toast.error(`You are covering ${cov.staff_name} on ${iso} — you cannot book leave then`);
+      return;
+    }
     const used = countsPending
       ? (rowsByDay.get(iso)?.length ?? 0)
       : (approvedByDay.get(iso)?.length ?? 0);
