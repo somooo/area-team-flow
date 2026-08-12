@@ -838,7 +838,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                     </div>
                                     <div className="text-[10px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
                                     {changeByLeave[r.id] && (
-                                      <div className="text-[10px] font-medium text-copper-700">Change pending — {changeByLeave[r.id].type}</div>
+                                      <div className="text-[10px] font-medium text-copper">Change pending — {changeByLeave[r.id].type}</div>
                                     )}
                                     {isUnassignedView && me.role === "admin" && (
                                       <Link to="/directory" className="text-[10px] underline text-steel-700">
