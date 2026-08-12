@@ -15,6 +15,8 @@ export type RosterShift = {
   duty: Duty;
   ot_type: OtType;
   sick_tag?: boolean | null;
+  /** Row position from the imported sheet; drives the schedule display order. */
+  sort_order?: number | null;
 };
 
 export function monthDays(year: number, month: number): Date[] {
@@ -43,7 +45,8 @@ export function cellFor(shift: RosterShift | undefined, isWeekend: boolean): Cel
   }
   // Codes render exactly as stored; night keeps the source's lowercase "s" prefix.
   const unit = shift.unit_code ?? "";
-  const base = shift.duty === "Night" && unit ? `s${unit}` : unit;
+  const base =
+    shift.duty === "Night" && unit && !unit.startsWith("s") ? `s${unit}` : unit;
 
   // MedEvac OT is a standalone entry and can never be sick — checked before the sick tag.
   if (shift.ot_type === "MedEvac") {

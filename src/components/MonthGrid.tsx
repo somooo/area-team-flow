@@ -28,13 +28,19 @@ export type MonthGridProps = {
   layer?: "all" | "day" | "night";
   /** `email|date` keys with unsaved edits — rendered with a pending outline. */
   pendingKeys?: Set<string>;
+  /**
+   * Explicit zone groups, in display order. When given, staff order inside each
+   * group is preserved exactly (no alphabetical sorting anywhere).
+   */
+  groups?: { label: string; staff: StaffLite[] }[];
 };
 
-export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, isCellClickable, layer = "all", pendingKeys }: MonthGridProps) {
+export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, isCellClickable, layer = "all", pendingKeys, groups }: MonthGridProps) {
   const days = useMemo(() => monthDays(year, month), [year, month]);
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
   const grouped = useMemo(() => {
+    if (groups) return groups.map((g) => [g.label, g.staff] as [string, StaffLite[]]);
     const map = new Map<string, StaffLite[]>();
     for (const s of staff) {
       const k = s.department || "—";
@@ -42,7 +48,7 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
       map.get(k)!.push(s);
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [staff]);
+  }, [staff, groups]);
 
   const shiftIdx = useMemo(() => {
     const map = new Map<string, RosterShift>();
