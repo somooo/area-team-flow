@@ -127,6 +127,9 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                 </tr>
                 {members.map((s) => {
                   const isMe = s.email.toLowerCase() === meEmail.toLowerCase();
+                  const home = homeAreaByEmail?.[s.email.toLowerCase()] ?? s.area ?? null;
+                  const visiting =
+                    !!currentArea && !!home && home.toLowerCase() !== currentArea.toLowerCase();
                   return (
                     <tr key={s.id} className={cn(isMe && "bg-steel-100/40")}>
                       <td className={cn("sticky left-0 z-10 border-b border-r px-3 py-2 min-w-[180px]", isMe ? "bg-steel-100" : "bg-card")}>
@@ -135,6 +138,14 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                           {isMe && (
                             <span className="shrink-0 rounded-full bg-copper/15 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-copper">
                               You
+                            </span>
+                          )}
+                          {visiting && (
+                            <span
+                              title={`Home area: ${home}`}
+                              className="shrink-0 rounded-full bg-steel-300/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-steel-900"
+                            >
+                              {home}
                             </span>
                           )}
                         </div>
@@ -146,8 +157,14 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                         const iso = toISODate(d);
                         const shift = shiftIdx.get(`${s.email.toLowerCase()}|${iso}`);
                         const isWknd = isWeekendDay(d, layer);
-                        const style = cellFor(shift, isWknd);
-                        const clickable = !!onCellClick && (!isCellClickable || isCellClickable({ staff: s, date: iso, shift }));
+                        const onVacation = !!vacationKeys?.has(`${s.email.toLowerCase()}|${iso}`);
+                        const style = onVacation
+                          ? { code: "V", className: "bg-[#A2ABD8] text-slate-900", title: `Approved vacation · ${iso}` }
+                          : cellFor(shift, isWknd);
+                        const clickable =
+                          !onVacation &&
+                          !!onCellClick &&
+                          (!isCellClickable || isCellClickable({ staff: s, date: iso, shift }));
                         const pending = pendingKeys?.has(`${s.email.toLowerCase()}|${iso}`);
                         return (
                           <td
