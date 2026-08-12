@@ -164,6 +164,18 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (c && !c.available) setCovering("");
   }, [supervisors, covering]);
 
+  // Options for re-nominating cover after a decline.
+  useEffect(() => {
+    if (!detail || detail.stage !== "cover_declined" || detail.staff_email.toLowerCase() !== me.email.toLowerCase()) {
+      setRenomOptions([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchCoverCandidates({ start: detail.start_date, end: detail.end_date, requesterEmail: me.email, excludeLeaveId: detail.id })
+      .then((list) => { if (!cancelled) setRenomOptions(list); });
+    return () => { cancelled = true; };
+  }, [detail, me.email]);
+
   useEffect(() => {
     void resolveApprover(me).then(async (email) => {
       setApprover(email);
