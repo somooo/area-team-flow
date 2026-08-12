@@ -422,6 +422,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   };
 
   const submit = async () => {
+    void 0;
     if (!start) return;
     const s = start, e = end ?? start;
     if (isSupervisorsView && !covering) { toast.error("Select a covering supervisor"); return; }
