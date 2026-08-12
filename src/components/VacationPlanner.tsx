@@ -114,6 +114,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
   const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === me.area;
@@ -231,7 +232,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     const used = countsPending
       ? (rowsByDay.get(iso)?.length ?? 0)
       : (approvedByDay.get(iso)?.length ?? 0);
-    if (cap > 0 && used >= cap) return;
+    if (cap > 0 && used >= cap) {
+      toast.error(`Cap reached — ${capAreaLabel} is full on ${iso} (${used}/${cap})`);
+      return;
+    }
     if (!start || (start && end)) { setStart(iso); setEnd(null); return; }
     if (iso < start) { setStart(iso); return; }
     setEnd(iso);
@@ -240,12 +244,31 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const officeHours = isOfficeHoursRole(me.role);
   const totalDays = start ? countVacationDays(start, end ?? start, me.role) : 0;
 
+  /** Days in the current selection that are already at the area cap. */
+  const blockedDates = useMemo(() => {
+    if (!start || cap <= 0) return [] as string[];
+    return eachDay(start, end ?? start).filter((iso) => {
+      if (mineByDay.get(iso)) return false;
+      const used = countsPending ? (rowsByDay.get(iso)?.length ?? 0) : (approvedByDay.get(iso)?.length ?? 0);
+      return used >= cap;
+    });
+  }, [start, end, cap, countsPending, rowsByDay, approvedByDay, mineByDay]);
+  const canOverrideCap = me.role === "admin" || me.role === "supervisor";
+
   const submit = async () => {
     if (!start) return;
     const s = start, e = end ?? start;
     if (isSupervisorsView && !covering) { toast.error("Select a covering supervisor"); return; }
     const routeTo = isSupervisorsView ? covering : approver;
     if (!routeTo) { toast.error("No approver available"); return; }
+    const isOverride = blockedDates.length > 0;
+    if (isOverride) {
+      if (!canOverrideCap) {
+        toast.error(`Blocked: ${blockedDates.join(", ")} are at capacity.`);
+        return;
+      }
+      if (!overrideReason.trim()) { toast.error("An override reason is required"); return; }
+    }
     setBusy(true);
     const { data: inserted, error } = await supabase.from("leave_requests").insert({
       staff_email: me.email.toLowerCase(), staff_name: me.name,
@@ -254,14 +277,25 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       staff_id: me.id, start_date: s, end_date: e, reason, approver_email: routeTo,
       covering_supervisor_email: isSupervisorsView ? covering : null,
       stage: isSupervisorsView ? "covering" : null,
+      over_cap_override: isOverride,
+      over_cap_reason: isOverride ? overrideReason.trim() : null,
     }).select("id").maybeSingle();
     setBusy(false);
     if (error) { toast.error(error.message); return; }
+    if (isOverride) {
+      await logAudit({
+        action: "vacation_cap_override",
+        entity_type: "leave_request",
+        entity_id: inserted?.id ?? null,
+        area: isSupervisorsView ? SUPERVISORS_AREA : me.area,
+        details: { start_date: s, end_date: e, blocked_dates: blockedDates, reason: overrideReason.trim(), cap, area_label: capAreaLabel },
+      });
+    }
     await notify({ data: { event: "request_submitted", staff_name: me.name, staff_email: me.email, supervisor_email: routeTo, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, leave_type: "Vacation", start_date: s, end_date: e, reason } });
     await createNotification({ data: { recipient_email: routeTo, title: isSupervisorsView ? "Cover + approve vacation" : "Vacation leave request", body: `${me.name}: ${s} → ${e}`, link: "/approvals" } });
     await logAudit({ action: "leave_requested", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, details: { start_date: s, end_date: e, leave_type: "Vacation", covering_supervisor_email: isSupervisorsView ? covering : null } });
     toast.success("Vacation request submitted");
-    setConfirmOpen(false); setStart(null); setEnd(null); setReason(""); setCovering("");
+    setConfirmOpen(false); setStart(null); setEnd(null); setReason(""); setCovering(""); setOverrideReason("");
     await load(); onDone();
   };
 
