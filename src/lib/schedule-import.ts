@@ -10,6 +10,13 @@ import {
 } from "@/lib/roster";
 import { codesForLayer, type AssignmentCode } from "@/lib/assignments";
 import type { StaffLite } from "@/components/MonthGrid";
+import { normalizeBadge } from "@/lib/staff-import";
+
+/** A directory record used for badge matching during a schedule import. */
+export type DirectoryPerson = StaffLite & { badge: string; position?: string | null };
+
+/** A badge present in the file that has no Staff Directory record. */
+export type MissingPerson = { badge: string; name: string; rows: number };
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -625,9 +632,12 @@ export function collectUnknownCodes(input: {
 export type PlanInput = {
   matrix: unknown[][];
   blocks: DetectedBlock[];
+  /** People already on this area's schedule. */
   staff: StaffLite[];
   /** badge_id per staff email, for badge matching. */
   badges?: Record<string, string>;
+  /** The whole staff directory, used to add missing people to the schedule. */
+  directory?: DirectoryPerson[];
   shifts: RosterShift[];
   codes: AssignmentCode[];
   codeMap?: CodeMap;
@@ -640,6 +650,10 @@ export type PlanResult = {
   items: ImportItem<ImportedCell>[];
   labelRowsSkipped: number;
   cellCount: number;
+  /** Badges in the file with no directory record at all. */
+  missing: MissingPerson[];
+  /** People found in the directory who are not yet on this schedule. */
+  addedToSchedule: StaffLite[];
 };
 
 export function planScheduleImport(input: PlanInput): PlanResult {
@@ -648,12 +662,21 @@ export function planScheduleImport(input: PlanInput): PlanResult {
   const items: ImportItem<ImportedCell>[] = [];
   let labelRowsSkipped = 0;
 
-  const byName = new Map(staff.map((s) => [s.name.trim().toLowerCase(), s]));
+  // Directory = the match source. When the caller does not pass one, fall back to
+  // the people already on the schedule plus their badges.
+  const directory: DirectoryPerson[] =
+    input.directory ??
+    staff.map((s) => ({ ...s, badge: input.badges?.[s.email.toLowerCase()] ?? "" }));
+
+  const byName = new Map(directory.map((s) => [s.name.trim().toLowerCase(), s as StaffLite]));
   const byBadge = new Map<string, StaffLite>();
-  for (const [email, badge] of Object.entries(input.badges ?? {})) {
-    const s = staff.find((x) => x.email.toLowerCase() === email.toLowerCase());
-    if (s && badge) byBadge.set(String(badge).trim(), s);
+  for (const p of directory) {
+    const key = normalizeBadge(p.badge);
+    if (key) byBadge.set(key, p as StaffLite);
   }
+  const onSchedule = new Set(staff.map((s) => s.email.toLowerCase()));
+  const missing = new Map<string, MissingPerson>();
+  const added = new Map<string, StaffLite>();
   const current = new Map<string, RosterShift>();
   for (const s of shifts) current.set(`${s.staff_email.toLowerCase()}|${s.date}`, s);
 
@@ -664,15 +687,33 @@ export function planScheduleImport(input: PlanInput): PlanResult {
     for (let r = b.firstDataRow; r <= b.lastDataRow; r++) {
       const row = matrix[r] ?? [];
       const name = cellText(row[b.nameCol]);
-      const badge = b.badgeCol == null ? "" : cellText(row[b.badgeCol]);
+      const rawBadge = b.badgeCol == null ? "" : cellText(row[b.badgeCol]);
+      const badge = normalizeBadge(rawBadge);
       const member =
         (badge ? byBadge.get(badge) : undefined) ?? byName.get(name.trim().toLowerCase());
 
       if (!member) {
-        // Zone labels and footer rows: a name (or nothing) with no matching badge.
-        labelRowsSkipped++;
+        if (badge.length >= 4) {
+          // A real person the directory has never heard of — never silently dropped.
+          const entry = missing.get(badge) ?? { badge, name: name || "(no name in file)", rows: 0 };
+          entry.rows++;
+          missing.set(badge, entry);
+          items.push({
+            id: `${b.id}-${r}-missing`,
+            label: name || `Badge ${badge}`,
+            badge,
+            change: "—",
+            status: "skip",
+            reason: "Not in directory — needs a directory record",
+          });
+        } else {
+          // Zone labels and footer rows: no badge and no matching name.
+          labelRowsSkipped++;
+        }
         continue;
       }
+
+      if (!onSchedule.has(member.email.toLowerCase())) added.set(member.email.toLowerCase(), member);
 
       for (let i = 0; i < Math.min(b.dayCount, days.length); i++) {
         const date = toISODate(days[i]);
@@ -693,12 +734,13 @@ export function planScheduleImport(input: PlanInput): PlanResult {
         const id = `${b.id}-${r}-${i}`;
         const change = `${date}: ${before || "—"} → ${raw || "—"}`;
         if (!parsed.ok) {
-          items.push({ id, label: member.name, change, status: "skip", reason: parsed.reason });
+          items.push({ id, label: member.name, badge, change, status: "skip", reason: parsed.reason });
           continue;
         }
         items.push({
           id,
           label: member.name,
+          badge,
           change,
           status: input.replace || !existing ? "add" : "update",
           payload: {
@@ -712,5 +754,11 @@ export function planScheduleImport(input: PlanInput): PlanResult {
     }
   }
 
-  return { items, labelRowsSkipped, cellCount: items.filter((i) => i.status !== "skip").length };
+  return {
+    items,
+    labelRowsSkipped,
+    cellCount: items.filter((i) => i.status !== "skip").length,
+    missing: Array.from(missing.values()).sort((a, b) => b.rows - a.rows),
+    addedToSchedule: Array.from(added.values()),
+  };
 }

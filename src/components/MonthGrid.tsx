@@ -115,7 +115,14 @@ export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, 
                   return (
                     <tr key={s.id} className={cn(isMe && "bg-steel-100/40")}>
                       <td className={cn("sticky left-0 z-10 border-b border-r px-3 py-2 min-w-[180px]", isMe ? "bg-steel-100" : "bg-card")}>
-                        <div className="font-medium truncate">{s.name}</div>
+                        <div className="font-medium truncate flex items-center gap-1.5">
+                          <span className="truncate">{s.name}</span>
+                          {isMe && (
+                            <span className="shrink-0 rounded-full bg-copper/15 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-copper">
+                              You
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-muted-foreground truncate">
                           {s.role}{s.department ? ` · ${s.department}` : ""}
                         </div>

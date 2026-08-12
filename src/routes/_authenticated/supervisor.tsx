@@ -16,7 +16,13 @@ import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
-import { planScheduleImport, type ImportedCell } from "@/lib/schedule-import";
+import {
+  planScheduleImport,
+  type ImportedCell,
+  type DirectoryPerson as ImportDirectoryPerson,
+  type MissingPerson,
+} from "@/lib/schedule-import";
+import { normalizeBadge, isProtectedTest } from "@/lib/staff-import";
 import { ScheduleMappingDialog, type ScheduleImportConfig } from "@/components/ScheduleMappingDialog";
 import { logAudit } from "@/lib/audit";
 import { canManageArea, isAdmin } from "@/lib/permissions";
@@ -80,6 +86,12 @@ function SupervisorPage() {
   const [importConfig, setImportConfig] = useState<ScheduleImportConfig | null>(null);
   const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
   const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
+  const [directory, setDirectory] = useState<ImportDirectoryPerson[]>([]);
+  const [missingPeople, setMissingPeople] = useState<MissingPerson[]>([]);
+  const [addingMissing, setAddingMissing] = useState(false);
+  const [addedToSchedule, setAddedToSchedule] = useState<StaffLite[]>([]);
+  const [removalPreview, setRemovalPreview] = useState<{ name: string; badge: string }[]>([]);
+  const [scopeWarning, setScopeWarning] = useState<string | null>(null);
   /** Every non-blank cell in the file, used when the import replaces the whole month. */
   const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<ImportedCell>[]>([]);
 
@@ -99,6 +111,33 @@ function SupervisorPage() {
     void fetchAssignmentCodes(viewArea).then(setCodes);
     void fetchZoneReference(viewArea).then(setReference);
   }, [viewArea]);
+
+  /** The whole directory is the match source for imports — not just this area's roster. */
+  const loadDirectory = async () => {
+    const { data } = await supabase
+      .from("staff")
+      .select("id,name,email,role,area,department,position,badge_id,first_name")
+      .order("name");
+    const rows = (data ?? []) as {
+      id: string; name: string; email: string | null; role: string; area: string | null;
+      department: string | null; position: string | null; badge_id: string | null; first_name: string | null;
+    }[];
+    setDirectory(
+      rows
+        .filter((r) => !isProtectedTest(r))
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          email: (r.email ?? "").toLowerCase() || `badge-${normalizeBadge(r.badge_id) || r.id}@no-email.local`,
+          role: r.role,
+          area: r.area,
+          department: r.department,
+          position: r.position,
+          badge: normalizeBadge(r.badge_id),
+        })),
+    );
+  };
+  useEffect(() => { void loadDirectory(); }, []);
 
   const isAssistants = viewArea.toLowerCase() === "assistants";
   const effectiveLayer: "all" | "day" | "night" = isAssistants ? "all" : layer;
@@ -148,6 +187,25 @@ function SupervisorPage() {
 
   const pendingKeys = useMemo(() => new Set(Object.keys(pending)), [pending]);
 
+  const monthLabel = (y: number, m: number) =>
+    new Date(y, m, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
+
+  /**
+   * Grid roster = staff assigned to this area PLUS anyone who has a shift in the
+   * visible month, so people added by an import show up immediately.
+   */
+  const gridStaff = useMemo(() => {
+    const map = new Map<string, StaffLite>();
+    for (const s of staff) map.set(s.email.toLowerCase(), s as StaffLite);
+    for (const sh of mergedShifts) {
+      const k = sh.staff_email.toLowerCase();
+      if (map.has(k)) continue;
+      const dir = directory.find((d) => d.email.toLowerCase() === k);
+      map.set(k, dir ?? { id: k, name: sh.staff_name, email: sh.staff_email, role: "staff", area: viewArea, department: null });
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [staff, mergedShifts, directory, viewArea]);
+
   if (!me?.staff) return null;
   if (!canManage) return <p>Supervisor / admin access only.</p>;
   const meStaff = me.staff;
@@ -174,7 +232,9 @@ function SupervisorPage() {
     items: ImportItem<ImportedCell>[],
     { replace, setProgress }: { replace: boolean; setProgress: (t: string | null) => void },
   ) => {
-    const staffIdByEmail = new Map(staff.map((s) => [s.email.toLowerCase(), s.id]));
+    const staffIdByEmail = new Map<string, string>();
+    for (const s of staff) staffIdByEmail.set(s.email.toLowerCase(), s.id);
+    for (const d of directory) if (!staffIdByEmail.has(d.email.toLowerCase())) staffIdByEmail.set(d.email.toLowerCase(), d.id);
     const ranges = importRanges(importConfig);
     // In replace mode nothing survives to diff against, so every parsed cell is written.
     const source = replace ? replaceAllItems : items;
@@ -276,9 +336,50 @@ function SupervisorPage() {
     toast.success(
       `Import complete — ${written} of ${attempted} shift${attempted === 1 ? "" : "s"} written into ${viewArea}`,
     );
+
+    await logAudit({
+      action: replace ? "schedule_import_replace" : "schedule_import_merge",
+      entity_type: "schedule",
+      entity_id: `${viewArea}-${ranges.map((r) => r.label).join(",")}`,
+      actor_email: me?.staff?.email, actor_role: me?.staff?.role, area: viewArea,
+      details: {
+        area: viewArea,
+        months: ranges.map((r) => r.label),
+        shift: isAssistants ? "all" : layer,
+        mode: replace ? "replace" : "merge",
+        assignments_written: written,
+        staff_added_to_schedule: addedToSchedule.map((s) => s.name),
+        staff_removed_from_schedule: replace ? removalPreview : [],
+      },
+    });
+
     setPending({});
     await load();
+    await loadDirectory();
     return { attempted, written, confirmed, failures };
+  };
+
+  /** Create real directory records for badges the file contains but the directory does not. */
+  const addMissingToDirectory = async () => {
+    if (!missingPeople.length) return;
+    setAddingMissing(true);
+    const rows = missingPeople.map((m) => ({
+      badge_id: m.badge,
+      name: m.name && m.name !== "(no name in file)" ? m.name : `Badge ${m.badge}`,
+      role: "staff" as const,
+      status: "Active",
+    }));
+    const { data, error } = await supabase.from("staff").insert(rows as never).select("id");
+    setAddingMissing(false);
+    if (error) { toast.error(`Could not add to directory: ${error.message}`); return; }
+    await logAudit({
+      action: "staff_created_from_schedule_import", entity_type: "staff",
+      actor_email: me?.staff?.email, actor_role: me?.staff?.role, area: viewArea,
+      details: { created: rows.length, badges: missingPeople.map((m) => m.badge) },
+    });
+    toast.success(`${data?.length ?? rows.length} staff added to the directory — re-run the import to include them`);
+    setMissingPeople([]);
+    await loadDirectory();
   };
 
   const saveAll = async () => {
@@ -444,6 +545,7 @@ function SupervisorPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
+            {canEditViewedArea && (
             <ExcelImportButton<ImportedCell, ScheduleImportConfig>
               title={`Import ${viewArea} schedule`}
               description="Read from cell text only — colour is applied by the app from the overtime type. Re-importing an untouched export produces no changes."
@@ -460,25 +562,84 @@ function SupervisorPage() {
                 />
               )}
               replaceOption={{
-                label: `Replace the whole month — delete every existing shift for ${viewArea} in ${replaceInfo.label || "the imported month"} (day and night) before importing`,
-                description: `${replaceInfo.count} existing shift${replaceInfo.count === 1 ? "" : "s"} in ${viewArea} · ${replaceInfo.label || "the imported month"} will be deleted. Staff not listed in the file will be cleared too. Leave unchecked to merge only the differences.`,
+                mergeLabel: "Merge — keep everyone currently on the schedule",
+                mergeDescription: "Adds the new staff and overwrites only the assignments for dates present in the file. Nobody is removed.",
+                label: `Replace — the file becomes the full ${viewArea} roster for ${replaceInfo.label || "the imported month"}`,
+                description: `${replaceInfo.count} existing shift${replaceInfo.count === 1 ? "" : "s"} in ${viewArea} · ${replaceInfo.label || "the imported month"} will be cleared first. Staff absent from the file are removed from this schedule only — their Staff Directory record is never changed.`,
+                extra: removalPreview.length > 0 ? (
+                  <span className="mt-2 block rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                    <span className="font-medium block text-destructive">
+                      {removalPreview.length} staff will be removed from this schedule
+                    </span>
+                    <span className="block text-muted-foreground">
+                      {removalPreview.map((p) => `${p.name}${p.badge ? ` (${p.badge})` : ""}`).join(", ")}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="mt-2 block text-muted-foreground">Nobody currently on the schedule is missing from the file.</span>
+                ),
               }}
-              extraSummary={() => labelRowsSkipped > 0
-                ? <p className="text-xs text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
-                : null}
+              extraSummary={() => (
+                <div className="space-y-2 text-xs">
+                  <p className="text-muted-foreground">
+                    Scope: <span className="font-medium text-foreground">{viewArea}</span> ·{" "}
+                    <span className="font-medium text-foreground">{replaceInfo.label || monthLabel(year, month)}</span> ·{" "}
+                    <span className="font-medium text-foreground">{isAssistants ? "single grid" : effectiveLayer === "night" ? "Night" : "Day"}</span>
+                  </p>
+                  {scopeWarning && (
+                    <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      {scopeWarning}
+                    </p>
+                  )}
+                  {addedToSchedule.length > 0 && (
+                    <p className="text-muted-foreground">
+                      {addedToSchedule.length} staff will be added to this schedule from the directory:{" "}
+                      {addedToSchedule.map((s) => s.name).join(", ")}
+                    </p>
+                  )}
+                  {missingPeople.length > 0 && (
+                    <div className="rounded-md border p-2 space-y-2">
+                      <p className="font-medium">
+                        {missingPeople.length} badge{missingPeople.length === 1 ? "" : "s"} not in the directory — needs a directory record
+                      </p>
+                      <ul className="text-muted-foreground">
+                        {missingPeople.map((m) => (
+                          <li key={m.badge}>{m.badge} · {m.name}</li>
+                        ))}
+                      </ul>
+                      <Button size="sm" variant="outline" disabled={addingMissing} onClick={() => void addMissingToDirectory()}>
+                        {addingMissing ? "Adding…" : `Add ${missingPeople.length} staff to directory`}
+                      </Button>
+                    </div>
+                  )}
+                  {labelRowsSkipped > 0 && (
+                    <p className="text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
+                  )}
+                </div>
+              )}
               parse={async (input, config) => {
                 if (!config) return [];
                 const matrix = input.workbook.sheets[config.sheetName] ?? [];
                 const common = {
-                  matrix, blocks: config.blocks, staff: staff as StaffLite[], badges,
+                  matrix, blocks: config.blocks, staff: staff as StaffLite[], badges, directory,
                   shifts, codes, codeMap: config.codeMap,
                 };
                 const diff = planScheduleImport({ ...common, replace: false });
                 const full = planScheduleImport({ ...common, replace: true });
                 setLabelRowsSkipped(diff.labelRowsSkipped);
+                setMissingPeople(full.missing);
+                setAddedToSchedule(full.addedToSchedule);
                 setReplaceAllItems(full.items.filter((i) => i.status !== "skip"));
 
                 const ranges = importRanges(config);
+                const off = config.blocks.filter((b) => b.year !== year || b.month !== month);
+                setScopeWarning(
+                  off.length
+                    ? `The file contains dates outside ${monthLabel(year, month)} (${off
+                        .map((b) => monthLabel(b.year, b.month))
+                        .join(", ")}). They will be imported into that period, not the month shown above.`
+                    : null,
+                );
                 let count = 0;
                 for (const r of ranges) {
                   const { count: c } = await supabase.from("shifts")
@@ -487,17 +648,40 @@ function SupervisorPage() {
                   count += c ?? 0;
                 }
                 setReplaceInfo({ count, label: ranges.map((r) => r.label).join(", ") });
+
+                // Who is on the schedule today but absent from the file (Replace mode only).
+                const inFile = new Set<string>([
+                  ...full.items.filter((i) => i.payload).map((i) => i.payload!.staff.email.toLowerCase()),
+                ]);
+                const existing = new Map<string, { name: string; badge: string }>();
+                for (const r of ranges) {
+                  const { data } = await supabase.from("shifts")
+                    .select("staff_email,staff_name")
+                    .eq("area", viewArea).gte("date", r.start).lte("date", r.end);
+                  for (const s of (data ?? []) as { staff_email: string; staff_name: string }[]) {
+                    const k = s.staff_email.toLowerCase();
+                    if (inFile.has(k)) continue;
+                    existing.set(k, {
+                      name: s.staff_name,
+                      badge: directory.find((d) => d.email.toLowerCase() === k)?.badge ?? "",
+                    });
+                  }
+                }
+                setRemovalPreview(Array.from(existing.values()));
                 return diff.items;
               }}
               commit={commitScheduleImport}
             />
+            )}
+            {canEditViewedArea && (
             <Button
               size="sm"
               variant="outline"
-              onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
+              onClick={() => void exportExcel({ area: viewArea, year, month, staff: gridStaff, shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
             >
               Export to Excel
             </Button>
+            )}
             {Object.keys(pending).length > 0 && (
               <>
                 <Badge variant="secondary">{Object.keys(pending).length} unsaved</Badge>
@@ -538,14 +722,14 @@ function SupervisorPage() {
 
           <ReferenceTable area={viewArea} rows={reference} />
 
-          {staff.length === 0 ? (
+          {gridStaff.length === 0 ? (
             <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
               No staff assigned to this area yet — use Add staff to get started.
             </p>
           ) : (
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
-            staff={staff} shifts={mergedShifts} meEmail={meStaff.email}
+            staff={gridStaff} shifts={mergedShifts} meEmail={meStaff.email}
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             pendingKeys={pendingKeys}
@@ -605,6 +789,7 @@ function SupervisorPage() {
                 <div className="text-xs text-muted-foreground">{s.email}</div>
                 <div className="mt-2 flex items-center justify-between">
                   <Badge variant="secondary" className="capitalize">{s.role}</Badge>
+                  {canEditViewedArea && (
                   <Button
                     size="sm" variant="ghost" disabled={!canEditViewedArea}
                     title="Remove from schedule"
@@ -617,6 +802,7 @@ function SupervisorPage() {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
+                  )}
                 </div>
               </div>
             ))}

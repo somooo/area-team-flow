@@ -96,7 +96,14 @@ export function ExcelImportButton<P, C = unknown>({
     onCancel: () => void;
   }) => ReactNode;
   /** Shows a "remove all data before importing" checkbox above the preview. */
-  replaceOption?: { label: string; description: string };
+  replaceOption?: {
+    label: string;
+    description: string;
+    mergeLabel?: string;
+    mergeDescription?: string;
+    /** Extra detail shown when Replace is selected, e.g. who will be removed. */
+    extra?: ReactNode;
+  };
   /** Extra line above the preview table, e.g. "12 label rows skipped". */
   extraSummary?: (items: ImportItem<P>[]) => ReactNode;
   /** Checkboxes that change how the file is parsed; toggling re-runs the parse. */
@@ -141,7 +148,7 @@ export function ExcelImportButton<P, C = unknown>({
       const [{ rows, matrix }, workbook] = await Promise.all([readSheet(file), readWorkbook(file)]);
       const input: ParseInput = { rows, matrix, file, workbook, toggles: toggleState };
       setLastInput(input);
-      setReplace(true);
+      setReplace(false);
       if (configure) {
         setConfigInput(input);
         return;
@@ -253,17 +260,38 @@ export function ExcelImportButton<P, C = unknown>({
           <div className="space-y-3">
             {description && <p className="text-xs text-muted-foreground">{description}</p>}
             {replaceOption && (
-              <label className="flex gap-2 items-start rounded-md border p-3 text-xs">
-                <Checkbox
-                  checked={replace}
-                  onCheckedChange={(v) => setReplace(v === true)}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-medium block">{replaceOption.label}</span>
-                  <span className="text-muted-foreground">{replaceOption.description}</span>
-                </span>
-              </label>
+              <div className="space-y-2">
+                {([false, true] as const).map((mode) => (
+                  <label
+                    key={String(mode)}
+                    className={`flex cursor-pointer gap-2 items-start rounded-md border p-3 text-xs ${
+                      replace === mode ? "border-primary bg-primary/5" : ""
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="import-mode"
+                      className="mt-0.5"
+                      checked={replace === mode}
+                      onChange={() => setReplace(mode)}
+                    />
+                    <span>
+                      <span className="font-medium block">
+                        {mode
+                          ? replaceOption.label
+                          : (replaceOption.mergeLabel ?? "Merge — keep everyone already on the schedule")}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {mode
+                          ? replaceOption.description
+                          : (replaceOption.mergeDescription ??
+                            "Adds the new staff and overwrites only the dates present in the file.")}
+                      </span>
+                      {mode && replace && replaceOption.extra}
+                    </span>
+                  </label>
+                ))}
+              </div>
             )}
             {(toggles ?? []).map((t) => (
               <label key={t.key} className="flex gap-2 items-start rounded-md border p-3 text-xs">
