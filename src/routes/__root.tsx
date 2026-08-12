@@ -49,7 +49,10 @@ function isChunkLoadError(error: unknown): boolean {
 function reloadOnceForStaleBundle(): boolean {
   if (typeof window === "undefined") return false;
   const key = "kadir:chunk-reload";
-  if (sessionStorage.getItem(key)) return false;
+  const last = Number(sessionStorage.getItem(key) ?? 0);
+  // Allow another recovery attempt after a cooling-off window, otherwise a second
+  // deploy in the same tab session would leave the user on a permanent blank screen.
+  if (last && Date.now() - last < 30_000) return false;
   sessionStorage.setItem(key, String(Date.now()));
   window.location.reload();
   return true;
@@ -156,7 +159,26 @@ function RootComponent() {
       reloadOnceForStaleBundle();
     };
     window.addEventListener("vite:preloadError", onPreloadError);
-    return () => window.removeEventListener("vite:preloadError", onPreloadError);
+
+    // A rejected lazy-route import can surface as "Uncaught undefined" before any
+    // error boundary renders, which is the blank-screen case.
+    const onError = (event: ErrorEvent) => {
+      if (isChunkLoadError(event.error ?? event.message)) reloadOnceForStaleBundle();
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      if (isChunkLoadError(event.reason)) reloadOnceForStaleBundle();
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+
+    // The bundle loaded fine, so clear the guard for future deploys.
+    sessionStorage.removeItem("kadir:chunk-reload");
+
+    return () => {
+      window.removeEventListener("vite:preloadError", onPreloadError);
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
   }, []);
 
   return (
