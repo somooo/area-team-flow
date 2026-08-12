@@ -16,7 +16,8 @@ import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
-import { planScheduleImport, type ImportedCell } from "@/lib/schedule-import";
+import { planScheduleImport, type ImportedCell, type DirectoryPerson, type MissingPerson } from "@/lib/schedule-import";
+import { normalizeBadge, isProtectedTest } from "@/lib/staff-import";
 import { ScheduleMappingDialog, type ScheduleImportConfig } from "@/components/ScheduleMappingDialog";
 import { logAudit } from "@/lib/audit";
 import { canManageArea, isAdmin } from "@/lib/permissions";
@@ -80,6 +81,12 @@ function SupervisorPage() {
   const [importConfig, setImportConfig] = useState<ScheduleImportConfig | null>(null);
   const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
   const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
+  const [directory, setDirectory] = useState<DirectoryPerson[]>([]);
+  const [missingPeople, setMissingPeople] = useState<MissingPerson[]>([]);
+  const [addingMissing, setAddingMissing] = useState(false);
+  const [addedToSchedule, setAddedToSchedule] = useState<StaffLite[]>([]);
+  const [removalPreview, setRemovalPreview] = useState<{ name: string; badge: string }[]>([]);
+  const [scopeWarning, setScopeWarning] = useState<string | null>(null);
   /** Every non-blank cell in the file, used when the import replaces the whole month. */
   const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<ImportedCell>[]>([]);
 
@@ -99,6 +106,33 @@ function SupervisorPage() {
     void fetchAssignmentCodes(viewArea).then(setCodes);
     void fetchZoneReference(viewArea).then(setReference);
   }, [viewArea]);
+
+  /** The whole directory is the match source for imports — not just this area's roster. */
+  const loadDirectory = async () => {
+    const { data } = await supabase
+      .from("staff")
+      .select("id,name,email,role,area,department,position,badge_id,first_name")
+      .order("name");
+    const rows = (data ?? []) as {
+      id: string; name: string; email: string | null; role: string; area: string | null;
+      department: string | null; position: string | null; badge_id: string | null; first_name: string | null;
+    }[];
+    setDirectory(
+      rows
+        .filter((r) => !isProtectedTest(r))
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          email: (r.email ?? "").toLowerCase() || `badge-${normalizeBadge(r.badge_id) || r.id}@no-email.local`,
+          role: r.role,
+          area: r.area,
+          department: r.department,
+          position: r.position,
+          badge: normalizeBadge(r.badge_id),
+        })),
+    );
+  };
+  useEffect(() => { void loadDirectory(); }, []);
 
   const isAssistants = viewArea.toLowerCase() === "assistants";
   const effectiveLayer: "all" | "day" | "night" = isAssistants ? "all" : layer;
