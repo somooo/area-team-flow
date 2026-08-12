@@ -924,6 +924,20 @@ export type Database = {
         }
         Returns: number
       }
+      import_schedule_rows: {
+        Args: {
+          _area: string
+          _end: string
+          _replace: boolean
+          _rows: Json
+          _start: string
+        }
+        Returns: Json
+      }
+      import_vacations_batch: {
+        Args: { _approver: string; _override_reason: string; _rows: Json }
+        Returns: Json
+      }
       is_admin: { Args: never; Returns: boolean }
       is_area_manager_of: { Args: { _area: string }; Returns: boolean }
       is_supervisor_of: { Args: { _area: string }; Returns: boolean }
