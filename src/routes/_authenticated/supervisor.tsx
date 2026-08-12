@@ -347,8 +347,9 @@ function SupervisorPage() {
             area: viewArea, year: r.year, month: r.month,
             cells_written: rows.length,
             staff_rows: new Set(rows.map((x) => x.staff_email)).size,
-            blocks: importConfig?.blocks.length ?? 0,
-            profile_used: importConfig?.sheetName ?? null,
+            side: importConfig?.side ?? null,
+            day_sheet: importConfig?.daySheet ?? null,
+            night_sheet: importConfig?.nightSheet ?? null,
           },
         });
       }
