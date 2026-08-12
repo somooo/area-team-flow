@@ -96,6 +96,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
   const [headcount, setHeadcount] = useState(1);
+  const [capRow, setCapRow] = useState<{ cap_pct: number; warn_pct: number } | null>(null);
   const [balance, setBalance] = useState<{ approved: number; pending: number }>({ approved: 0, pending: 0 });
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
@@ -144,7 +145,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     const hcQuery = isSupervisorsView
       ? supabase.from("staff").select("id", { count: "exact", head: true }).eq("role", "supervisor")
       : supabase.from("staff").select("id", { count: "exact", head: true }).eq("area", viewArea);
-    const [{ count: hc }, { data: area }, { data: mine }] = await Promise.all([
+    const capArea = isSupervisorsView ? "Supervisor" : viewArea;
+    const [{ count: hc }, { data: area }, { data: mine }, { data: capData }] = await Promise.all([
       hcQuery,
       supabase.from("leave_requests")
         .select("id,staff_email,staff_name,start_date,end_date,status,reason,approver_email,covering_supervisor_email,stage")
@@ -155,8 +157,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
         .ilike("staff_email", me.email).eq("leave_type", "Vacation")
         .gte("start_date", `${year}-01-01`).lte("end_date", `${year}-12-31`)
         .in("status", ["Approved", "Pending"]),
+      supabase.from("vacation_caps").select("cap_pct,warn_pct").eq("area", capArea).maybeSingle(),
     ]);
     setHeadcount(hc ?? 1);
+    setCapRow((capData as { cap_pct: number; warn_pct: number } | null) ?? null);
     setLeaves((area ?? []) as LeaveRow[]);
     let approved = 0, pending = 0;
     for (const r of mine ?? []) {
@@ -179,10 +183,12 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     });
   }, []);
 
-  const cap = useMemo(
-    () => Math.floor((headcount * ruleNumber(rules, "vacation_cap_pct", 30)) / 100),
-    [headcount, rules],
-  );
+  /** Per-day cap for this area, from vacation_caps (falls back to the legacy rule). */
+  const capPct = capRow?.cap_pct ?? ruleNumber(rules, "vacation_cap_pct", 30);
+  const warnPct = capRow?.warn_pct ?? 80;
+  const cap = useMemo(() => maxOffPerDay(headcount, capPct), [headcount, capPct]);
+  const countsPending = rules["vacation_cap_counts_pending"] !== false;
+  const capAreaLabel = isSupervisorsView ? "Supervisors" : viewArea;
   const yearlyCap = ruleNumber(rules, "vacation_yearly_days", 25);
   const remaining = Math.max(0, yearlyCap - balance.approved - balance.pending);
 
