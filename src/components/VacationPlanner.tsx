@@ -50,6 +50,17 @@ type LeaveRow = {
   stage: string | null;
 };
 
+type ChangeReq = {
+  id: string;
+  leave_request_id: string;
+  type: "cancel" | "adjust";
+  new_start_date: string | null;
+  new_end_date: string | null;
+  reason: string | null;
+  requested_by: string;
+  status: string;
+};
+
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function monthMatrix(year: number, month: number): (Date | null)[] {
@@ -118,6 +129,11 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [editEnd, setEditEnd] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
   const [importOverrideReason, setImportOverrideReason] = useState("");
+  const [changeByLeave, setChangeByLeave] = useState<Record<string, ChangeReq>>({});
+  const [changeMode, setChangeMode] = useState<null | "cancel" | "adjust">(null);
+  const [chgStart, setChgStart] = useState("");
+  const [chgEnd, setChgEnd] = useState("");
+  const [chgReason, setChgReason] = useState("");
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
   const isUnassignedView = viewArea === UNASSIGNED_AREA;
@@ -167,6 +183,18 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     setHeadcount(hc ?? 1);
     setCapRow((capData as { cap_pct: number; warn_pct: number } | null) ?? null);
     setLeaves((area ?? []) as LeaveRow[]);
+    const ids = ((area ?? []) as LeaveRow[]).map((r) => r.id);
+    if (ids.length > 0) {
+      const { data: chg } = await supabase
+        .from("vacation_change_requests")
+        .select("id,leave_request_id,type,new_start_date,new_end_date,reason,requested_by,status")
+        .in("leave_request_id", ids).eq("status", "pending");
+      const map: Record<string, ChangeReq> = {};
+      for (const c of ((chg ?? []) as ChangeReq[])) map[c.leave_request_id] = c;
+      setChangeByLeave(map);
+    } else {
+      setChangeByLeave({});
+    }
     let approved = 0, pending = 0;
     for (const r of mine ?? []) {
       const n = countVacationDays(r.start_date, r.end_date, me.role);
