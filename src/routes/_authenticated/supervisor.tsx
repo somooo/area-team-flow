@@ -285,6 +285,7 @@ function SupervisorPage() {
           sick_tag: p.sick_tag,
           hours: p.hours,
           shift_type: (p.duty === "Night" ? "Night" : p.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
+          sort_order: c.order,
         };
       });
 
