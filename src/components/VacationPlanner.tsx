@@ -290,6 +290,79 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   }, [start, end, cap, countsPending, rowsByDay, approvedByDay, mineByDay]);
   const canOverrideCap = me.role === "admin" || me.role === "supervisor";
 
+  /** Days in an arbitrary range that are already at the area cap (ignoring my own existing days). */
+  const blockedIn = useCallback((s: string, e: string) => {
+    if (cap <= 0) return [] as string[];
+    return eachDay(s, e).filter((iso) => {
+      if (mineByDay.get(iso)) return false;
+      const used = countsPending ? (rowsByDay.get(iso)?.length ?? 0) : (approvedByDay.get(iso)?.length ?? 0);
+      return used >= cap;
+    });
+  }, [cap, countsPending, rowsByDay, approvedByDay, mineByDay]);
+
+  const chgBlocked = useMemo(
+    () => (changeMode === "adjust" && chgStart && chgEnd && chgEnd >= chgStart ? blockedIn(chgStart, chgEnd) : []),
+    [changeMode, chgStart, chgEnd, blockedIn],
+  );
+
+  const closeChange = () => { setChangeMode(null); setChgReason(""); setChgStart(""); setChgEnd(""); };
+
+  /** Staff-initiated change request against their own booked vacation. Never mutates the vacation. */
+  const submitChangeRequest = async () => {
+    if (!detail || !changeMode) return;
+    if (!chgReason.trim()) { toast.error("A short reason is required"); return; }
+    if (changeMode === "adjust") {
+      if (!chgStart || !chgEnd || chgEnd < chgStart) { toast.error("Pick a valid date range"); return; }
+      if (chgBlocked.length > 0) {
+        toast.error(`Blocked: ${chgBlocked.join(", ")} ${chgBlocked.length === 1 ? "is" : "are"} at capacity.`);
+        return;
+      }
+    }
+    setBusy(true);
+    const { data: created, error } = await supabase.from("vacation_change_requests").insert({
+      leave_request_id: detail.id,
+      requested_by: me.email.toLowerCase(),
+      type: changeMode,
+      new_start_date: changeMode === "adjust" ? chgStart : null,
+      new_end_date: changeMode === "adjust" ? chgEnd : null,
+      reason: chgReason.trim(),
+      status: "pending",
+    }).select("id").maybeSingle();
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    await logAudit({
+      action: changeMode === "cancel" ? "vacation_cancellation_requested" : "vacation_adjustment_requested",
+      entity_type: "vacation_change_request",
+      entity_id: created?.id ?? null,
+      area: viewArea,
+      details: { leave_request_id: detail.id, from: [detail.start_date, detail.end_date], to: changeMode === "adjust" ? [chgStart, chgEnd] : null, reason: chgReason.trim() },
+    });
+    if (detail.approver_email) {
+      await createNotification({ data: {
+        recipient_email: detail.approver_email,
+        title: changeMode === "cancel" ? "Vacation cancellation requested" : "Vacation adjustment requested",
+        body: `${me.name}: ${detail.start_date} → ${detail.end_date}${changeMode === "adjust" ? ` ⇒ ${chgStart} → ${chgEnd}` : ""}`,
+        link: "/approvals",
+      } });
+    }
+    toast.success("Change request submitted for approval");
+    closeChange();
+    setDetail(null);
+    await load(); onDone();
+  };
+
+  const withdrawChangeRequest = async (req: ChangeReq) => {
+    setBusy(true);
+    const { error, count } = await supabase.from("vacation_change_requests")
+      .delete({ count: "exact" }).eq("id", req.id).eq("status", "pending");
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    if (!count) { toast.error("Could not withdraw — the request may already have been decided"); return; }
+    await logAudit({ action: "vacation_change_request_withdrawn", entity_type: "vacation_change_request", entity_id: req.id, area: viewArea, details: { leave_request_id: req.leave_request_id, type: req.type } });
+    toast.success("Change request withdrawn");
+    await load(); onDone();
+  };
+
   const submit = async () => {
     if (!start) return;
     const s = start, e = end ?? start;
