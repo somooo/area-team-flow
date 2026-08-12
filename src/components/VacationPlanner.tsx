@@ -19,6 +19,7 @@ import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
 import { AREAS } from "@/lib/areas";
+import { maxOffPerDay } from "@/components/VacationCapsTable";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { commitVacationImport, exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type ExistingLeave, type VacationImportPayload } from "@/lib/vacation-io";
 
