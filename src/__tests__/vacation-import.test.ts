@@ -78,4 +78,25 @@ describe("planVacationImport", () => {
     expect(out[0].payload!.existing_id).toBe("L1");
     expect(out[1].warning).toContain("Overlaps existing leave");
   });
+
+  it("skips rows that exceed the area cap, earliest start first", () => {
+    const rows = [
+      { Badge: "902682", "Vacation Start": "2026-10-12", "Vacation End": "2026-10-12" },
+      { Badge: "44707", "Vacation Start": "2026-10-11", "Vacation End": "2026-10-12" },
+    ];
+    const out = plan(rows, { capByArea: { Wards: 1 } });
+    expect(out[0].status).toBe("add"); // 11th–12th booked first
+    expect(out[1].reason).toBe("Exceeds Wards cap on 2026-10-12");
+  });
+
+  it("imports over-cap rows as overrides when allowed", () => {
+    const rows = [
+      { Badge: "44707", "Vacation Start": "2026-10-12", "Vacation End": "2026-10-12" },
+      { Badge: "902682", "Vacation Start": "2026-10-12", "Vacation End": "2026-10-12" },
+    ];
+    const out = plan(rows, { capByArea: { Wards: 1 }, overrideCap: true });
+    expect(out[1].status).toBe("add");
+    expect(out[1].payload!.over_cap).toBe(true);
+    expect(out[1].payload!.over_cap_dates).toEqual(["2026-10-12"]);
+  });
 });
