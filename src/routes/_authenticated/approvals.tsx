@@ -151,6 +151,7 @@ function ApprovalsPage() {
 
       <Card>
         <CardHeader><CardTitle>Team Leader reports</CardTitle></CardHeader>
+*** PLACEHOLDER ***
         <CardContent className="space-y-2">
           {reports.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
           {reports.map(r => (
