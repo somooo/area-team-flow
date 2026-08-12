@@ -789,6 +789,7 @@ function SupervisorPage() {
                 <div className="text-xs text-muted-foreground">{s.email}</div>
                 <div className="mt-2 flex items-center justify-between">
                   <Badge variant="secondary" className="capitalize">{s.role}</Badge>
+                  {canEditViewedArea && (
                   <Button
                     size="sm" variant="ghost" disabled={!canEditViewedArea}
                     title="Remove from schedule"
@@ -801,6 +802,7 @@ function SupervisorPage() {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
+                  )}
                 </div>
               </div>
             ))}
