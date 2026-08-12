@@ -277,7 +277,32 @@ function SupervisorPage() {
     for (const d of directory) if (!staffIdByEmail.has(d.email.toLowerCase())) staffIdByEmail.set(d.email.toLowerCase(), d.id);
     const ranges = importRanges(importMonths);
     // In replace mode nothing survives to diff against, so every parsed cell is written.
-    const source = replace ? replaceAllItems : items;
+    const allItems = replace ? replaceAllItems : items;
+
+    // One side per area / one side across areas: skipped badges never reach the database,
+    // and "move" badges have their conflicting membership cleared first.
+    const skipEmails = new Set(
+      sideConflicts.filter((c) => (conflictChoice[c.badge] ?? "skip") === "skip").map((c) => c.email),
+    );
+    const source = skipEmails.size
+      ? allItems.filter((i) => !i.payload || !skipEmails.has(i.payload.staff.email.toLowerCase()))
+      : allItems;
+    const moving = sideConflicts.filter((c) => conflictChoice[c.badge] === "move");
+    for (const c of moving) {
+      const mStart = c.monthStart;
+      const [my, mm] = mStart.split("-").map(Number);
+      const mEnd = toISODate(new Date(my, mm, 0));
+      setProgress(`Moving ${c.name} off the ${c.otherArea} ${c.otherSide} schedule…`);
+      const { error } = await supabase.from("shifts").delete()
+        .eq("area", c.otherArea).ilike("staff_email", c.email)
+        .gte("date", mStart).lte("date", mEnd);
+      if (error) throw new Error(`Could not move ${c.name}: ${error.message}`);
+      await logAudit({
+        action: "schedule_side_moved", entity_type: "schedule", entity_id: `${c.email}-${mStart}`,
+        actor_email: me?.staff?.email, actor_role: me?.staff?.role, area: viewArea,
+        details: { staff: c.name, badge: c.badge, from_area: c.otherArea, from_side: c.otherSide, to_area: viewArea, to_side: c.side, month: c.monthLabel },
+      });
+    }
 
     // Deletions first (merge mode only clears cells that were emptied in the file).
     const toDelete = replace ? [] : source.filter((i) => i.payload && !i.payload.payload && i.payload.existingId)
