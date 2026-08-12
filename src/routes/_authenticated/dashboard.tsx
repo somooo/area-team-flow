@@ -271,7 +271,7 @@ function SchedulePage() {
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
             staff={roster} shifts={shifts}
-            meEmail={isMyArea ? meStaff.email : ""}
+            meEmail={meStaff.email}
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             onCellClick={handleCell}
