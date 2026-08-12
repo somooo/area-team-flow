@@ -20,7 +20,7 @@ import { planScheduleImport, type ImportedCell } from "@/lib/schedule-import";
 import { ScheduleMappingDialog, type ScheduleImportConfig } from "@/components/ScheduleMappingDialog";
 import { logAudit } from "@/lib/audit";
 import { canManageArea, isAdmin } from "@/lib/permissions";
-import { AREAS } from "@/lib/areas";
+import { useDirectoryAreas } from "@/lib/areas";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
 import { toISODate } from "@/lib/roster";
@@ -68,7 +68,7 @@ function SupervisorPage() {
   const [changes, setChanges] = useState<ChangeReq[]>([]);
   const [reports, setReports] = useState<TlReport[]>([]);
   const [supervisors, setSupervisors] = useState<Staff[]>([]);
-  const areas = AREAS as readonly string[];
+  const { areas } = useDirectoryAreas();
   const [viewArea, setViewArea] = useState("");
   const [layer, setLayer] = useState<"day" | "night">("day");
   const [codes, setCodes] = useState<AssignmentCode[]>([]);
