@@ -25,12 +25,24 @@ describe("parseCellCode", () => {
 
   it("consumes the overtime suffix and stores only the base code", () => {
     const r = parseCellCode("A3|BOT", CODES, 12);
-    expect(r).toMatchObject({ ok: true, cell: { duty: "Day", unit_code: "3", ot_type: "BuiltIn" } });
+    expect(r).toMatchObject({ ok: true, cell: { duty: "Day", unit_code: "A3", ot_type: "BuiltIn" } });
     expect(JSON.stringify(r)).not.toContain("BOT|");
   });
 
-  it("keeps the s prefix as a sick tag on the base code", () => {
-    expect(parseCellCode("sA3", CODES, 12)).toMatchObject({ ok: true, cell: { unit_code: "3", sick_tag: true } });
+  it("reads the lowercase s prefix as a night shift, not part of the code", () => {
+    expect(parseCellCode("sA3", CODES, 12)).toMatchObject({
+      ok: true,
+      cell: { unit_code: "A3", duty: "Night", sick_tag: false },
+    });
+  });
+
+  it("stores zone D codes verbatim without a day/night letter", () => {
+    const D = [code({ code: "D1", unit_code: "D1" }), code({ code: "D8", unit_code: "D8" })];
+    expect(parseCellCode("D1", D, 12)).toMatchObject({ ok: true, cell: { unit_code: "D1", duty: "Day" } });
+    expect(parseCellCode("sD1|BOT", D, 12)).toMatchObject({
+      ok: true,
+      cell: { unit_code: "D1", duty: "Night", ot_type: "BuiltIn" },
+    });
   });
 
   it("reports an unrecognised suffix instead of dropping the cell", () => {
@@ -40,21 +52,34 @@ describe("parseCellCode", () => {
   it("treats MOT as a standalone MedEvac entry", () => {
     expect(parseCellCode("MOT", CODES, 12)).toMatchObject({ ok: true, cell: { ot_type: "MedEvac", unit_code: null } });
     expect(parseCellCode("A3|MOT", CODES, 12)).toMatchObject({ ok: false });
-    const sick = parseCellCode("sMOT", CODES, 12);
-    expect(sick.ok).toBe(false);
-    expect(!sick.ok && sick.reason).toMatch(/sick leave/i);
+    expect(parseCellCode("sMOT", CODES, 12)).toMatchObject({
+      ok: true,
+      cell: { ot_type: "MedEvac", duty: "Night" },
+    });
   });
 
   it("round-trips through exportCell without losing the overtime type", () => {
     const shift = {
       id: "1", staff_email: "a@b.c", staff_name: "A", area: "Wards", date: "2026-08-03",
       shift_type: "Morning", hours: 12, is_overtime: true, notes: null,
-      unit_code: "3", duty: "Day", ot_type: "BuiltIn", sick_tag: false,
+      unit_code: "A3", duty: "Day", ot_type: "BuiltIn", sick_tag: false,
     } as RosterShift;
     const out = exportCell(shift, false);
-    expect(out.display).toBe("D3");
-    const back = parseCellCode(out.raw, [code({ code: "A3", unit_code: "3" })], 12);
-    expect(back).toMatchObject({ ok: true, cell: { duty: "Day", unit_code: "3", ot_type: "BuiltIn", sick_tag: false } });
+    expect(out.display).toBe("A3");
+    expect(out.raw).toBe("A3|BOT");
+    const back = parseCellCode(out.raw, [code({ code: "A3", unit_code: "A3" })], 12);
+    expect(back).toMatchObject({ ok: true, cell: { duty: "Day", unit_code: "A3", ot_type: "BuiltIn", sick_tag: false } });
+  });
+
+  it("round-trips a night code with its s prefix and overtime suffix", () => {
+    const D = [code({ code: "D1", unit_code: "D1" })];
+    const parsed = parseCellCode("sD1|BOT", D, 12);
+    const shift = {
+      id: "1", staff_email: "a@b.c", staff_name: "A", area: "Wards", date: "2026-08-03",
+      shift_type: "Night", hours: 12, is_overtime: true, notes: null,
+      ...(parsed.ok ? parsed.cell : {}),
+    } as unknown as RosterShift;
+    expect(exportCell(shift, false).raw).toBe("sD1|BOT");
   });
 });
 
