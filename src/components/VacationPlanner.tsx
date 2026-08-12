@@ -742,10 +742,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
               });
             }}
             commit={async (items: ImportItem<VacationImportPayload>[], { setProgress }) => {
-              if (items.length === 0) return { written: 0, failures: [] };
+              if (items.length === 0) return { attempted: 0, written: 0, confirmed: 0, failures: [] };
               const overrides = items.filter((i) => i.payload?.over_cap);
               const reason = importOverrideReason.trim() || `Excel import by ${me.name ?? me.email}`;
-              const { written, errors } = await commitVacationImport(items, {
+              const { written, attempted, confirmed, errors } = await commitVacationImport(items, {
                 approverEmail: me.email,
                 setProgress,
                 overrideReason: reason,
@@ -780,18 +780,20 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
                 .map((c) => `${c.date} (${c.count}/${c.cap}) · ${c.area}`);
               setImportOverCapSummary(summary);
-              if (written > 0) {
+              if (confirmed > 0) {
                 await logAudit({ action: "vacations_imported", entity_type: "leave_request", area: viewArea, details: { count: written } });
                 toast.success(
                   summary.length > 0
-                    ? `Imported ${written} rows. ${summary.length} day${summary.length === 1 ? "" : "s"} now exceed the cap: ${summary.slice(0, 3).join(", ")}${summary.length > 3 ? "…" : ""}`
-                    : `${written} vacation row${written === 1 ? "" : "s"} imported`,
+                    ? `Imported ${confirmed} of ${attempted} rows. ${summary.length} day${summary.length === 1 ? "" : "s"} now exceed the cap: ${summary.slice(0, 3).join(", ")}${summary.length > 3 ? "…" : ""}`
+                    : `${confirmed} of ${attempted} vacation row${attempted === 1 ? "" : "s"} imported`,
                 );
                 await load(); onDone();
               }
               if (errors.length > 0) console.error("[vacation import] row failures", errors);
               return {
+                attempted,
                 written,
+                confirmed,
                 failures: errors.map((e) => `Badge ${e.badge} · ${e.name} · ${e.range} — ${e.message}`),
               };
             }}
