@@ -169,15 +169,25 @@ function SupervisorPage() {
     if (!canManage || !viewArea) return;
     const start = toISODate(new Date(year, month, 1));
     const end = toISODate(new Date(year, month + 1, 0));
-    const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }, { data: tl }] = await Promise.all([
+    const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }, { data: tl }, { data: allStaff }, vac] = await Promise.all([
       supabase.from("shifts").select("*").eq("area", viewArea).gte("date", start).lte("date", end).order("date"),
       supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active,badge_id").eq("area", viewArea).order("name"),
       supabase.from("leave_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("schedule_change_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active").eq("role", "supervisor"),
       supabase.from("team_leader_reports").select("*").eq("area", viewArea).order("shift_date", { ascending: false }).limit(30),
+      supabase.from("staff").select("email,area"),
+      fetchVacationDays(start, end),
     ]);
     setShifts((sh as Shift[]) ?? []);
+    setVacationKeys(vac.keys);
+    setHomeAreas(
+      Object.fromEntries(
+        ((allStaff ?? []) as { email: string | null; area: string | null }[])
+          .filter((s) => s.email)
+          .map((s) => [s.email!.toLowerCase(), s.area]),
+      ),
+    );
     const staffRows = (st as (Staff & { badge_id?: string | null })[]) ?? [];
     setStaff(staffRows as Staff[]);
     setBadges(Object.fromEntries(staffRows.filter((s) => s.badge_id).map((s) => [s.email.toLowerCase(), String(s.badge_id)])));
