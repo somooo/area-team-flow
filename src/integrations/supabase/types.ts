@@ -154,6 +154,7 @@ export type Database = {
           created_at: string
           end_date: string
           id: string
+          import_source: string | null
           leave_type: Database["public"]["Enums"]["leave_type"]
           over_cap_by: string | null
           over_cap_override: boolean
@@ -176,6 +177,7 @@ export type Database = {
           created_at?: string
           end_date: string
           id?: string
+          import_source?: string | null
           leave_type: Database["public"]["Enums"]["leave_type"]
           over_cap_by?: string | null
           over_cap_override?: boolean
@@ -198,6 +200,7 @@ export type Database = {
           created_at?: string
           end_date?: string
           id?: string
+          import_source?: string | null
           leave_type?: Database["public"]["Enums"]["leave_type"]
           over_cap_by?: string | null
           over_cap_override?: boolean

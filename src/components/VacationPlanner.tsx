@@ -132,6 +132,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [editEnd, setEditEnd] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
   const [importOverrideReason, setImportOverrideReason] = useState("");
+  const [importOverCapSummary, setImportOverCapSummary] = useState<string[]>([]);
   const [changeByLeave, setChangeByLeave] = useState<Record<string, ChangeReq>>({});
   const [changeMode, setChangeMode] = useState<null | "cancel" | "adjust">(null);
   const [chgStart, setChgStart] = useState("");
@@ -694,19 +695,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
             description="Required columns: Badge, Vacation Start, Vacation End. Staff Name / Area / Status are optional — names and areas always come from the staff directory, matched by badge number."
             toggles={[
               { key: "allAreas", label: "Import all areas", description: "Ignore the area filter and import every badge found in the directory." },
-              ...(me.role === "admin"
-                ? [{ key: "overrideCap", label: "Import over cap as override", description: "Import rows that exceed an area's daily cap. A reason is required and every override is logged to Audit." }]
-                : []),
             ]}
             extraSummary={(items) => {
               const overrides = items.filter((i) => i.status !== "skip" && i.payload?.over_cap);
               if (overrides.length === 0) return null;
               return (
-                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-1">
-                  <p className="text-[11px] text-destructive">
-                    {overrides.length} row{overrides.length === 1 ? "" : "s"} exceed the area cap and will be imported as over-cap overrides.
+                <div className="rounded-md border border-copper/40 bg-copper/5 p-2 space-y-1">
+                  <p className="text-[11px] text-ink">
+                    {overrides.length} row{overrides.length === 1 ? "" : "s"} exceed an area cap. Caps are request-time rules only — these rows will still be imported, tagged over-cap and logged to Audit.
                   </p>
-                  <Label className="text-xs">Override reason (required)</Label>
+                  <Label className="text-xs">Note (optional)</Label>
                   <Input value={importOverrideReason} onChange={(e) => setImportOverrideReason(e.target.value)} placeholder="Why is the cap being exceeded?" />
                 </div>
               );
@@ -740,19 +738,17 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 existing: (lv ?? []) as ExistingLeave[],
                 capByArea,
                 countsPending,
-                overrideCap: me.role === "admin" && !!toggles["overrideCap"],
+                bypassCaps: true,
               });
             }}
             commit={async (items: ImportItem<VacationImportPayload>[], { setProgress }) => {
               if (items.length === 0) return { written: 0, failures: [] };
               const overrides = items.filter((i) => i.payload?.over_cap);
-              if (overrides.length > 0 && !importOverrideReason.trim()) {
-                throw new Error("An override reason is required to import rows over the cap");
-              }
+              const reason = importOverrideReason.trim() || `Excel import by ${me.name ?? me.email}`;
               const { written, errors } = await commitVacationImport(items, {
                 approverEmail: me.email,
                 setProgress,
-                overrideReason: importOverrideReason,
+                overrideReason: reason,
               });
               for (const o of overrides) {
                 await logAudit({
@@ -766,13 +762,31 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                     start_date: o.payload!.start_date,
                     end_date: o.payload!.end_date,
                     blocked_dates: o.payload!.over_cap_dates ?? [],
-                    reason: importOverrideReason.trim(),
+                    over_cap_counts: o.payload!.over_cap_counts ?? [],
+                    reason,
                   },
                 });
               }
+              // Surface the resulting over-capacity days instead of hiding them.
+              const worst = new Map<string, { area: string; date: string; count: number; cap: number }>();
+              for (const o of overrides) {
+                for (const c of o.payload!.over_cap_counts ?? []) {
+                  const k = `${c.area}\u0000${c.date}`;
+                  const prev = worst.get(k);
+                  if (!prev || c.count > prev.count) worst.set(k, c);
+                }
+              }
+              const summary = [...worst.values()]
+                .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+                .map((c) => `${c.date} (${c.count}/${c.cap}) · ${c.area}`);
+              setImportOverCapSummary(summary);
               if (written > 0) {
                 await logAudit({ action: "vacations_imported", entity_type: "leave_request", area: viewArea, details: { count: written } });
-                toast.success(`${written} vacation row${written === 1 ? "" : "s"} imported`);
+                toast.success(
+                  summary.length > 0
+                    ? `Imported ${written} rows. ${summary.length} day${summary.length === 1 ? "" : "s"} now exceed the cap: ${summary.slice(0, 3).join(", ")}${summary.length > 3 ? "…" : ""}`
+                    : `${written} vacation row${written === 1 ? "" : "s"} imported`,
+                );
                 await load(); onDone();
               }
               if (errors.length > 0) console.error("[vacation import] row failures", errors);
@@ -791,6 +805,21 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
           >
             Export to Excel
           </Button>
+        </div>
+      )}
+
+      {canManage && importOverCapSummary.length > 0 && (
+        <div className="rounded-md border border-copper/40 bg-copper/5 p-3 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-ink">
+              {importOverCapSummary.length} day{importOverCapSummary.length === 1 ? "" : "s"} now exceed the area cap after the import
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => setImportOverCapSummary([])}>Dismiss</Button>
+          </div>
+          <ul className="text-[11px] text-muted-foreground space-y-0.5 max-h-32 overflow-auto">
+            {importOverCapSummary.map((s) => <li key={s}>{s}</li>)}
+          </ul>
+          <p className="text-[10px] text-muted-foreground">Those days stay locked on the calendar, so nobody can add to them.</p>
         </div>
       )}
 
