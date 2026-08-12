@@ -4,13 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { logAudit } from "@/lib/audit";
-import { AREAS } from "@/lib/areas";
+import { SUPERVISORS_TEAM, UNASSIGNED_AREA } from "@/lib/areas";
 
 type Cap = { id: string; area: string; cap_pct: number; warn_pct: number };
 type StaffRow = { area: string | null; role: string; status: string | null };
-
-/** Rows shown, in fixed order. "Supervisor" counts supervisors across all areas. */
-const CAP_ROWS = ["Supervisor", ...AREAS] as const;
 
 export function maxOffPerDay(activeStaff: number, capPct: number): number {
   return Math.max(1, Math.floor((activeStaff * capPct) / 100));
