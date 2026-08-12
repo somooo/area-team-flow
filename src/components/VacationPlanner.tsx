@@ -325,6 +325,11 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   /** Staff-initiated change request against their own booked vacation. Never mutates the vacation. */
   const submitChangeRequest = async () => {
     if (!detail || !changeMode) return;
+    const dl = changeDeadline(detail.start_date);
+    if (dl.passed) {
+      toast.error(`The deadline to change ${dl.monthName} leave was ${dl.label}. Contact your supervisor.`);
+      return;
+    }
     if (!chgReason.trim()) { toast.error("A short reason is required"); return; }
     if (changeMode === "adjust") {
       if (!chgStart || !chgEnd || chgEnd < chgStart) { toast.error("Pick a valid date range"); return; }
