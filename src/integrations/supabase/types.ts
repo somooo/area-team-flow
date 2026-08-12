@@ -481,6 +481,7 @@ export type Database = {
           prev_unit_code: string | null
           shift_type: Database["public"]["Enums"]["shift_type"]
           sick_tag: boolean
+          sort_order: number
           staff_email: string
           staff_id: string | null
           staff_name: string
@@ -507,6 +508,7 @@ export type Database = {
           prev_unit_code?: string | null
           shift_type: Database["public"]["Enums"]["shift_type"]
           sick_tag?: boolean
+          sort_order?: number
           staff_email: string
           staff_id?: string | null
           staff_name: string
@@ -533,6 +535,7 @@ export type Database = {
           prev_unit_code?: string | null
           shift_type?: Database["public"]["Enums"]["shift_type"]
           sick_tag?: boolean
+          sort_order?: number
           staff_email?: string
           staff_id?: string | null
           staff_name?: string
@@ -840,6 +843,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      zone_assignments: {
+        Row: {
+          area: string
+          assignment_no: string
+          created_at: string
+          id: string
+          sort_order: number
+          unit: string
+          updated_at: string
+          zone: string
+        }
+        Insert: {
+          area: string
+          assignment_no: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          unit: string
+          updated_at?: string
+          zone: string
+        }
+        Update: {
+          area?: string
+          assignment_no?: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          unit?: string
+          updated_at?: string
+          zone?: string
+        }
+        Relationships: []
       }
       zone_reference: {
         Row: {

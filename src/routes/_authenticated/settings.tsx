@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { logAudit } from "@/lib/audit";
 import VacationCapsTable from "@/components/VacationCapsTable";
+import ZoneMapTable from "@/components/ZoneMapTable";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "System rules — KADIR Staff Management" }] }),
@@ -146,6 +147,15 @@ function SettingsPage() {
         </CardHeader>
         <CardContent>
           <VacationCapsTable actorEmail={me?.staff?.email} />
+        </CardContent>
+      </Card>
+
+      <Card id="zone-map">
+        <CardHeader>
+          <CardTitle>Zone map (assignment number → unit → zone)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ZoneMapTable actorEmail={me?.staff?.email} />
         </CardContent>
       </Card>
 

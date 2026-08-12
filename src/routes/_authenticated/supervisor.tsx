@@ -16,14 +16,20 @@ import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
-import {
-  planScheduleImport,
-  type ImportedCell,
-  type DirectoryPerson as ImportDirectoryPerson,
-  type MissingPerson,
+import type {
+  DirectoryPerson as ImportDirectoryPerson,
+  MissingPerson,
 } from "@/lib/schedule-import";
+import {
+  detectSheetLayout,
+  planSheetImport,
+  type SheetCell,
+  type SheetSource,
+  type SheetPlanResult,
+} from "@/lib/sheet-schedule-import";
+import { buildScheduleGroups, fetchZoneAssignments, type ZoneAssignment } from "@/lib/zones";
 import { normalizeBadge, isProtectedTest } from "@/lib/staff-import";
-import { ScheduleMappingDialog, type ScheduleImportConfig } from "@/components/ScheduleMappingDialog";
+import { SheetMappingDialog, type SheetImportConfig } from "@/components/SheetMappingDialog";
 import { logAudit } from "@/lib/audit";
 import { canManageArea, isAdmin } from "@/lib/permissions";
 import { useDirectoryAreas } from "@/lib/areas";
@@ -83,7 +89,13 @@ function SupervisorPage() {
   const [pending, setPending] = useState<Record<string, PendingEdit>>({});
   const [saving, setSaving] = useState(false);
   const [badges, setBadges] = useState<Record<string, string>>({});
-  const [importConfig, setImportConfig] = useState<ScheduleImportConfig | null>(null);
+  const [importConfig, setImportConfig] = useState<SheetImportConfig | null>(null);
+  const [importMonths, setImportMonths] = useState<{ year: number; month: number }[]>([]);
+  const [zones, setZones] = useState<ZoneAssignment[]>([]);
+  const [sheetSummary, setSheetSummary] = useState<Pick<
+    SheetPlanResult,
+    "perSheet" | "crossSheetWarnings" | "unmappedNumbers" | "bothSheets" | "warnings"
+  > | null>(null);
   const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
   const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
   const [directory, setDirectory] = useState<ImportDirectoryPerson[]>([]);
@@ -93,7 +105,7 @@ function SupervisorPage() {
   const [removalPreview, setRemovalPreview] = useState<{ name: string; badge: string }[]>([]);
   const [scopeWarning, setScopeWarning] = useState<string | null>(null);
   /** Every non-blank cell in the file, used when the import replaces the whole month. */
-  const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<ImportedCell>[]>([]);
+  const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<SheetCell>[]>([]);
 
   const role = me?.staff?.role;
   const admin = isAdmin(me?.staff);
@@ -110,6 +122,7 @@ function SupervisorPage() {
     if (!viewArea) return;
     void fetchAssignmentCodes(viewArea).then(setCodes);
     void fetchZoneReference(viewArea).then(setReference);
+    void fetchZoneAssignments(viewArea).then(setZones);
   }, [viewArea]);
 
   /** The whole directory is the match source for imports — not just this area's roster. */
@@ -203,8 +216,15 @@ function SupervisorPage() {
       const dir = directory.find((d) => d.email.toLowerCase() === k);
       map.set(k, dir ?? { id: k, name: sh.staff_name, email: sh.staff_email, role: "staff", area: viewArea, department: null });
     }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    // Display order comes from the imported sheet order, never from the alphabet.
+    return Array.from(map.values());
   }, [staff, mergedShifts, directory, viewArea]);
+
+  /** Zone separator rows with the Excel row order preserved inside each zone. */
+  const gridGroups = useMemo(
+    () => buildScheduleGroups({ staff: gridStaff, shifts: mergedShifts, zones }),
+    [gridStaff, mergedShifts, zones],
+  );
 
   if (!me?.staff) return null;
   if (!canManage) return <p>Supervisor / admin access only.</p>;
@@ -215,10 +235,10 @@ function SupervisorPage() {
     setEditor(null);
   };
 
-  /** The month(s) the confirmed mapping covers, as ISO date ranges. */
-  const importRanges = (config: ScheduleImportConfig | null) => {
+  /** The month(s) the mapped sheets cover, as ISO date ranges. */
+  const importRanges = (months: { year: number; month: number }[]) => {
     const seen = new Map<string, { year: number; month: number }>();
-    for (const b of config?.blocks ?? []) seen.set(`${b.year}-${b.month}`, { year: b.year, month: b.month });
+    for (const b of months) seen.set(`${b.year}-${b.month}`, { year: b.year, month: b.month });
     return Array.from(seen.values()).map((m) => ({
       ...m,
       start: toISODate(new Date(m.year, m.month, 1)),
@@ -229,13 +249,13 @@ function SupervisorPage() {
 
   /** Bulk apply an imported grid after the mapping and preview steps. */
   const commitScheduleImport = async (
-    items: ImportItem<ImportedCell>[],
+    items: ImportItem<SheetCell>[],
     { replace, setProgress }: { replace: boolean; setProgress: (t: string | null) => void },
   ) => {
     const staffIdByEmail = new Map<string, string>();
     for (const s of staff) staffIdByEmail.set(s.email.toLowerCase(), s.id);
     for (const d of directory) if (!staffIdByEmail.has(d.email.toLowerCase())) staffIdByEmail.set(d.email.toLowerCase(), d.id);
-    const ranges = importRanges(importConfig);
+    const ranges = importRanges(importMonths);
     // In replace mode nothing survives to diff against, so every parsed cell is written.
     const source = replace ? replaceAllItems : items;
 
@@ -265,6 +285,7 @@ function SupervisorPage() {
           sick_tag: p.sick_tag,
           hours: p.hours,
           shift_type: (p.duty === "Night" ? "Night" : p.duty === "Day" ? "Morning" : "Off") as "Morning" | "Night" | "Off",
+          sort_order: c.order,
         };
       });
 
@@ -326,8 +347,9 @@ function SupervisorPage() {
             area: viewArea, year: r.year, month: r.month,
             cells_written: rows.length,
             staff_rows: new Set(rows.map((x) => x.staff_email)).size,
-            blocks: importConfig?.blocks.length ?? 0,
-            profile_used: importConfig?.sheetName ?? null,
+            side: importConfig?.side ?? null,
+            day_sheet: importConfig?.daySheet ?? null,
+            night_sheet: importConfig?.nightSheet ?? null,
           },
         });
       }
@@ -546,17 +568,13 @@ function SupervisorPage() {
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             {canEditViewedArea && (
-            <ExcelImportButton<ImportedCell, ScheduleImportConfig>
+            <ExcelImportButton<SheetCell, SheetImportConfig>
               title={`Import ${viewArea} schedule`}
-              description="Read from cell text only — colour is applied by the app from the overtime type. Re-importing an untouched export produces no changes."
+              description="Two-sheet format: row 1 holds the dates, column A the name and column B the badge. Day rows go to the Day schedule and Night rows to the Night schedule — codes are stored exactly as written."
               disabled={!canEditViewedArea}
               configure={({ input, onConfirm, onCancel }) => (
-                <ScheduleMappingDialog
+                <SheetMappingDialog
                   input={input}
-                  area={viewArea}
-                  codes={codes}
-                  uiYear={year}
-                  uiMonth={month}
                   onCancel={onCancel}
                   onConfirm={(cfg) => { setImportConfig(cfg); onConfirm(cfg); }}
                 />
@@ -584,11 +602,46 @@ function SupervisorPage() {
                   <p className="text-muted-foreground">
                     Scope: <span className="font-medium text-foreground">{viewArea}</span> ·{" "}
                     <span className="font-medium text-foreground">{replaceInfo.label || monthLabel(year, month)}</span> ·{" "}
-                    <span className="font-medium text-foreground">{isAssistants ? "single grid" : effectiveLayer === "night" ? "Night" : "Day"}</span>
+                    <span className="font-medium text-foreground">
+                      {importConfig?.side === "both" ? "Day + Night" : importConfig?.side === "night" ? "Night only" : "Day only"}
+                    </span>
                   </p>
+                  {(sheetSummary?.perSheet ?? []).map((s) => (
+                    <p key={s.side} className="text-muted-foreground">
+                      <span className="font-medium text-foreground capitalize">{s.side}</span> · sheet “{s.sheetName}” ·{" "}
+                      {s.dateCols} date columns · {s.rows} staff rows · {s.matched} matched to the directory
+                      {s.blankRowsSkipped > 0 ? ` · ${s.blankRowsSkipped} blank rows skipped` : ""}
+                    </p>
+                  ))}
+                  {(sheetSummary?.warnings ?? []).map((w) => (
+                    <p key={w} className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      {w}
+                    </p>
+                  ))}
                   {scopeWarning && (
                     <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
                       {scopeWarning}
+                    </p>
+                  )}
+                  {(sheetSummary?.crossSheetWarnings.length ?? 0) > 0 && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      <p className="font-medium">
+                        {sheetSummary!.crossSheetWarnings.length} code{sheetSummary!.crossSheetWarnings.length === 1 ? "" : "s"} look like they belong to the other sheet
+                      </p>
+                      <ul>
+                        {sheetSummary!.crossSheetWarnings.slice(0, 10).map((w) => <li key={w}>{w}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {(sheetSummary?.unmappedNumbers.length ?? 0) > 0 && (
+                    <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      Assignment numbers with no zone mapped: {sheetSummary!.unmappedNumbers.join(", ")} — these staff are grouped under “Unassigned”.{" "}
+                      <a className="underline" href="/settings#zone-map">Edit the zone map in Settings</a>
+                    </p>
+                  )}
+                  {(sheetSummary?.bothSheets.length ?? 0) > 0 && (
+                    <p className="text-muted-foreground">
+                      {sheetSummary!.bothSheets.length} badge{sheetSummary!.bothSheets.length === 1 ? "" : "s"} appear on both sheets: {sheetSummary!.bothSheets.join(", ")}
                     </p>
                   )}
                   {addedToSchedule.length > 0 && (
@@ -600,7 +653,7 @@ function SupervisorPage() {
                   {missingPeople.length > 0 && (
                     <div className="rounded-md border p-2 space-y-2">
                       <p className="font-medium">
-                        {missingPeople.length} badge{missingPeople.length === 1 ? "" : "s"} not in the directory — needs a directory record
+                        {missingPeople.length} badge{missingPeople.length === 1 ? "" : "s"} not in the directory — review and add them there first
                       </p>
                       <ul className="text-muted-foreground">
                         {missingPeople.map((m) => (
@@ -612,27 +665,44 @@ function SupervisorPage() {
                       </Button>
                     </div>
                   )}
-                  {labelRowsSkipped > 0 && (
-                    <p className="text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
-                  )}
                 </div>
               )}
               parse={async (input, config) => {
                 if (!config) return [];
-                const matrix = input.workbook.sheets[config.sheetName] ?? [];
+                const sources: SheetSource[] = [];
+                if (config.side !== "night" && config.daySheet) {
+                  const m = input.workbook.sheets[config.daySheet] ?? [];
+                  sources.push({ side: "day", matrix: m, layout: detectSheetLayout(m, config.daySheet, "day") });
+                }
+                if (config.side !== "day" && config.nightSheet) {
+                  const m = input.workbook.sheets[config.nightSheet] ?? [];
+                  sources.push({ side: "night", matrix: m, layout: detectSheetLayout(m, config.nightSheet, "night") });
+                }
                 const common = {
-                  matrix, blocks: config.blocks, staff: staff as StaffLite[], badges, directory,
-                  shifts, codes, codeMap: config.codeMap,
+                  sources,
+                  staff: staff as StaffLite[],
+                  directory,
+                  shifts,
+                  knownAssignmentNumbers: new Set(zones.map((z) => z.assignment_no)),
                 };
-                const diff = planScheduleImport({ ...common, replace: false });
-                const full = planScheduleImport({ ...common, replace: true });
-                setLabelRowsSkipped(diff.labelRowsSkipped);
+                const diff = planSheetImport({ ...common, replace: false });
+                const full = planSheetImport({ ...common, replace: true });
+                setLabelRowsSkipped(0);
                 setMissingPeople(full.missing);
                 setAddedToSchedule(full.addedToSchedule);
                 setReplaceAllItems(full.items.filter((i) => i.status !== "skip"));
+                setSheetSummary({
+                  perSheet: full.perSheet,
+                  crossSheetWarnings: full.crossSheetWarnings,
+                  unmappedNumbers: full.unmappedNumbers,
+                  bothSheets: full.bothSheets,
+                  warnings: Array.from(new Set(full.warnings)),
+                });
 
-                const ranges = importRanges(config);
-                const off = config.blocks.filter((b) => b.year !== year || b.month !== month);
+                const months = sources.map((s) => ({ year: s.layout.year, month: s.layout.month }));
+                setImportMonths(months);
+                const ranges = importRanges(months);
+                const off = months.filter((b) => b.year !== year || b.month !== month);
                 setScopeWarning(
                   off.length
                     ? `The file contains dates outside ${monthLabel(year, month)} (${off
@@ -733,6 +803,7 @@ function SupervisorPage() {
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             pendingKeys={pendingKeys}
+            groups={gridGroups}
             onCellClick={canEditViewedArea ? ({ staff: s, date, shift }) => setEditor({ staff: s, date, shift }) : undefined}
           />
           )}
