@@ -238,8 +238,13 @@ export type SheetPlanResult = {
   crossSheetWarnings: string[];
   unmappedNumbers: string[];
   bothSheets: string[];
-  perSheet: { side: SheetSide; sheetName: string; rows: number; matched: number; dateCols: number; blankRowsSkipped: number }[];
+  perSheet: {
+    side: SheetSide; sheetName: string; rows: number; matched: number; dateCols: number;
+    blankRowsSkipped: number; monthLabel: string; firstDate: string | null; lastDate: string | null;
+  }[];
   warnings: string[];
+  /** Inclusive date range every written row must fall inside. */
+  range: { start: string; end: string } | null;
 };
 
 export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
@@ -266,6 +271,16 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
     const { layout, matrix, side } = src;
     warnings.push(...layout.warnings);
     let matched = 0;
+
+    // Fail loudly: a header date outside the detected month means the date
+    // handling is wrong, and nothing may be written.
+    if (layout.outOfMonth.length) {
+      const bad = layout.outOfMonth[0];
+      throw new Error(
+        `Date check failed on sheet "${layout.sheetName}": column ${bad.col + 1} has header “${bad.header}” which reads as ${bad.iso}, outside ${monthLabelOf(layout.year, layout.month)}. Import aborted — no rows were written.`,
+      );
+    }
+    const monthPrefix = `${layout.year}-${String(layout.month).padStart(2, "0")}-`;
 
     for (const row of layout.rows) {
       const member = row.badge ? byBadge.get(row.badge) : undefined;
@@ -294,6 +309,11 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
       if (!onSchedule.has(member.email.toLowerCase())) added.set(member.email.toLowerCase(), member);
 
       for (const dc of layout.dateCols) {
+        if (!dc.iso.startsWith(monthPrefix)) {
+          throw new Error(
+            `Date check failed on sheet "${layout.sheetName}": column ${dc.col + 1} was about to be written as ${dc.iso}, outside ${monthLabelOf(layout.year, layout.month)}. Import aborted — no rows were written.`,
+          );
+        }
         const raw = text(matrix[row.row]?.[dc.col]);
         const existing = current.get(`${member.email.toLowerCase()}|${dc.iso}`);
         if (!raw) continue;
@@ -346,12 +366,18 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
       matched,
       dateCols: layout.dateCols.length,
       blankRowsSkipped: layout.blankRowsSkipped,
+      monthLabel: monthLabelOf(layout.year, layout.month),
+      firstDate: layout.firstDate,
+      lastDate: layout.lastDate,
     });
   }
 
   const bothSheets = Array.from(seenByBadgeSide.entries())
     .filter(([, sides]) => sides.size > 1)
     .map(([badge]) => badge);
+
+  const allDates = input.sources.flatMap((s) => s.layout.dateCols.map((d) => d.iso)).sort();
+  const range = allDates.length ? { start: allDates[0], end: allDates[allDates.length - 1] } : null;
 
   return {
     items,
@@ -362,5 +388,6 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
     bothSheets,
     perSheet,
     warnings,
+    range,
   };
 }
