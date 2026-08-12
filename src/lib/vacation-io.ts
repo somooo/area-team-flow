@@ -3,6 +3,7 @@ import type { ImportItem } from "@/components/ExcelImportButton";
 import { downloadSheet, field, toISODateValue } from "@/lib/xlsx-io";
 import { countVacationDays } from "@/lib/hours-model";
 import type { AppRole } from "@/lib/permissions";
+import { UNASSIGNED_AREA } from "@/lib/areas";
 
 export type VacationRow = {
   id: string;

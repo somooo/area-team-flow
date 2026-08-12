@@ -18,7 +18,7 @@ import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
-import { AREAS } from "@/lib/areas";
+import { useDirectoryAreas, UNASSIGNED_AREA } from "@/lib/areas";
 import { maxOffPerDay } from "@/components/VacationCapsTable";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { commitVacationImport, exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type ExistingLeave, type VacationImportPayload } from "@/lib/vacation-io";
@@ -89,9 +89,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const { rules } = useSystemRules();
   const canSwitchArea = me.role !== "staff";
   const canSeeSupervisorsCalendar = canUseSupervisorsCalendar(me);
-  const areas = AREAS as readonly string[];
+  const { areas } = useDirectoryAreas();
+  const myArea = me.role === "supervisor" ? SUPERVISORS_AREA : (me.area ?? UNASSIGNED_AREA);
   const [viewArea, setViewArea] = useState<string>(
-    me.role === "supervisor" || me.role === "admin" ? SUPERVISORS_AREA : (me.area ?? ""),
+    me.role === "supervisor" || me.role === "admin" ? SUPERVISORS_AREA : myArea,
   );
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
@@ -118,7 +119,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [importOverrideReason, setImportOverrideReason] = useState("");
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
-  const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === me.area;
+  const isUnassignedView = viewArea === UNASSIGNED_AREA;
+  const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === myArea;
   /** Supervisors manage their own area; admins manage every area including the supervisors calendar. */
   const canManage = canManageVacationsIn(me, viewArea, SUPERVISORS_AREA);
 
