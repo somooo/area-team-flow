@@ -132,6 +132,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [editEnd, setEditEnd] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
   const [importOverrideReason, setImportOverrideReason] = useState("");
+  const [importOverCapSummary, setImportOverCapSummary] = useState<string[]>([]);
   const [changeByLeave, setChangeByLeave] = useState<Record<string, ChangeReq>>({});
   const [changeMode, setChangeMode] = useState<null | "cancel" | "adjust">(null);
   const [chgStart, setChgStart] = useState("");
