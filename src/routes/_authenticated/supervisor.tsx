@@ -558,25 +558,84 @@ function SupervisorPage() {
                 />
               )}
               replaceOption={{
-                label: `Replace the whole month — delete every existing shift for ${viewArea} in ${replaceInfo.label || "the imported month"} (day and night) before importing`,
-                description: `${replaceInfo.count} existing shift${replaceInfo.count === 1 ? "" : "s"} in ${viewArea} · ${replaceInfo.label || "the imported month"} will be deleted. Staff not listed in the file will be cleared too. Leave unchecked to merge only the differences.`,
+                mergeLabel: "Merge — keep everyone currently on the schedule",
+                mergeDescription: "Adds the new staff and overwrites only the assignments for dates present in the file. Nobody is removed.",
+                label: `Replace — the file becomes the full ${viewArea} roster for ${replaceInfo.label || "the imported month"}`,
+                description: `${replaceInfo.count} existing shift${replaceInfo.count === 1 ? "" : "s"} in ${viewArea} · ${replaceInfo.label || "the imported month"} will be cleared first. Staff absent from the file are removed from this schedule only — their Staff Directory record is never changed.`,
+                extra: removalPreview.length > 0 ? (
+                  <span className="mt-2 block rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                    <span className="font-medium block text-destructive">
+                      {removalPreview.length} staff will be removed from this schedule
+                    </span>
+                    <span className="block text-muted-foreground">
+                      {removalPreview.map((p) => `${p.name}${p.badge ? ` (${p.badge})` : ""}`).join(", ")}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="mt-2 block text-muted-foreground">Nobody currently on the schedule is missing from the file.</span>
+                ),
               }}
-              extraSummary={() => labelRowsSkipped > 0
-                ? <p className="text-xs text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
-                : null}
+              extraSummary={() => (
+                <div className="space-y-2 text-xs">
+                  <p className="text-muted-foreground">
+                    Scope: <span className="font-medium text-foreground">{viewArea}</span> ·{" "}
+                    <span className="font-medium text-foreground">{replaceInfo.label || `${MONTHS[month]} ${year}`}</span> ·{" "}
+                    <span className="font-medium text-foreground">{isAssistants ? "single grid" : effectiveLayer === "night" ? "Night" : "Day"}</span>
+                  </p>
+                  {scopeWarning && (
+                    <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      {scopeWarning}
+                    </p>
+                  )}
+                  {addedToSchedule.length > 0 && (
+                    <p className="text-muted-foreground">
+                      {addedToSchedule.length} staff will be added to this schedule from the directory:{" "}
+                      {addedToSchedule.map((s) => s.name).join(", ")}
+                    </p>
+                  )}
+                  {missingPeople.length > 0 && (
+                    <div className="rounded-md border p-2 space-y-2">
+                      <p className="font-medium">
+                        {missingPeople.length} badge{missingPeople.length === 1 ? "" : "s"} not in the directory — needs a directory record
+                      </p>
+                      <ul className="text-muted-foreground">
+                        {missingPeople.map((m) => (
+                          <li key={m.badge}>{m.badge} · {m.name}</li>
+                        ))}
+                      </ul>
+                      <Button size="sm" variant="outline" disabled={addingMissing} onClick={() => void addMissingToDirectory()}>
+                        {addingMissing ? "Adding…" : `Add ${missingPeople.length} staff to directory`}
+                      </Button>
+                    </div>
+                  )}
+                  {labelRowsSkipped > 0 && (
+                    <p className="text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
+                  )}
+                </div>
+              )}
               parse={async (input, config) => {
                 if (!config) return [];
                 const matrix = input.workbook.sheets[config.sheetName] ?? [];
                 const common = {
-                  matrix, blocks: config.blocks, staff: staff as StaffLite[], badges,
+                  matrix, blocks: config.blocks, staff: staff as StaffLite[], badges, directory,
                   shifts, codes, codeMap: config.codeMap,
                 };
                 const diff = planScheduleImport({ ...common, replace: false });
                 const full = planScheduleImport({ ...common, replace: true });
                 setLabelRowsSkipped(diff.labelRowsSkipped);
+                setMissingPeople(full.missing);
+                setAddedToSchedule(full.addedToSchedule);
                 setReplaceAllItems(full.items.filter((i) => i.status !== "skip"));
 
                 const ranges = importRanges(config);
+                const off = config.blocks.filter((b) => b.year !== year || b.month !== month);
+                setScopeWarning(
+                  off.length
+                    ? `The file contains dates outside ${MONTHS[month]} ${year} (${off
+                        .map((b) => `${MONTHS[b.month]} ${b.year}`)
+                        .join(", ")}). They will be imported into that period, not the month shown above.`
+                    : null,
+                );
                 let count = 0;
                 for (const r of ranges) {
                   const { count: c } = await supabase.from("shifts")
@@ -585,6 +644,26 @@ function SupervisorPage() {
                   count += c ?? 0;
                 }
                 setReplaceInfo({ count, label: ranges.map((r) => r.label).join(", ") });
+
+                // Who is on the schedule today but absent from the file (Replace mode only).
+                const inFile = new Set<string>([
+                  ...full.items.filter((i) => i.payload).map((i) => i.payload!.staff.email.toLowerCase()),
+                ]);
+                const existing = new Map<string, { name: string; badge: string }>();
+                for (const r of ranges) {
+                  const { data } = await supabase.from("shifts")
+                    .select("staff_email,staff_name")
+                    .eq("area", viewArea).gte("date", r.start).lte("date", r.end);
+                  for (const s of (data ?? []) as { staff_email: string; staff_name: string }[]) {
+                    const k = s.staff_email.toLowerCase();
+                    if (inFile.has(k)) continue;
+                    existing.set(k, {
+                      name: s.staff_name,
+                      badge: directory.find((d) => d.email.toLowerCase() === k)?.badge ?? "",
+                    });
+                  }
+                }
+                setRemovalPreview(Array.from(existing.values()));
                 return diff.items;
               }}
               commit={commitScheduleImport}
