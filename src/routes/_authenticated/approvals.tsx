@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/approvals")({
   component: ApprovalsPage,
 });
 
-type Leave = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null; stage: string | null; covering_supervisor_email: string | null };
+type Leave = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null; stage: string | null; covering_supervisor_email: string | null; cover_decline_reason: string | null };
 type Change = { id: string; requester_email: string; requester_name: string; area: string; change_type: string; target_staff_name: string; details: string | null; status: string };
 type Pre = { id: string; requester_email: string; requester_name: string; area: string; request_type: string; target_month: string; requested_dates: string[]; details: string | null; status: string };
 type SickCall = { staff_name: string; staff_code: string; covered_by: string; coverage_type: string };
@@ -56,27 +56,43 @@ function ApprovalsPage() {
   if (!canApprove) return <p>Approvals are limited to supervisors, team leaders and admins.</p>;
 
   const decideLeave = async (r: Leave, status: "Approved" | "Rejected") => {
-    // Supervisor-calendar vacations: covering supervisor approves first, then admin.
-    // Admin can override and approve at any stage.
-    if (status === "Approved" && r.stage === "covering" && !admin) {
-      const { data: admin } = await supabase.from("staff").select("email").eq("role", "admin").limit(1).maybeSingle();
-      if (!admin?.email) { toast.error("No admin available for final approval"); return; }
-      const { error: e1 } = await supabase.from("leave_requests")
-        .update({ stage: "admin", approver_email: admin.email }).eq("id", r.id);
-      if (e1) { toast.error(e1.message); return; }
-      await logAudit({ action: "leave_covering_approved", entity_type: "leave_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
-      await createNotification({ data: { recipient_email: admin.email, title: "Supervisor vacation — final approval", body: `${r.staff_name}: ${r.start_date} → ${r.end_date}`, link: "/approvals" } });
-      await createNotification({ data: { recipient_email: r.staff_email, title: "Covering supervisor approved", body: "Pending admin approval", link: "/vacations" } });
-      toast.success("Sent to admin for final approval");
-      load();
-      return;
-    }
+    // Supervisor-calendar vacations: cover accepts first, then admin approves.
+    if (status === "Approved" && r.stage === "covering" && !admin) { await acceptCover(r); return; }
     const { error } = await supabase.from("leave_requests").update({ status }).eq("id", r.id);
     if (error) { toast.error(error.message); return; }
     await notify({ data: { event: "request_decided", staff_name: r.staff_name, staff_email: r.staff_email, status, start_date: r.start_date, end_date: r.end_date } });
     await logAudit({ action: `leave_${status.toLowerCase()}`, entity_type: "leave_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role, details: { leave_type: r.leave_type } });
     await createNotification({ data: { recipient_email: r.staff_email, title: `Leave ${status.toLowerCase()}`, body: `${r.leave_type} ${r.start_date} → ${r.end_date}`, link: "/dashboard" } });
     toast.success(`Leave ${status.toLowerCase()}`);
+    load();
+  };
+
+  /** Covering supervisor accepts: request moves on to admin approval. */
+  const acceptCover = async (r: Leave) => {
+    const { data: adminRow } = await supabase.from("staff").select("email").eq("role", "admin").limit(1).maybeSingle();
+    if (!adminRow?.email) { toast.error("No admin available for final approval"); return; }
+    const { error } = await supabase.from("leave_requests")
+      .update({ stage: "admin", approver_email: adminRow.email, cover_accepted_at: new Date().toISOString(), cover_decline_reason: null })
+      .eq("id", r.id);
+    if (error) { toast.error(error.message); return; }
+    await logAudit({ action: "cover_accepted", entity_type: "leave_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role, details: { start_date: r.start_date, end_date: r.end_date } });
+    await createNotification({ data: { recipient_email: adminRow.email, title: "Supervisor vacation — final approval", body: `${r.staff_name}: ${r.start_date} → ${r.end_date}`, link: "/approvals" } });
+    await createNotification({ data: { recipient_email: r.staff_email, title: "Cover accepted", body: "Pending admin approval", link: "/vacations" } });
+    toast.success("Cover accepted — sent to admin");
+    load();
+  };
+
+  /** Covering supervisor declines: goes back to the requester, never to the admin. */
+  const declineCover = async (r: Leave) => {
+    const reason = window.prompt(`Why can't you cover ${r.staff_name} (${r.start_date} → ${r.end_date})?`)?.trim();
+    if (!reason) { toast.error("A short reason is required to decline"); return; }
+    const { error } = await supabase.from("leave_requests")
+      .update({ stage: "cover_declined", cover_decline_reason: reason, approver_email: r.staff_email })
+      .eq("id", r.id);
+    if (error) { toast.error(error.message); return; }
+    await logAudit({ action: "cover_declined", entity_type: "leave_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role, details: { reason, start_date: r.start_date, end_date: r.end_date } });
+    await createNotification({ data: { recipient_email: r.staff_email, title: "Cover declined", body: `${me?.staff?.name ?? "Your cover"} declined: ${reason}. Nominate another supervisor.`, link: "/vacations" } });
+    toast.success("Declined — sent back to the requester");
     load();
   };
   const decideChange = async (r: Change, approve: boolean) => {
@@ -138,8 +154,9 @@ function ApprovalsPage() {
                 <div className="font-medium">{l.staff_name} · {l.leave_type} <span className="text-xs text-muted-foreground">({l.area})</span></div>
                 <div className="text-xs text-muted-foreground">
                   {l.start_date} → {l.end_date}{l.reason ? ` · ${l.reason}` : ""}
-                  {l.stage === "covering" && " · Pending covering supervisor approval"}
-                  {l.stage === "admin" && " · Pending admin approval"}
+                  {l.stage === "covering" && " · Pending cover"}
+                  {l.stage === "admin" && " · Pending approval"}
+                  {l.stage === "cover_declined" && ` · Cover declined${l.cover_decline_reason ? `: ${l.cover_decline_reason}` : ""}`}
                 </div>
                 {coverConflicts[l.id] && (
                   <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -151,10 +168,21 @@ function ApprovalsPage() {
                 )}
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => decideLeave(l, "Approved")}>
-                  {admin && l.stage === "covering" ? "Approve (override)" : "Approve"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => decideLeave(l, "Rejected")}>Reject</Button>
+                {l.stage === "cover_declined" ? (
+                  <span className="text-xs text-muted-foreground">Waiting for the requester to nominate another cover</span>
+                ) : l.stage === "covering" && isMyCover(l) ? (
+                  <>
+                    <Button size="sm" onClick={() => acceptCover(l)}>Accept</Button>
+                    <Button size="sm" variant="outline" onClick={() => declineCover(l)}>Decline</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button size="sm" onClick={() => decideLeave(l, "Approved")}>
+                      {admin && l.stage === "covering" ? "Approve (override)" : "Approve"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => decideLeave(l, "Rejected")}>Reject</Button>
+                  </>
+                )}
               </div>
             </div>
           ))}
