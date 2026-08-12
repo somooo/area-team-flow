@@ -94,7 +94,7 @@ function SupervisorPage() {
   const [zones, setZones] = useState<ZoneAssignment[]>([]);
   const [sheetSummary, setSheetSummary] = useState<Pick<
     SheetPlanResult,
-    "perSheet" | "crossSheetWarnings" | "unmappedNumbers" | "bothSheets" | "warnings"
+    "perSheet" | "crossSheetWarnings" | "unmappedNumbers" | "bothSheets" | "warnings" | "range"
   > | null>(null);
   const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
   const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
@@ -697,9 +697,11 @@ function SupervisorPage() {
                   unmappedNumbers: full.unmappedNumbers,
                   bothSheets: full.bothSheets,
                   warnings: Array.from(new Set(full.warnings)),
+                  range: full.range,
                 });
 
-                const months = sources.map((s) => ({ year: s.layout.year, month: s.layout.month }));
+                // layout.month is a real month number (1-12); state months are JS indexes.
+                const months = sources.map((s) => ({ year: s.layout.year, month: s.layout.month - 1 }));
                 setImportMonths(months);
                 const ranges = importRanges(months);
                 const off = months.filter((b) => b.year !== year || b.month !== month);
