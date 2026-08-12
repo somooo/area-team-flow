@@ -37,9 +37,10 @@ export type ExportCell = { display: string; raw: string; fill?: string; light?: 
 
 export function exportCell(shift: RosterShift | undefined, isWeekend: boolean): ExportCell {
   if (!shift) return { display: "", raw: "", fill: isWeekend ? FILL.weekend : undefined };
+  // The assignment code is written exactly as stored. Night is marked by the
+  // source's lowercase "s" prefix; no "D"/"N" letter is ever added.
   const unit = shift.unit_code ?? "";
-  const letter = shift.duty === "Day" ? "D" : shift.duty === "Night" ? "N" : "";
-  const base = `${letter}${unit}`;
+  const base = shift.duty === "Night" && unit ? `s${unit}` : unit;
 
   // MedEvac is always a standalone MOT entry: no ward code, never sick.
   if (shift.ot_type === "MedEvac" && (shift.duty === "Day" || shift.duty === "Night")) {
@@ -48,12 +49,12 @@ export function exportCell(shift: RosterShift | undefined, isWeekend: boolean): 
 
   if (shift.sick_tag) {
     const b = base || "S";
-    return { display: b, raw: `s${b}`, fill: FILL.sick, light: true };
+    return { display: b, raw: b, fill: FILL.sick, light: true };
   }
   switch (shift.duty) {
     case "Sick": {
       const b = base || "S";
-      return { display: b, raw: `s${b}`, fill: FILL.sick, light: true };
+      return { display: b, raw: b, fill: FILL.sick, light: true };
     }
     case "Vacation":
       return { display: "V", raw: "V", fill: FILL.vac };
