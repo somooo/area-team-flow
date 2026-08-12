@@ -228,7 +228,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (own) { setDetail(own); return; }
     if (!isOwnArea) return;
     if (iso < todayISO) return;
-    const used = approvedByDay.get(iso)?.length ?? 0;
+    const used = countsPending
+      ? (rowsByDay.get(iso)?.length ?? 0)
+      : (approvedByDay.get(iso)?.length ?? 0);
     if (cap > 0 && used >= cap) return;
     if (!start || (start && end)) { setStart(iso); setEnd(null); return; }
     if (iso < start) { setStart(iso); return; }
