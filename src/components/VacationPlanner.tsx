@@ -548,7 +548,15 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                   <Select value={covering} onValueChange={setCovering}>
                     <SelectTrigger className="mt-1"><SelectValue placeholder="Select a supervisor" /></SelectTrigger>
                     <SelectContent>
-                      {supervisors.map((s) => <SelectItem key={s.email} value={s.email}>{s.name}</SelectItem>)}
+                      {supervisors.length === 0 && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">No supervisors available</div>
+                      )}
+                      {supervisors.map((s) => (
+                        <SelectItem key={s.email} value={s.email} disabled={!s.available}>
+                          {s.name}
+                          {!s.available && <span className="ml-1 text-[10px] text-muted-foreground">— {s.reason}</span>}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <p className="mt-1 text-[11px] text-muted-foreground">Approval: covering supervisor → admin.</p>
