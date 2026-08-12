@@ -918,12 +918,26 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                   </div>
                 ) : detail.staff_email.toLowerCase() === me.email.toLowerCase() ? (
                   changeMode === null ? (
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="destructive" className="flex-1" onClick={() => { setChangeMode("cancel"); setChgReason(""); }}>Request cancellation</Button>
-                      <Button variant="outline" className="flex-1"
-                        onClick={() => { setChangeMode("adjust"); setChgReason(""); setChgStart(detail.start_date); setChgEnd(detail.end_date); }}>
-                        Request adjustment
-                      </Button>
+                    <div className="space-y-2 pt-1">
+                      <div className="flex gap-2">
+                        <Button variant="destructive" className="flex-1" disabled={changeDeadline(detail.start_date).passed}
+                          onClick={() => { setChangeMode("cancel"); setChgReason(""); }}>Request cancellation</Button>
+                        <Button variant="outline" className="flex-1" disabled={changeDeadline(detail.start_date).passed}
+                          onClick={() => { setChangeMode("adjust"); setChgReason(""); setChgStart(detail.start_date); setChgEnd(detail.end_date); }}>
+                          Request adjustment
+                        </Button>
+                      </div>
+                      {changeDeadline(detail.start_date).passed ? (
+                        <p className="text-[11px] text-destructive">
+                          The deadline to change {changeDeadline(detail.start_date).monthName} leave was {changeDeadline(detail.start_date).label}. Contact your supervisor.
+                        </p>
+                      ) : (
+                        me.role === "staff" && (
+                          <p className="text-[11px] text-muted-foreground">
+                            You can change this until {changeDeadline(detail.start_date).label}.
+                          </p>
+                        )
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-2 rounded-md border p-2">
