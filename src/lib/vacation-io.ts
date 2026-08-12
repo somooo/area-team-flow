@@ -259,6 +259,8 @@ export function planVacationImport(input: {
 
 export type VacationCommitResult = {
   written: number;
+  attempted: number;
+  confirmed: number;
   errors: { badge: string; name: string; range: string; message: string }[];
 };
 
@@ -273,47 +275,64 @@ export async function commitVacationImport(
   const rows = items.map((i) => i.payload!).filter(Boolean);
   const errors: VacationCommitResult["errors"] = [];
   let written = 0;
+  const writtenIds: string[] = [];
 
-  const describe = (p: VacationImportPayload) => ({
-    badge: p.badge, name: p.staff_name, range: `${p.start_date} → ${p.end_date}`,
-  });
-
-  // Updates: status changes on an existing range.
-  for (const p of rows.filter((r) => r.existing_id)) {
-    const { error, data } = await supabase.from("leave_requests")
-      .update({ status: p.status as "Approved" | "Pending" | "Rejected", approver_email: opts.approverEmail })
-      .eq("id", p.existing_id!).select("id");
-    if (error) errors.push({ ...describe(p), message: error.message });
-    else if (!data || data.length === 0) errors.push({ ...describe(p), message: "Blocked by access policy (0 rows updated)" });
-    else written += 1;
-  }
-
-  const inserts = rows.filter((r) => !r.existing_id);
-  const CHUNK = 50;
-  for (let i = 0; i < inserts.length; i += CHUNK) {
-    const chunk = inserts.slice(i, i + CHUNK);
-    opts.setProgress?.(`Writing ${Math.min(i + chunk.length, inserts.length)} / ${inserts.length} rows…`);
-    const toRow = (p: VacationImportPayload) => ({
-      // `area` is intentionally NOT written: the database derives it from the staff directory.
-      staff_id: p.staff_id, staff_email: p.staff_email.toLowerCase(), staff_name: p.staff_name,
-      leave_type: "Vacation" as const,
-      start_date: p.start_date, end_date: p.end_date,
-      status: p.status as "Approved" | "Pending" | "Rejected",
-      approver_email: opts.approverEmail,
-      import_source: p.import_source ?? null,
-      over_cap_override: !!p.over_cap,
-      over_cap_reason: p.over_cap ? (opts.overrideReason?.trim() || null) : null,
+  // The batch runs server-side so RLS read-back visibility can never be mistaken for a
+  // failed write, and each row reports its real Postgres error instead of a generic message.
+  const CHUNK = 100;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    opts.setProgress?.(`Writing ${Math.min(i + chunk.length, rows.length)} / ${rows.length} rows…`);
+    const payload = chunk.map((p) => ({
+      // `area` is intentionally NOT sent: the database derives it from the staff directory.
+      badge: p.badge,
+      staff_id: p.staff_id,
+      staff_email: p.staff_email.toLowerCase(),
+      staff_name: p.staff_name,
+      start_date: p.start_date,
+      end_date: p.end_date,
+      status: p.status,
+      existing_id: p.existing_id ?? null,
+      over_cap: !!p.over_cap,
+    }));
+    const { data, error } = await supabase.rpc("import_vacations_batch", {
+      _rows: payload,
+      _approver: opts.approverEmail,
+      _override_reason: opts.overrideReason?.trim() || "Excel import",
     });
-    const { error, data } = await supabase.from("leave_requests").insert(chunk.map(toRow)).select("id");
-    if (!error && data && data.length === chunk.length) { written += data.length; continue; }
-    // fall back to per-row so one bad row does not lose the batch
-    for (const p of chunk) {
-      const { error: e, data: d } = await supabase.from("leave_requests").insert(toRow(p)).select("id");
-      if (e) errors.push({ ...describe(p), message: e.message });
-      else if (!d || d.length === 0) errors.push({ ...describe(p), message: "Blocked by access policy (0 rows inserted)" });
-      else written += 1;
+    if (error) {
+      // Whole batch rejected (e.g. permission): report it against every row in the batch.
+      for (const p of chunk) {
+        errors.push({
+          badge: p.badge, name: p.staff_name,
+          range: `${p.start_date} → ${p.end_date}`,
+          message: `${error.message}${error.hint ? ` (${error.hint})` : ""}`,
+        });
+      }
+      continue;
+    }
+    const result = data as {
+      written: number; updated: number; attempted: number;
+      rows: { badge: string; name: string; range: string; status: string; id?: string; error?: string }[];
+    };
+    for (const r of result?.rows ?? []) {
+      if (r.status === "failed") {
+        errors.push({ badge: r.badge, name: r.name, range: r.range, message: r.error ?? "Unknown error" });
+      } else {
+        written += 1;
+        if (r.id) writtenIds.push(r.id);
+      }
     }
   }
+
+  // Re-query so the reported number is what is actually committed, not what we asked for.
+  let confirmed = 0;
+  for (let i = 0; i < writtenIds.length; i += 200) {
+    const { count } = await supabase.from("leave_requests")
+      .select("id", { count: "exact", head: true })
+      .in("id", writtenIds.slice(i, i + 200));
+    confirmed += count ?? 0;
+  }
   opts.setProgress?.(null);
-  return { written, errors };
+  return { written, attempted: rows.length, confirmed, errors };
 }
