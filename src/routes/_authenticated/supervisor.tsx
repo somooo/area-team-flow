@@ -718,14 +718,14 @@ function SupervisorPage() {
 
           <ReferenceTable area={viewArea} rows={reference} />
 
-          {staff.length === 0 ? (
+          {gridStaff.length === 0 ? (
             <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
               No staff assigned to this area yet — use Add staff to get started.
             </p>
           ) : (
           <MonthGrid
             year={year} month={month} onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
-            staff={staff} shifts={mergedShifts} meEmail={meStaff.email}
+            staff={gridStaff} shifts={mergedShifts} meEmail={meStaff.email}
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             pendingKeys={pendingKeys}
