@@ -635,7 +635,7 @@ function SupervisorPage() {
                 setScopeWarning(
                   off.length
                     ? `The file contains dates outside ${monthLabel(year, month)} (${off
-                        .map((b) => monthLabel(b.month === undefined ? month : b.month, b.year))
+                        .map((b) => monthLabel(b.year, b.month))
                         .join(", ")}). They will be imported into that period, not the month shown above.`
                     : null,
                 );
