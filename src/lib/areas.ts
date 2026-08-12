@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isProtectedTest } from "@/lib/staff-import";
 
 /**
  * Areas are NOT hardcoded: the Staff Directory is the single source of truth.
@@ -16,9 +17,10 @@ function isActive(status: string | null | undefined) {
 
 /** Distinct, sorted area values currently used by active staff in the directory. */
 export async function fetchDirectoryAreas(): Promise<string[]> {
-  const { data } = await supabase.from("staff").select("area,status");
+  const { data } = await supabase.from("staff").select("area,status,name,first_name");
   const set = new Set<string>();
-  for (const s of (data ?? []) as { area: string | null; status: string | null }[]) {
+  for (const s of (data ?? []) as { area: string | null; status: string | null; name?: string | null; first_name?: string | null }[]) {
+    if (isProtectedTest(s)) continue;
     const a = (s.area ?? "").trim();
     if (!a || a === SUPERVISORS_TEAM || a === UNASSIGNED_AREA) continue;
     if (isActive(s.status)) set.add(a);

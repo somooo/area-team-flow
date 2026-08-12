@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isProtectedTest } from "@/lib/staff-import";
 
 /** Inclusive date-range overlap on ISO (YYYY-MM-DD) strings. */
 export function rangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string) {
@@ -32,14 +33,14 @@ function isSupervisorArea(s: StaffLite) {
 
 async function loadCoverData(start: string, end: string) {
   const [{ data: staff }, { data: leaves }] = await Promise.all([
-    supabase.from("staff").select("email,name,area,role,status"),
+    supabase.from("staff").select("email,name,area,role,status,first_name"),
     supabase.from("leave_requests")
       .select("id,staff_email,staff_name,start_date,end_date,status,covering_supervisor_email")
       .in("status", ["Approved", "Pending"])
       .lte("start_date", end).gte("end_date", start),
   ]);
   return {
-    staff: ((staff ?? []) as StaffLite[]).filter((s) => (s.status ?? "Active") === "Active" && isSupervisorArea(s)),
+    staff: ((staff ?? []) as StaffLite[]).filter((s) => (s.status ?? "Active") === "Active" && !isProtectedTest(s) && isSupervisorArea(s)),
     leaves: (leaves ?? []) as LeaveLite[],
   };
 }
