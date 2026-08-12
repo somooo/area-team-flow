@@ -50,7 +50,7 @@ export default function VacationCapsTable({ actorEmail }: { actorEmail?: string 
     const m: Record<string, number> = {};
     for (const row of CAP_ROWS) {
       m[row] =
-        row === SUPERVISORS_TEAM || row === "Supervisor"
+        (row as string) === "Supervisor"
           ? staff.filter((s) => isActive(s) && s.role === "supervisor").length
           : staff.filter((s) => isActive(s) && s.area === row).length;
     }
