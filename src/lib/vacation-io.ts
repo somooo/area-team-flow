@@ -65,6 +65,10 @@ export type VacationImportPayload = {
   over_cap?: boolean;
   /** Dates in this row that were at capacity. */
   over_cap_dates?: string[];
+  /** For each over-cap date: resulting count vs the area cap (for reporting). */
+  over_cap_counts?: { date: string; count: number; cap: number; area: string }[];
+  /** Marks the row as written by a privileged bulk import (bypasses request-time caps). */
+  import_source?: string;
 };
 
 /**
@@ -124,8 +128,15 @@ export function planVacationImport(input: {
   countsPending?: boolean;
   /** Import rows that exceed the cap as explicit overrides instead of skipping them. */
   overrideCap?: boolean;
+  /**
+   * Privileged Excel import by an admin/supervisor: caps, day locks and deadlines are
+   * request-time rules only and must never block an import. Rows over the cap are still
+   * imported, tagged `over_cap` and reported.
+   */
+  bypassCaps?: boolean;
 }): ImportItem<VacationImportPayload>[] {
-  const { rows, area, allAreas = false, staff, existing, capByArea = {}, countsPending = true, overrideCap = false } = input;
+  const { rows, area, allAreas = false, staff, existing, capByArea = {}, countsPending = true, overrideCap = false, bypassCaps = false } = input;
+  const allowOverCap = overrideCap || bypassCaps;
   const byBadge = new Map<string, DirectoryStaffLite>();
   for (const s of staff) {
     const key = normalizeBadge(s.badge_id);
@@ -207,7 +218,7 @@ export function planVacationImport(input: {
     if (typeof cap === "number" && cap > 0 && !exact) {
       blocked = days.filter((iso) => (usage.get(usedKey(rowArea, iso)) ?? 0) >= cap);
     }
-    if (blocked.length > 0 && !overrideCap) {
+    if (blocked.length > 0 && !allowOverCap) {
       return {
         ...base, label, area: memberArea, status: "skip",
         reason: `Exceeds ${rowArea} cap on ${blocked.join(", ")}`,
@@ -218,6 +229,10 @@ export function planVacationImport(input: {
     if (countsTowardCap && !exact) {
       for (const iso of days) usage.set(usedKey(rowArea, iso), (usage.get(usedKey(rowArea, iso)) ?? 0) + 1);
     }
+    const overCapCounts = blocked.map((iso) => ({
+      date: iso, area: rowArea, cap: cap as number,
+      count: usage.get(usedKey(rowArea, iso)) ?? cap as number,
+    }));
     if (blocked.length > 0) {
       warnings.push(`Over cap on ${blocked.join(", ")} — imported as override`);
     }
@@ -225,7 +240,8 @@ export function planVacationImport(input: {
     const payload: VacationImportPayload = {
       badge, staff_id: member.id, staff_email: member.email, staff_name: member.name,
       area: member.area ?? UNASSIGNED_AREA, start_date: start, end_date: end, status,
-      ...(blocked.length > 0 ? { over_cap: true, over_cap_dates: blocked } : {}),
+      ...(bypassCaps ? { import_source: "excel_import" } : {}),
+      ...(blocked.length > 0 ? { over_cap: true, over_cap_dates: blocked, over_cap_counts: overCapCounts } : {}),
       ...(exact ? { existing_id: exact.id } : {}),
     };
 
@@ -284,6 +300,7 @@ export async function commitVacationImport(
       start_date: p.start_date, end_date: p.end_date,
       status: p.status as "Approved" | "Pending" | "Rejected",
       approver_email: opts.approverEmail,
+      import_source: p.import_source ?? null,
       over_cap_override: !!p.over_cap,
       over_cap_reason: p.over_cap ? (opts.overrideReason?.trim() || null) : null,
     });
