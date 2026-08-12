@@ -305,6 +305,21 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     [changeMode, chgStart, chgEnd, blockedIn],
   );
 
+  /**
+   * Staff may request a change only until `vacation_change_deadline_day` of the month
+   * BEFORE the vacation month. Supervisors/admins are exempt.
+   */
+  const deadlineDay = ruleNumber(rules, "vacation_change_deadline_day", 15);
+  const changeDeadline = useCallback((startISO: string) => {
+    const [y, m] = startISO.split("-").map(Number);
+    const d = new Date(y!, (m! - 1) - 1, Math.min(Math.max(deadlineDay, 1), 28));
+    const monthName = new Date(y!, m! - 1, 1).toLocaleDateString("en-GB", { month: "long" });
+    const label = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const exempt = me.role !== "staff";
+    const passed = !exempt && toISODate(new Date()) > toISODate(d);
+    return { passed, label, monthName };
+  }, [deadlineDay, me.role]);
+
   const closeChange = () => { setChangeMode(null); setChgReason(""); setChgStart(""); setChgEnd(""); };
 
   /** Staff-initiated change request against their own booked vacation. Never mutates the vacation. */
