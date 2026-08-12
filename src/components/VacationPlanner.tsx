@@ -183,7 +183,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     const [{ count: hc }, { data: area }, { data: mine }, { data: capData }] = await Promise.all([
       hcQuery,
       supabase.from("leave_requests")
-        .select("id,staff_email,staff_name,start_date,end_date,status,reason,approver_email,covering_supervisor_email,stage")
+        .select("id,staff_email,staff_name,start_date,end_date,status,reason,approver_email,covering_supervisor_email,stage,cover_decline_reason")
         .eq("area", viewArea).eq("leave_type", "Vacation")
         .in("status", ["Approved", "Pending"])
         .lte("start_date", winEnd).gte("end_date", winStart),
