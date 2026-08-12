@@ -213,13 +213,19 @@ function SupervisorPage() {
       ? ranges
       : [{ year: 0, month: 0, start: "1900-01-01", end: "2999-12-31", label: "schedule" }];
     let written = 0;
+    let attempted = 0;
+    let confirmed = 0;
+    const failures: string[] = [];
     for (let idx = 0; idx < targets.length; idx++) {
       const r = targets[idx];
       const chunk = replace ? rows.filter((x) => x.date >= r.start && x.date <= r.end) : rows;
       setProgress(
         `Writing ${r.label} — ${chunk.length} row${chunk.length === 1 ? "" : "s"} (${idx + 1} of ${targets.length})…`,
       );
-      const { data, error } = await supabase.rpc("import_schedule_month", {
+      attempted += chunk.length;
+      // Server-side batch: one row failing is collected, not fatal, and the real
+      // Postgres message comes back per row.
+      const { data, error } = await supabase.rpc("import_schedule_rows", {
         _area: viewArea,
         _start: r.start,
         _end: r.end,
@@ -227,21 +233,27 @@ function SupervisorPage() {
         _rows: chunk,
       });
       if (error) {
-        console.error("[schedule import] RPC failed", { area: viewArea, range: r, rows: chunk.length, error });
-        throw new Error(
-          `Import failed while writing ${chunk.length} rows for ${r.label}: ${error.message}${error.hint ? ` (${error.hint})` : ""}`,
+        console.error("[schedule import] batch failed", { area: viewArea, range: r, rows: chunk.length, error });
+        failures.push(
+          `${r.label} — all ${chunk.length} rows rejected: ${error.message}${error.hint ? ` (${error.hint})` : ""}`,
         );
+        continue;
       }
-      written += Number(data ?? 0);
-      if (chunk.length > 0 && Number(data ?? 0) === 0) {
-        console.error("[schedule import] RPC wrote 0 rows", { area: viewArea, range: r, rows: chunk.length });
-        throw new Error(
-          `Import wrote 0 of ${chunk.length} rows for ${r.label}. This usually means your account is not allowed to write this area's schedule.`,
-        );
+      const res = data as {
+        attempted: number; written: number; confirmed: number;
+        failures: { staff_name: string; badge: string; date: string; error: string }[];
+      };
+      written += res?.written ?? 0;
+      confirmed += res?.confirmed ?? 0;
+      for (const f of res?.failures ?? []) {
+        failures.push(`${f.badge} · ${f.staff_name} · ${f.date} — ${f.error}`);
       }
     }
     setProgress(null);
-    toast.success(`${written} shift${written === 1 ? "" : "s"} imported into ${viewArea}`);
+    if (written === 0) {
+      console.error("[schedule import] nothing written", { area: viewArea, attempted, failures });
+      return { attempted, written: 0, confirmed: 0, failures };
+    }
 
     if (replace) {
       for (const r of ranges) {
@@ -259,9 +271,12 @@ function SupervisorPage() {
       }
     }
 
-    toast.success(`Import complete — ${written} shift${written === 1 ? "" : "s"} written`);
+    toast.success(
+      `Import complete — ${written} of ${attempted} shift${attempted === 1 ? "" : "s"} written into ${viewArea}`,
+    );
     setPending({});
     await load();
+    return { attempted, written, confirmed, failures };
   };
 
   const saveAll = async () => {
