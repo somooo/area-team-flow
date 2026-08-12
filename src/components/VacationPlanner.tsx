@@ -473,8 +473,13 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 const names = approvedByDay.get(iso) ?? [];
                 const own = mineByDay.get(iso);
                 const dayRows = rowsByDay.get(iso) ?? [];
-                const used = names.length;
-                const full = cap > 0 && used >= cap && !own;
+                const used = countsPending ? dayRows.length : names.length;
+                const atCap = cap > 0 && used >= cap;
+                const nearCap = cap > 0 && !atCap && used >= Math.ceil((cap * warnPct) / 100) && used > 0;
+                const full = atCap && !own;
+                const capTip = atCap
+                  ? `Vacation cap reached for ${capAreaLabel} (${used}/${cap})`
+                  : `Almost full — ${used} of ${cap} slots used`;
                 const past = iso < todayISO;
                 const selected = selectedSet.has(iso);
                 const clickable = !!own || (canManage && dayRows.length > 0) || (isOwnArea && !full && !past);
@@ -491,13 +496,44 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                     }}
                     className={[
                       "min-h-[86px] max-h-[86px] overflow-hidden border-b border-r p-1 text-left align-top flex flex-col gap-0.5 transition-colors",
-                      full ? "bg-muted text-muted-foreground" : "bg-card",
+                      atCap
+                        ? "bg-muted text-muted-foreground"
+                        : nearCap
+                          ? "bg-copper/20"
+                          : "bg-card",
                       past && !own ? "opacity-50" : "",
                       selected && !own ? "ring-2 ring-inset ring-steel-500 bg-steel-50" : "",
                       clickable ? "hover:bg-steel-50/70 cursor-pointer" : "cursor-default",
                     ].join(" ")}
                   >
-                    <span className="text-[11px] font-semibold text-ink">{d.getDate()}</span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-semibold text-ink">{d.getDate()}</span>
+                      {cap > 0 && used > 0 && (
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className={[
+                                  "shrink-0 rounded px-1 text-[9px] font-semibold tabular-nums leading-[14px]",
+                                  atCap
+                                    ? "bg-muted-foreground/25 text-ink"
+                                    : nearCap
+                                      ? "bg-copper/40 text-ink"
+                                      : "bg-muted text-muted-foreground",
+                                ].join(" ")}
+                              >
+                                {used}/{cap}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-56">
+                              <div className="text-xs">
+                                {atCap || nearCap ? capTip : `${used} of ${cap} slots used`}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
                     <div className="flex flex-col gap-px w-full min-w-0 overflow-y-auto">
                       {visible.map((r) => {
                         const mine = r.staff_email.toLowerCase() === me.email.toLowerCase();
