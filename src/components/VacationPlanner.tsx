@@ -22,6 +22,7 @@ import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissio
 import { useDirectoryAreas, UNASSIGNED_AREA } from "@/lib/areas";
 import { maxOffPerDay } from "@/components/VacationCapsTable";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
+import { fetchCoverCandidates, type CoverCandidate } from "@/lib/cover";
 import { commitVacationImport, exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type ExistingLeave, type VacationImportPayload } from "@/lib/vacation-io";
 
 export const SUPERVISORS_AREA = "Supervisors";
@@ -119,7 +120,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [detail, setDetail] = useState<LeaveRow | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [supervisors, setSupervisors] = useState<{ email: string; name: string }[]>([]);
+  const [supervisors, setSupervisors] = useState<CoverCandidate[]>([]);
   const [covering, setCovering] = useState<string>("");
   const [manageDay, setManageDay] = useState<{ iso: string; rows: LeaveRow[] } | null>(null);
   const [manageRow, setManageRow] = useState<LeaveRow | null>(null);
@@ -141,13 +142,23 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   /** Supervisors manage their own area; admins manage every area including the supervisors calendar. */
   const canManage = canManageVacationsIn(me, viewArea, SUPERVISORS_AREA);
 
+  // Covering-supervisor options, recomputed whenever the selected range changes so that
+  // availability (own leave / already covering someone) reflects the requested dates.
   useEffect(() => {
-    if (!canSeeSupervisorsCalendar) return;
-    void supabase.from("staff").select("email,name,role").eq("role", "supervisor").then(({ data }) => {
-      setSupervisors(((data ?? []) as { email: string; name: string }[])
-        .filter((s) => s.email.toLowerCase() !== me.email.toLowerCase()));
+    if (!canSeeSupervisorsCalendar || !start) { setSupervisors([]); return; }
+    let cancelled = false;
+    void fetchCoverCandidates({ start, end: end ?? start, requesterEmail: me.email }).then((list) => {
+      if (!cancelled) setSupervisors(list);
     });
-  }, [canSeeSupervisorsCalendar, me.email]);
+    return () => { cancelled = true; };
+  }, [canSeeSupervisorsCalendar, me.email, start, end]);
+
+  // Clear a nominated cover that is no longer available for the new range.
+  useEffect(() => {
+    if (!covering) return;
+    const c = supervisors.find((s) => s.email === covering);
+    if (c && !c.available) setCovering("");
+  }, [supervisors, covering]);
 
   useEffect(() => {
     void resolveApprover(me).then(async (email) => {
@@ -387,6 +398,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (!start) return;
     const s = start, e = end ?? start;
     if (isSupervisorsView && !covering) { toast.error("Select a covering supervisor"); return; }
+    if (isSupervisorsView && covering) {
+      const fresh = await fetchCoverCandidates({ start: s, end: e, requesterEmail: me.email });
+      const pick = fresh.find((c) => c.email === covering);
+      setSupervisors(fresh);
+      if (!pick || !pick.available) {
+        toast.error(`${pick?.name ?? "That supervisor"} can no longer cover — ${pick?.reason ?? "not available"}`);
+        setCovering("");
+        return;
+      }
+    }
     const routeTo = isSupervisorsView ? covering : approver;
     if (!routeTo) { toast.error("No approver available"); return; }
     const isOverride = blockedDates.length > 0;
@@ -537,7 +558,15 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                   <Select value={covering} onValueChange={setCovering}>
                     <SelectTrigger className="mt-1"><SelectValue placeholder="Select a supervisor" /></SelectTrigger>
                     <SelectContent>
-                      {supervisors.map((s) => <SelectItem key={s.email} value={s.email}>{s.name}</SelectItem>)}
+                      {supervisors.length === 0 && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">No supervisors available</div>
+                      )}
+                      {supervisors.map((s) => (
+                        <SelectItem key={s.email} value={s.email} disabled={!s.available}>
+                          {s.name}
+                          {!s.available && <span className="ml-1 text-[10px] text-muted-foreground">— {s.reason}</span>}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <p className="mt-1 text-[11px] text-muted-foreground">Approval: covering supervisor → admin.</p>
