@@ -22,6 +22,7 @@ import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissio
 import { useDirectoryAreas, UNASSIGNED_AREA } from "@/lib/areas";
 import { maxOffPerDay } from "@/components/VacationCapsTable";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
+import { fetchCoverCandidates, type CoverCandidate } from "@/lib/cover";
 import { commitVacationImport, exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type ExistingLeave, type VacationImportPayload } from "@/lib/vacation-io";
 
 export const SUPERVISORS_AREA = "Supervisors";
