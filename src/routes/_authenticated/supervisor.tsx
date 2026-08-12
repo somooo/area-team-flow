@@ -229,7 +229,9 @@ function SupervisorPage() {
     items: ImportItem<ImportedCell>[],
     { replace, setProgress }: { replace: boolean; setProgress: (t: string | null) => void },
   ) => {
-    const staffIdByEmail = new Map(staff.map((s) => [s.email.toLowerCase(), s.id]));
+    const staffIdByEmail = new Map<string, string>();
+    for (const s of staff) staffIdByEmail.set(s.email.toLowerCase(), s.id);
+    for (const d of directory) if (!staffIdByEmail.has(d.email.toLowerCase())) staffIdByEmail.set(d.email.toLowerCase(), d.id);
     const ranges = importRanges(importConfig);
     // In replace mode nothing survives to diff against, so every parsed cell is written.
     const source = replace ? replaceAllItems : items;
@@ -331,9 +333,50 @@ function SupervisorPage() {
     toast.success(
       `Import complete — ${written} of ${attempted} shift${attempted === 1 ? "" : "s"} written into ${viewArea}`,
     );
+
+    await logAudit({
+      action: replace ? "schedule_import_replace" : "schedule_import_merge",
+      entity_type: "schedule",
+      entity_id: `${viewArea}-${ranges.map((r) => r.label).join(",")}`,
+      actor_email: me?.staff?.email, actor_role: me?.staff?.role, area: viewArea,
+      details: {
+        area: viewArea,
+        months: ranges.map((r) => r.label),
+        shift: isAssistants ? "all" : layer,
+        mode: replace ? "replace" : "merge",
+        assignments_written: written,
+        staff_added_to_schedule: addedToSchedule.map((s) => s.name),
+        staff_removed_from_schedule: replace ? removalPreview : [],
+      },
+    });
+
     setPending({});
     await load();
+    await loadDirectory();
     return { attempted, written, confirmed, failures };
+  };
+
+  /** Create real directory records for badges the file contains but the directory does not. */
+  const addMissingToDirectory = async () => {
+    if (!missingPeople.length) return;
+    setAddingMissing(true);
+    const rows = missingPeople.map((m) => ({
+      badge_id: m.badge,
+      name: m.name && m.name !== "(no name in file)" ? m.name : `Badge ${m.badge}`,
+      role: "staff" as const,
+      status: "Active",
+    }));
+    const { data, error } = await supabase.from("staff").insert(rows as never).select("id");
+    setAddingMissing(false);
+    if (error) { toast.error(`Could not add to directory: ${error.message}`); return; }
+    await logAudit({
+      action: "staff_created_from_schedule_import", entity_type: "staff",
+      actor_email: me?.staff?.email, actor_role: me?.staff?.role, area: viewArea,
+      details: { created: rows.length, badges: missingPeople.map((m) => m.badge) },
+    });
+    toast.success(`${data?.length ?? rows.length} staff added to the directory — re-run the import to include them`);
+    setMissingPeople([]);
+    await loadDirectory();
   };
 
   const saveAll = async () => {
