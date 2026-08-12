@@ -708,9 +708,54 @@ function SupervisorPage() {
                     </p>
                   )}
                   {(sheetSummary?.bothSheets.length ?? 0) > 0 && (
-                    <p className="text-muted-foreground">
-                      {sheetSummary!.bothSheets.length} badge{sheetSummary!.bothSheets.length === 1 ? "" : "s"} appear on both sheets: {sheetSummary!.bothSheets.join(", ")}
+                    <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-destructive">
+                      {sheetSummary!.bothSheets.length} badge{sheetSummary!.bothSheets.length === 1 ? "" : "s"} appear on both the Day and Night sheet: {sheetSummary!.bothSheets.join(", ")}.
+                      A staff member cannot be on both sides of the same area — fix the file before importing.
                     </p>
+                  )}
+                  {sideConflicts.length > 0 && (
+                    <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                      <p className="font-medium text-destructive">
+                        {sideConflicts.length} shift-side conflict{sideConflicts.length === 1 ? "" : "s"}
+                      </p>
+                      {sideConflicts.map((c) => (
+                        <div key={c.badge} className="space-y-1 border-t pt-2 first:border-t-0 first:pt-0">
+                          <p>{c.message}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant={conflictChoice[c.badge] === "move" ? "default" : "outline"}
+                              onClick={() => setConflictChoice((p) => ({ ...p, [c.badge]: "move" }))}
+                            >
+                              Move to {c.sameArea ? viewArea : viewArea} {c.side === "night" ? "Night" : "Day"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={(conflictChoice[c.badge] ?? "skip") === "skip" ? "default" : "outline"}
+                              onClick={() => setConflictChoice((p) => ({ ...p, [c.badge]: "skip" }))}
+                            >
+                              Skip this row
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-muted-foreground">
+                        “Move” clears their {sideConflicts[0].otherArea} rows for that month before importing. Nothing is created on both sides.
+                      </p>
+                    </div>
+                  )}
+                  {vacationConflicts.length > 0 && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      <p className="font-medium">
+                        Assigned while on vacation — {vacationConflicts.length} staff. The codes are imported, but the
+                        schedule shows V for those days. Correct them at source.
+                      </p>
+                      <ul>
+                        {vacationConflicts.map((v) => (
+                          <li key={v.badge}>{v.badge} · {v.name} — {v.dates.join(", ")}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                   {addedToSchedule.length > 0 && (
                     <p className="text-muted-foreground">
