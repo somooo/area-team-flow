@@ -404,7 +404,33 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 <Label className="text-xs">Reason (optional)</Label>
                 <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
               </div>
-              <Button className="w-full" disabled={busy || (isSupervisorsView && !covering)} onClick={submit}>Submit request</Button>
+              {blockedDates.length > 0 && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-2">
+                  <p className="text-[11px] text-destructive">
+                    Blocked: {blockedDates.join(", ")} {blockedDates.length === 1 ? "is" : "are"} at capacity.
+                  </p>
+                  {canOverrideCap ? (
+                    <div>
+                      <Label className="text-xs">Override reason (required)</Label>
+                      <Textarea rows={2} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+                      <p className="mt-1 text-[10px] text-muted-foreground">Marked as an over-cap override and logged to Audit.</p>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">Pick dates that are not full.</p>
+                  )}
+                </div>
+              )}
+              <Button
+                className="w-full"
+                disabled={
+                  busy ||
+                  (isSupervisorsView && !covering) ||
+                  (blockedDates.length > 0 && (!canOverrideCap || !overrideReason.trim()))
+                }
+                onClick={submit}
+              >
+                {blockedDates.length > 0 && canOverrideCap ? "Submit with override" : "Submit request"}
+              </Button>
             </PopoverContent>
           </Popover>
         </div>
