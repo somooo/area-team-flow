@@ -174,7 +174,7 @@ export function planVacationImport(input: {
     if (!member) return skip(`Badge ${rawBadge.trim()} not found in staff directory`);
 
     const label = member.name;
-    const memberArea = member.area ?? "—";
+    const memberArea = member.area ?? UNASSIGNED_AREA;
     if (!allAreas && (member.area ?? "").toLowerCase() !== area.toLowerCase()) {
       return { ...base, label, area: memberArea, status: "skip", reason: `Different area (${memberArea})` };
     }
@@ -198,7 +198,7 @@ export function planVacationImport(input: {
       return { ...base, label, area: memberArea, status: "skip", reason: "Duplicate row in file" };
     }
 
-    const rowArea = member.area ?? area;
+    const rowArea = member.area ?? UNASSIGNED_AREA;
     const cap = capByArea[rowArea];
     const days = eachISO(start, end);
     const countsTowardCap = countsPending || status === "Approved";
@@ -223,7 +223,7 @@ export function planVacationImport(input: {
 
     const payload: VacationImportPayload = {
       badge, staff_id: member.id, staff_email: member.email, staff_name: member.name,
-      area: member.area ?? area, start_date: start, end_date: end, status,
+      area: member.area ?? UNASSIGNED_AREA, start_date: start, end_date: end, status,
       ...(blocked.length > 0 ? { over_cap: true, over_cap_dates: blocked } : {}),
       ...(exact ? { existing_id: exact.id } : {}),
     };
@@ -277,8 +277,9 @@ export async function commitVacationImport(
     const chunk = inserts.slice(i, i + CHUNK);
     opts.setProgress?.(`Writing ${Math.min(i + chunk.length, inserts.length)} / ${inserts.length} rows…`);
     const toRow = (p: VacationImportPayload) => ({
+      // `area` is intentionally NOT written: the database derives it from the staff directory.
       staff_id: p.staff_id, staff_email: p.staff_email.toLowerCase(), staff_name: p.staff_name,
-      area: p.area, leave_type: "Vacation" as const,
+      leave_type: "Vacation" as const,
       start_date: p.start_date, end_date: p.end_date,
       status: p.status as "Approved" | "Pending" | "Rejected",
       approver_email: opts.approverEmail,
