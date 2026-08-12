@@ -16,14 +16,20 @@ import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
-import {
-  planScheduleImport,
-  type ImportedCell,
-  type DirectoryPerson as ImportDirectoryPerson,
-  type MissingPerson,
+import type {
+  DirectoryPerson as ImportDirectoryPerson,
+  MissingPerson,
 } from "@/lib/schedule-import";
+import {
+  detectSheetLayout,
+  planSheetImport,
+  type SheetCell,
+  type SheetSource,
+  type SheetPlanResult,
+} from "@/lib/sheet-schedule-import";
+import { buildScheduleGroups, fetchZoneAssignments, type ZoneAssignment } from "@/lib/zones";
 import { normalizeBadge, isProtectedTest } from "@/lib/staff-import";
-import { ScheduleMappingDialog, type ScheduleImportConfig } from "@/components/ScheduleMappingDialog";
+import { SheetMappingDialog, type SheetImportConfig } from "@/components/SheetMappingDialog";
 import { logAudit } from "@/lib/audit";
 import { canManageArea, isAdmin } from "@/lib/permissions";
 import { useDirectoryAreas } from "@/lib/areas";
