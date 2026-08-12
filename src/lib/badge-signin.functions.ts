@@ -76,7 +76,7 @@ export const badgeSignIn = createServerFn({ method: "POST" })
     const { data: secret } = row?.id
       ? await supabaseAdmin.from("staff_secrets").select("password_hash").eq("staff_id", row.id).maybeSingle()
       : { data: null as { password_hash: string | null } | null };
-    if (!row || !secret?.password_hash) { await record(false); return { ok: false as const, error: "Invalid badge or password" }; }
+    if (!row || !row.email || !secret?.password_hash) { await record(false); return { ok: false as const, error: "Invalid badge or password" }; }
     const parts = secret.password_hash.split("$");
     if (parts.length !== 4 || parts[0] !== "pbkdf2") { await record(false); return { ok: false as const, error: "Invalid credential format" }; }
     const computed = await pbkdf2(data.password, parts[2]);
@@ -84,7 +84,7 @@ export const badgeSignIn = createServerFn({ method: "POST" })
     // Issue a magic link so the browser establishes a real Supabase session
     const { data: link, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
       type: "magiclink",
-      email: row.email,
+      email: row.email as string,
     });
     if (linkErr || !link?.properties?.action_link) { await record(false); return { ok: false as const, error: "Could not issue session link" }; }
     await record(true);

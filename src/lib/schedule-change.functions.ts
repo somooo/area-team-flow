@@ -43,7 +43,7 @@ export const applyScheduleChange = createServerFn({ method: "POST" })
       await supabaseAdmin
         .from("shifts")
         .update({
-          staff_email: tgtStaff.email,
+          staff_email: tgtStaff.email ?? req.target_staff_email,
           staff_name: tgtStaff.name,
           area: tgtStaff.area ?? srcShift.area,
         })

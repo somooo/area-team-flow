@@ -560,7 +560,7 @@ export type Database = {
           delegated_to_email: string | null
           delegation_active: boolean
           department: string | null
-          email: string
+          email: string | null
           extension: string | null
           first_name: string | null
           id: string
@@ -584,7 +584,7 @@ export type Database = {
           delegated_to_email?: string | null
           delegation_active?: boolean
           department?: string | null
-          email: string
+          email?: string | null
           extension?: string | null
           first_name?: string | null
           id?: string
@@ -608,7 +608,7 @@ export type Database = {
           delegated_to_email?: string | null
           delegation_active?: boolean
           department?: string | null
-          email?: string
+          email?: string | null
           extension?: string | null
           first_name?: string | null
           id?: string
@@ -897,6 +897,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_delete_staff: {
+        Args: { _cascade?: boolean; _force?: boolean; _id: string }
+        Returns: Json
+      }
       apply_absence_to_shifts: {
         Args: {
           _area: string
@@ -947,6 +951,7 @@ export type Database = {
         Args: { _origin: string; _req: string }
         Returns: undefined
       }
+      staff_dependents: { Args: { _id: string }; Returns: Json }
       vacation_change_deadline: {
         Args: { _start_date: string }
         Returns: string

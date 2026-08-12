@@ -99,7 +99,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
     if (!active) return;
     if (me.role === "supervisor" || me.role === "team_leader") {
       supabase.from("staff").select("id,name,email,area").eq("role", "supervisor").then(({ data }) => {
-        setSupervisors((data ?? []).filter((s) => s.email !== me.email));
+        setSupervisors((data ?? []).filter((s) => s.email && s.email !== me.email).map((s) => ({ ...s, email: s.email as string })));
       });
       setResolvedApprover(approver);
     } else if (me.supervisor_email) {

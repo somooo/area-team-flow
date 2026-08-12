@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isProtectedTest } from "@/lib/staff-import";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -7,7 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { SUPERVISORS_TEAM, UNASSIGNED_AREA } from "@/lib/areas";
 
 type Cap = { id: string; area: string; cap_pct: number; warn_pct: number };
-type StaffRow = { area: string | null; role: string; status: string | null };
+type StaffRow = { area: string | null; role: string; status: string | null; name?: string | null; first_name?: string | null };
 
 export function maxOffPerDay(activeStaff: number, capPct: number): number {
   return Math.max(1, Math.floor((activeStaff * capPct) / 100));
@@ -26,11 +27,11 @@ export default function VacationCapsTable({ actorEmail }: { actorEmail?: string 
   const load = useCallback(async () => {
     const [{ data: capData }, { data: staffData }] = await Promise.all([
       supabase.from("vacation_caps").select("id,area,cap_pct,warn_pct"),
-      supabase.from("staff").select("area,role,status"),
+      supabase.from("staff").select("area,role,status,name,first_name"),
     ]);
     const list = (capData ?? []) as Cap[];
     setCaps(list);
-    setStaff((staffData ?? []) as StaffRow[]);
+    setStaff(((staffData ?? []) as StaffRow[]).filter((s) => !isProtectedTest(s)));
     setDraft(
       Object.fromEntries(
         list.map((c) => [c.area, { cap: String(c.cap_pct), warn: String(c.warn_pct) }]),
