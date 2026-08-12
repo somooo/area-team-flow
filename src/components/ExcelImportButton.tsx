@@ -56,6 +56,8 @@ export type CommitReport = {
   confirmed?: number;
   /** One human-readable line per failed row, including badge and the real error text. */
   failures: string[];
+  /** Extra confirmation line shown in the result panel (e.g. the date range re-queried). */
+  note?: string;
 };
 
 /**
@@ -118,7 +120,7 @@ export function ExcelImportButton<P, C = unknown>({
   const [confirmDestructive, setConfirmDestructive] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [done, setDone] = useState<
-    { attempted: number; committed: number; confirmed: number | null; skipped: number; failures: string[] } | null
+    { attempted: number; committed: number; confirmed: number | null; skipped: number; failures: string[]; note?: string } | null
   >(null);
   const [toggleState, setToggleState] = useState<Record<string, boolean>>(() =>
     Object.fromEntries((toggles ?? []).map((t) => [t.key, false])),
@@ -189,6 +191,7 @@ export function ExcelImportButton<P, C = unknown>({
         confirmed,
         skipped: skipped.length,
         failures,
+        note: result?.note,
       });
       setItems(null);
       setConfirmDestructive(false);
@@ -481,6 +484,9 @@ export function ExcelImportButton<P, C = unknown>({
                 <span className="text-muted-foreground">Confirmed in database</span>
                 <span className="font-semibold">{done.confirmed}</span>
               </div>
+            )}
+            {done?.note && (
+              <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">{done.note}</div>
             )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Rows skipped</span>
