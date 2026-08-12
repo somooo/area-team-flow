@@ -36,6 +36,9 @@ function ApprovalsPage() {
   const role = me?.staff?.role as string | undefined;
   const canApprove = role === "supervisor" || role === "admin" || role === "team_leader";
   const admin = isAdmin(me?.staff);
+  const isMyCover = (l: Leave) =>
+    !!l.covering_supervisor_email &&
+    l.covering_supervisor_email.toLowerCase() === (me?.staff?.email ?? "").toLowerCase();
 
   const load = async () => {
     const [{ data: lv }, { data: ch }, { data: pr }, { data: tl }] = await Promise.all([
