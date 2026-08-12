@@ -25,7 +25,7 @@ import { getServerNow } from "@/lib/server-time.functions";
 import { exportExcel, exportPdf } from "@/lib/schedule-export";
 import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
 import { useSystemRules } from "@/lib/system-rules";
-import { AREAS } from "@/lib/areas";
+import { useDirectoryAreas } from "@/lib/areas";
 import { X } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -61,7 +61,7 @@ function SchedulePage() {
   const [month, setMonth] = useState(today.getMonth());
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [roster, setRoster] = useState<Staff[]>([]);
-  const areas = AREAS as readonly string[];
+  const { areas } = useDirectoryAreas();
   const [viewArea, setViewArea] = useState<string>("");
   const [layer, setLayer] = useState<"all" | "day" | "night">("day");
   const [menuShift, setMenuShift] = useState<Shift | null>(null);

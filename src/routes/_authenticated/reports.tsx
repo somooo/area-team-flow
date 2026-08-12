@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toISODate, type RosterShift } from "@/lib/roster";
-import { AREAS } from "@/lib/areas";
+import { useDirectoryAreas } from "@/lib/areas";
 import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
 
 export const Route = createFileRoute("/_authenticated/reports")({
@@ -30,7 +30,8 @@ function ReportsPage() {
   const [start, setStart] = useState(monthAgo);
   const [end, setEnd] = useState(today);
   const [areaFilter, setAreaFilter] = useState<string>("all");
-  const [areas, setAreas] = useState<string[]>([...AREAS]);
+  const { areas: directoryAreas } = useDirectoryAreas();
+  const [areas, setAreas] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
 
   const isAdmin = me?.staff?.role === "admin";
@@ -38,12 +39,12 @@ function ReportsPage() {
 
   useEffect(() => {
     if (isAdmin) {
-      setAreas([...AREAS]);
+      setAreas(directoryAreas);
     } else if (isSup && me?.staff?.area) {
       setAreas([me.staff.area]);
       setAreaFilter(me.staff.area);
     }
-  }, [isAdmin, isSup, me?.staff?.area]);
+  }, [isAdmin, isSup, me?.staff?.area, directoryAreas]);
 
   const load = async () => {
     const scopedArea = isSup ? me!.staff!.area! : (areaFilter === "all" ? null : areaFilter);

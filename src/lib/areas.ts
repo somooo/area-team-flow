@@ -1,23 +1,40 @@
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
 /**
- * Canonical area list.
- *
- * Areas are a fixed part of the organisation, NOT derived from staff data —
- * an area with zero staff must still be selectable everywhere so a supervisor
- * or admin can assign people into it.
+ * Areas are NOT hardcoded: the Staff Directory is the single source of truth.
+ * Every dropdown (calendar, filters, import, reports) is populated from the
+ * distinct area values found on staff records.
  */
-export const AREAS = ["ICU", "Wards", "Assistants"] as const;
-export type Area = (typeof AREAS)[number];
-
 export const SUPERVISORS_TEAM = "Supervisors";
+/** Bucket for vacations whose staff is missing, inactive or has no area. */
+export const UNASSIGNED_AREA = "Unassigned";
 
-/** Vacation planner teams: the supervisors calendar plus every area. */
-export const VACATION_TEAMS = [SUPERVISORS_TEAM, ...AREAS];
+function isActive(status: string | null | undefined) {
+  return (status ?? "Active").toLowerCase() === "active";
+}
 
-/** Canonical list plus any legacy area values still present in the data. */
-export function withKnownAreas(extra: (string | null | undefined)[]): string[] {
-  const out = [...AREAS] as string[];
-  for (const a of extra) {
-    if (a && !out.includes(a) && a !== SUPERVISORS_TEAM) out.push(a);
+/** Distinct, sorted area values currently used by active staff in the directory. */
+export async function fetchDirectoryAreas(): Promise<string[]> {
+  const { data } = await supabase.from("staff").select("area,status");
+  const set = new Set<string>();
+  for (const s of (data ?? []) as { area: string | null; status: string | null }[]) {
+    const a = (s.area ?? "").trim();
+    if (!a || a === SUPERVISORS_TEAM || a === UNASSIGNED_AREA) continue;
+    if (isActive(s.status)) set.add(a);
   }
-  return out;
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/** Live directory areas. Refetches on mount so directory edits show up immediately. */
+export function useDirectoryAreas() {
+  const [areas, setAreas] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refresh = useCallback(async () => {
+    const list = await fetchDirectoryAreas();
+    setAreas(list);
+    setLoading(false);
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+  return { areas, loading, refresh };
 }

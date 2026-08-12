@@ -166,7 +166,7 @@ export type Database = {
         }
         Insert: {
           approver_email?: string | null
-          area: string
+          area?: string
           auto_approve_at?: string | null
           covering_supervisor_email?: string | null
           created_at?: string
@@ -898,6 +898,10 @@ export type Database = {
         Returns: undefined
       }
       current_email: { Args: never; Returns: string }
+      derive_leave_area: {
+        Args: { _staff_email: string; _staff_id: string }
+        Returns: string
+      }
       import_schedule_month: {
         Args: {
           _area: string

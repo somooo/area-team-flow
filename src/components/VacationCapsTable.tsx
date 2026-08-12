@@ -4,13 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { logAudit } from "@/lib/audit";
-import { AREAS } from "@/lib/areas";
+import { SUPERVISORS_TEAM, UNASSIGNED_AREA } from "@/lib/areas";
 
 type Cap = { id: string; area: string; cap_pct: number; warn_pct: number };
 type StaffRow = { area: string | null; role: string; status: string | null };
-
-/** Rows shown, in fixed order. "Supervisor" counts supervisors across all areas. */
-const CAP_ROWS = ["Supervisor", ...AREAS] as const;
 
 export function maxOffPerDay(activeStaff: number, capPct: number): number {
   return Math.max(1, Math.floor((activeStaff * capPct) / 100));
@@ -45,17 +42,27 @@ export default function VacationCapsTable({ actorEmail }: { actorEmail?: string 
     void load();
   }, [load]);
 
+  /** Rows come from the directory, never a hardcoded list. */
+  const capRows = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of staff) {
+      const a = (s.area ?? "").trim();
+      if (a && a !== SUPERVISORS_TEAM && a !== UNASSIGNED_AREA && isActive(s)) set.add(a);
+    }
+    return ["Supervisor", ...[...set].sort((a, b) => a.localeCompare(b))];
+  }, [staff]);
+
   /** Live headcount per row — recomputed from the directory, never cached. */
   const headcount = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const row of CAP_ROWS) {
+    for (const row of capRows) {
       m[row] =
         (row as string) === "Supervisor"
           ? staff.filter((s) => isActive(s) && s.role === "supervisor").length
           : staff.filter((s) => isActive(s) && s.area === row).length;
     }
     return m;
-  }, [staff]);
+  }, [staff, capRows]);
 
   const save = async (cap: Cap) => {
     const d = draft[cap.area] ?? { cap: "", warn: "" };
@@ -92,7 +99,9 @@ export default function VacationCapsTable({ actorEmail }: { actorEmail?: string 
     void load();
   };
 
-  const ordered = CAP_ROWS.map((a) => caps.find((c) => c.area === a)).filter(Boolean) as Cap[];
+  const ordered = capRows
+    .map((a: string) => caps.find((c) => c.area === a))
+    .filter(Boolean) as Cap[];
 
   return (
     <div className="overflow-x-auto">

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { toISODate } from "@/lib/roster";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
@@ -18,7 +19,7 @@ import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
-import { AREAS } from "@/lib/areas";
+import { useDirectoryAreas, UNASSIGNED_AREA } from "@/lib/areas";
 import { maxOffPerDay } from "@/components/VacationCapsTable";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { commitVacationImport, exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type ExistingLeave, type VacationImportPayload } from "@/lib/vacation-io";
@@ -89,9 +90,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const { rules } = useSystemRules();
   const canSwitchArea = me.role !== "staff";
   const canSeeSupervisorsCalendar = canUseSupervisorsCalendar(me);
-  const areas = AREAS as readonly string[];
+  const { areas } = useDirectoryAreas();
+  const myArea = me.role === "supervisor" ? SUPERVISORS_AREA : (me.area ?? UNASSIGNED_AREA);
   const [viewArea, setViewArea] = useState<string>(
-    me.role === "supervisor" || me.role === "admin" ? SUPERVISORS_AREA : (me.area ?? ""),
+    me.role === "supervisor" || me.role === "admin" ? SUPERVISORS_AREA : myArea,
   );
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
@@ -118,7 +120,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [importOverrideReason, setImportOverrideReason] = useState("");
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
-  const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === me.area;
+  const isUnassignedView = viewArea === UNASSIGNED_AREA;
+  const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === myArea;
   /** Supervisors manage their own area; admins manage every area including the supervisors calendar. */
   const canManage = canManageVacationsIn(me, viewArea, SUPERVISORS_AREA);
 
@@ -188,7 +191,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   /** Per-day cap for this area, from vacation_caps (falls back to the legacy rule). */
   const capPct = capRow?.cap_pct ?? ruleNumber(rules, "vacation_cap_pct", 30);
   const warnPct = capRow?.warn_pct ?? 80;
-  const cap = useMemo(() => maxOffPerDay(headcount, capPct), [headcount, capPct]);
+  const cap = useMemo(
+    () => (isUnassignedView ? 0 : maxOffPerDay(headcount, capPct)),
+    [headcount, capPct, isUnassignedView],
+  );
   const countsPending = rules["vacation_cap_counts_pending"] !== false;
   const capAreaLabel = isSupervisorsView ? "Supervisors" : viewArea;
   const yearlyCap = ruleNumber(rules, "vacation_yearly_days", 25);
@@ -271,9 +277,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       if (!overrideReason.trim()) { toast.error("An override reason is required"); return; }
     }
     setBusy(true);
+    // `area` is never sent: the database derives it from the staff directory record.
     const { data: inserted, error } = await supabase.from("leave_requests").insert({
       staff_email: me.email.toLowerCase(), staff_name: me.name,
-      area: isSupervisorsView ? SUPERVISORS_AREA : me.area!,
       leave_type: "Vacation",
       staff_id: me.id, start_date: s, end_date: e, reason, approver_email: routeTo,
       covering_supervisor_email: isSupervisorsView ? covering : null,
@@ -345,7 +351,12 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   };
 
   const months = [cursor, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)];
-  const areaOptions = canSeeSupervisorsCalendar ? [SUPERVISORS_AREA, ...areas.filter((a) => a !== SUPERVISORS_AREA)] : areas;
+  const baseAreas = areas.filter((a) => a !== SUPERVISORS_AREA && a !== UNASSIGNED_AREA);
+  const areaOptions = [
+    ...(canSeeSupervisorsCalendar ? [SUPERVISORS_AREA] : []),
+    ...baseAreas,
+    UNASSIGNED_AREA,
+  ];
 
   return (
     <div className="space-y-4">
@@ -358,6 +369,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
           </Select>
         )}
       </div>
+
+      {isUnassignedView && (
+        <div className="rounded-lg border border-copper/40 bg-copper/10 px-3 py-2 text-xs text-ink">
+          These vacations belong to staff who are missing from the directory, inactive, or have no
+          area assigned. They stay visible here until the directory is fixed.{" "}
+          {me.role === "admin" && (
+            <Link to="/directory" className="underline font-medium">Open Staff Directory</Link>
+          )}
+        </div>
+      )}
 
       {/* Selection bar */}
       <div className="rounded-xl border bg-card px-4 py-3 flex flex-wrap items-center gap-4">
@@ -706,9 +727,14 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                       ].join(" ")}>{r.status}</span>
                                     </div>
                                     <div className="text-[10px] text-muted-foreground truncate">
-                                      {meta?.badge ? `#${meta.badge} · ` : ""}{meta?.area ?? viewArea}
+                                      {meta?.badge ? `#${meta.badge} · ` : ""}{meta?.area ?? UNASSIGNED_AREA}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
+                                    {isUnassignedView && me.role === "admin" && (
+                                      <Link to="/directory" className="text-[10px] underline text-steel-700">
+                                        Fix area in directory
+                                      </Link>
+                                    )}
                                   </div>
                                 );
                               })}
