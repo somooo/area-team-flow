@@ -49,6 +49,7 @@ type LeaveRow = {
   approver_email: string | null;
   covering_supervisor_email: string | null;
   stage: string | null;
+  cover_decline_reason?: string | null;
 };
 
 type ChangeReq = {
@@ -93,8 +94,9 @@ function countDays(a: string, b: string) {
 export function stageLabel(r: { status: string; stage: string | null }) {
   if (r.status === "Approved") return "Approved";
   if (r.status === "Rejected") return "Rejected";
-  if (r.stage === "covering") return "Pending covering supervisor approval";
-  if (r.stage === "admin") return "Pending admin approval";
+  if (r.stage === "cover_declined") return "Cover declined";
+  if (r.stage === "covering") return "Pending cover";
+  if (r.stage === "admin") return "Pending approval";
   return "Pending";
 }
 
@@ -124,7 +126,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [covering, setCovering] = useState<string>("");
   const [manageDay, setManageDay] = useState<{ iso: string; rows: LeaveRow[] } | null>(null);
   const [manageRow, setManageRow] = useState<LeaveRow | null>(null);
-  const [staffMeta, setStaffMeta] = useState<Record<string, { badge: string | null; area: string | null }>>({});
+  const [staffMeta, setStaffMeta] = useState<Record<string, { badge: string | null; area: string | null; name?: string }>>({});
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
@@ -135,6 +137,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [chgStart, setChgStart] = useState("");
   const [chgEnd, setChgEnd] = useState("");
   const [chgReason, setChgReason] = useState("");
+  const [renominate, setRenominate] = useState("");
+  const [renomOptions, setRenomOptions] = useState<CoverCandidate[]>([]);
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
   const isUnassignedView = viewArea === UNASSIGNED_AREA;
@@ -160,6 +164,18 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (c && !c.available) setCovering("");
   }, [supervisors, covering]);
 
+  // Options for re-nominating cover after a decline.
+  useEffect(() => {
+    if (!detail || detail.stage !== "cover_declined" || detail.staff_email.toLowerCase() !== me.email.toLowerCase()) {
+      setRenomOptions([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchCoverCandidates({ start: detail.start_date, end: detail.end_date, requesterEmail: me.email, excludeLeaveId: detail.id })
+      .then((list) => { if (!cancelled) setRenomOptions(list); });
+    return () => { cancelled = true; };
+  }, [detail, me.email]);
+
   useEffect(() => {
     void resolveApprover(me).then(async (email) => {
       setApprover(email);
@@ -181,7 +197,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     const [{ count: hc }, { data: area }, { data: mine }, { data: capData }] = await Promise.all([
       hcQuery,
       supabase.from("leave_requests")
-        .select("id,staff_email,staff_name,start_date,end_date,status,reason,approver_email,covering_supervisor_email,stage")
+        .select("id,staff_email,staff_name,start_date,end_date,status,reason,approver_email,covering_supervisor_email,stage,cover_decline_reason")
         .eq("area", viewArea).eq("leave_type", "Vacation")
         .in("status", ["Approved", "Pending"])
         .lte("start_date", winEnd).gte("end_date", winStart),
@@ -218,10 +234,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    void supabase.from("staff").select("email,badge_id,area").then(({ data }) => {
-      const map: Record<string, { badge: string | null; area: string | null }> = {};
-      for (const s of (data ?? []) as { email: string; badge_id: string | null; area: string | null }[]) {
-        map[s.email.toLowerCase()] = { badge: s.badge_id, area: s.area };
+    void supabase.from("staff").select("email,badge_id,area,name").then(({ data }) => {
+      const map: Record<string, { badge: string | null; area: string | null; name?: string }> = {};
+      for (const s of (data ?? []) as { email: string; badge_id: string | null; area: string | null; name: string }[]) {
+        map[s.email.toLowerCase()] = { badge: s.badge_id, area: s.area, name: s.name };
       }
       setStaffMeta(map);
     });
@@ -234,7 +250,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     () => (isUnassignedView ? 0 : maxOffPerDay(headcount, capPct)),
     [headcount, capPct, isUnassignedView],
   );
-  const countsPending = rules["vacation_cap_counts_pending"] !== false;
+  // Supervisor vacations only block days once fully Approved (cover + admin).
+  const countsPending = isSupervisorsView ? false : rules["vacation_cap_counts_pending"] !== false;
   const capAreaLabel = isSupervisorsView ? "Supervisors" : viewArea;
   const yearlyCap = ruleNumber(rules, "vacation_yearly_days", 25);
   const remaining = Math.max(0, yearlyCap - balance.approved - balance.pending);
@@ -261,6 +278,24 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     return { approvedByDay, mineByDay, rowsByDay };
   }, [leaves, me.email]);
 
+  const coverName = useCallback(
+    (email: string | null) => (email ? (staffMeta[email.toLowerCase()]?.name ?? email) : null),
+    [staffMeta],
+  );
+
+  /** Days where I am the accepted covering supervisor (read-only marker; blocks my own leave). */
+  const coveringByDay = useMemo(() => {
+    const map = new Map<string, LeaveRow>();
+    if (!isSupervisorsView) return map;
+    for (const r of leaves) {
+      if ((r.covering_supervisor_email ?? "").toLowerCase() !== me.email.toLowerCase()) continue;
+      if (r.status === "Rejected" || r.status === "Cancelled") continue;
+      if (!(r.status === "Approved" || r.stage === "admin")) continue;
+      for (const iso of eachDay(r.start_date, r.end_date)) map.set(iso, r);
+    }
+    return map;
+  }, [leaves, me.email, isSupervisorsView]);
+
   const todayISO = toISODate(new Date());
 
   const selectedSet = useMemo(() => {
@@ -275,6 +310,11 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (own) { setDetail(own); return; }
     if (!isOwnArea) return;
     if (iso < todayISO) return;
+    const cov = coveringByDay.get(iso);
+    if (cov) {
+      toast.error(`You are covering ${cov.staff_name} on ${iso} — you cannot book leave then`);
+      return;
+    }
     const used = countsPending
       ? (rowsByDay.get(iso)?.length ?? 0)
       : (approvedByDay.get(iso)?.length ?? 0);
@@ -394,6 +434,34 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     await load(); onDone();
   };
 
+  /** Re-send a declined supervisor request to a different covering supervisor. */
+  const renominateCover = async (row: LeaveRow) => {
+    if (!renominate) { toast.error("Pick a covering supervisor"); return; }
+    const fresh = await fetchCoverCandidates({ start: row.start_date, end: row.end_date, requesterEmail: me.email, excludeLeaveId: row.id });
+    const pick = fresh.find((c) => c.email === renominate);
+    setSupervisors(fresh);
+    if (!pick || !pick.available) {
+      toast.error(`${pick?.name ?? "That supervisor"} can no longer cover — ${pick?.reason ?? "not available"}`);
+      setRenominate("");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.from("leave_requests").update({
+      covering_supervisor_email: renominate,
+      approver_email: renominate,
+      stage: "covering",
+      cover_decline_reason: null,
+    }).eq("id", row.id);
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    await logAudit({ action: "cover_nominated", entity_type: "leave_request", entity_id: row.id, area: SUPERVISORS_AREA, details: { covering_supervisor_email: renominate, start_date: row.start_date, end_date: row.end_date, renominated: true } });
+    await createNotification({ data: { recipient_email: renominate, title: "Cover request", body: `${me.name}: ${row.start_date} → ${row.end_date}`, link: "/approvals" } });
+    toast.success("Cover request sent");
+    setRenominate("");
+    setDetail(null);
+    await load(); onDone();
+  };
+
   const submit = async () => {
     if (!start) return;
     const s = start, e = end ?? start;
@@ -443,6 +511,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     await notify({ data: { event: "request_submitted", staff_name: me.name, staff_email: me.email, supervisor_email: routeTo, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, leave_type: "Vacation", start_date: s, end_date: e, reason } });
     await createNotification({ data: { recipient_email: routeTo, title: isSupervisorsView ? "Cover + approve vacation" : "Vacation leave request", body: `${me.name}: ${s} → ${e}`, link: "/approvals" } });
     await logAudit({ action: "leave_requested", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, details: { start_date: s, end_date: e, leave_type: "Vacation", covering_supervisor_email: isSupervisorsView ? covering : null } });
+    if (isSupervisorsView) {
+      await logAudit({ action: "cover_nominated", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: SUPERVISORS_AREA, details: { covering_supervisor_email: covering, start_date: s, end_date: e } });
+    }
     toast.success("Vacation request submitted");
     setConfirmOpen(false); setStart(null); setEnd(null); setReason(""); setCovering(""); setOverrideReason("");
     await load(); onDone();
@@ -770,6 +841,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 const capBlocked = isOwnArea && full && !past && !(canManage && dayRows.length > 0);
                 const visible = dayRows.slice(0, 3);
                 const overflow = dayRows.length - visible.length;
+                const coveringHere = coveringByDay.get(iso);
                 return (
                   <div
                     key={i}
@@ -822,8 +894,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                       )}
                     </div>
                     <div className="flex flex-col gap-px w-full min-w-0 overflow-y-auto">
+                      {coveringHere && (
+                        <div className="flex items-center gap-1 rounded bg-emerald-100 px-1 py-px w-full min-w-0" title={`Covering ${coveringHere.staff_name}`}>
+                          <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-emerald-900">
+                            Covering {coveringHere.staff_name}
+                          </span>
+                        </div>
+                      )}
                       {visible.map((r) => {
                         const mine = r.staff_email.toLowerCase() === me.email.toLowerCase();
+                        const cov = isSupervisorsView ? coverName(r.covering_supervisor_email) : null;
                         return (
                           <TooltipProvider key={r.id} delayDuration={200}>
                             <Tooltip>
@@ -832,7 +912,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                   "flex items-center gap-1 rounded px-1 py-px w-full min-w-0",
                                   mine ? "bg-steel-100" : "bg-muted/40",
                                 ].join(" ")}>
-                                  <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-ink">{r.staff_name}</span>
+                                  <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-ink">
+                                    {r.staff_name}{cov ? ` — covered by ${cov}` : ""}
+                                  </span>
                                   {changeByLeave[r.id] && (
                                     <span className="shrink-0 rounded bg-copper/60 px-1 text-[8px] font-semibold leading-[13px] text-ink">C</span>
                                   )}
@@ -844,7 +926,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                               </TooltipTrigger>
                               <TooltipContent className="max-w-56">
                                 <div className="text-xs">
-                                  {r.staff_name} — {r.status}
+                                  {r.staff_name} — {stageLabel(r)}
+                                  {cov ? ` · covered by ${cov}` : ""}
                                   {changeByLeave[r.id] ? ` · Change pending (${changeByLeave[r.id].type})` : ""}
                                 </div>
                               </TooltipContent>
@@ -921,6 +1004,39 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
               <div><span className="text-muted-foreground">Stage: </span><span className="font-medium">{stageLabel(detail)}</span></div>
               <div><span className="text-muted-foreground">Approver: </span><span className="font-medium">{(detail.approver_email && detail.approver_email.toLowerCase() === approver?.toLowerCase() ? approverName : detail.approver_email) ?? "—"}</span></div>
               {detail.reason && <div><span className="text-muted-foreground">Reason: </span>{detail.reason}</div>}
+              {detail.covering_supervisor_email && (
+                <div><span className="text-muted-foreground">Covering: </span>
+                  <span className="font-medium">{coverName(detail.covering_supervisor_email)}</span></div>
+              )}
+              {detail.stage === "cover_declined" && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-2">
+                  <div className="text-xs font-semibold text-destructive">Cover declined</div>
+                  {detail.cover_decline_reason && (
+                    <div className="text-xs text-muted-foreground">Reason: {detail.cover_decline_reason}</div>
+                  )}
+                  {detail.staff_email.toLowerCase() === me.email.toLowerCase() && (
+                    <>
+                      <Label className="text-xs">Nominate another covering supervisor</Label>
+                      <Select value={renominate} onValueChange={setRenominate}>
+                        <SelectTrigger><SelectValue placeholder="Select a supervisor" /></SelectTrigger>
+                        <SelectContent>
+                          {renomOptions.length === 0 && (
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground">No supervisors available</div>
+                          )}
+                          {renomOptions.map((s) => (
+                            <SelectItem key={s.email} value={s.email} disabled={!s.available}>
+                              {s.name}
+                              {!s.available && <span className="ml-1 text-[10px] text-muted-foreground">— {s.reason}</span>}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" className="w-full" disabled={busy || !renominate}
+                        onClick={() => renominateCover(detail)}>Send cover request</Button>
+                    </>
+                  )}
+                </div>
+              )}
               {detail.status === "Approved" ? (
                 changeByLeave[detail.id] ? (
                   <div className="rounded-md border border-copper/50 bg-copper/10 p-2 space-y-2">
