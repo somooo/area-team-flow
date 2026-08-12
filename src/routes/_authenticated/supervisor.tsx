@@ -338,6 +338,27 @@ function SupervisorPage() {
       return { attempted, written: 0, confirmed: 0, failures };
     }
 
+    // Re-query what actually landed and compare with the header's own range.
+    let note: string | undefined;
+    const expectedStart = rows.reduce((a, r) => (a && a <= r.date ? a : r.date), "");
+    const expectedEnd = rows.reduce((a, r) => (a && a >= r.date ? a : r.date), "");
+    if (expectedStart && expectedEnd) {
+      const [{ data: lo }, { data: hi }] = await Promise.all([
+        supabase.from("shifts").select("date").eq("area", viewArea)
+          .gte("date", expectedStart).lte("date", expectedEnd).order("date", { ascending: true }).limit(1),
+        supabase.from("shifts").select("date").eq("area", viewArea)
+          .gte("date", expectedStart).lte("date", expectedEnd).order("date", { ascending: false }).limit(1),
+      ]);
+      const gotStart = lo?.[0]?.date ?? null;
+      const gotEnd = hi?.[0]?.date ?? null;
+      note = `Confirmed date range in the database: ${gotStart ?? "—"} to ${gotEnd ?? "—"} (file header: ${expectedStart} to ${expectedEnd}).`;
+      if (gotStart !== expectedStart || gotEnd !== expectedEnd) {
+        failures.push(
+          `Date range mismatch — the file covers ${expectedStart} to ${expectedEnd} but the database holds ${gotStart ?? "nothing"} to ${gotEnd ?? "nothing"}.`,
+        );
+      }
+    }
+
     if (replace) {
       for (const r of ranges) {
         await logAudit({
@@ -378,7 +399,7 @@ function SupervisorPage() {
     setPending({});
     await load();
     await loadDirectory();
-    return { attempted, written, confirmed, failures };
+    return { attempted, written, confirmed, failures, note };
   };
 
   /** Create real directory records for badges the file contains but the directory does not. */
