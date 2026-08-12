@@ -13,6 +13,7 @@ import { createNotification } from "@/lib/notifications.functions";
 type Leave = {
   id: string; staff_email: string; staff_name: string; area: string;
   start_date: string; end_date: string; status: string;
+  covering_supervisor_email: string | null; stage: string | null;
 };
 type Row = {
   id: string; leave_request_id: string; requested_by: string; type: string;
@@ -46,7 +47,7 @@ export function VacationChangeApprovals({
     if (reqs.length === 0) { setRows([]); return; }
     const { data: lv } = await supabase
       .from("leave_requests")
-      .select("id,staff_email,staff_name,area,start_date,end_date,status")
+      .select("id,staff_email,staff_name,area,start_date,end_date,status,covering_supervisor_email,stage")
       .in("id", reqs.map((r) => r.leave_request_id));
     const byId = new Map(((lv ?? []) as Leave[]).map((l) => [l.id, l]));
     const emails = Array.from(new Set(((lv ?? []) as Leave[]).map((l) => l.staff_email.toLowerCase())));
@@ -97,6 +98,18 @@ export function VacationChangeApprovals({
       if (r.type === "cancel") {
         const { error } = await supabase.from("leave_requests").update({ status: "Cancelled" }).eq("id", r.leave.id);
         if (error) { toast.error(error.message); return; }
+        if (r.leave.covering_supervisor_email) {
+          await logAudit({
+            action: "cover_cancelled", entity_type: "leave_request", entity_id: r.leave.id, area: r.leave.area,
+            details: { covering_supervisor_email: r.leave.covering_supervisor_email, start_date: r.leave.start_date, end_date: r.leave.end_date, actor_name: actor.name },
+          });
+          await createNotification({ data: {
+            recipient_email: r.leave.covering_supervisor_email,
+            title: "Cover cancelled",
+            body: `${r.leave.staff_name}: ${r.leave.start_date} → ${r.leave.end_date} was cancelled`,
+            link: "/vacations",
+          } });
+        }
       } else {
         if (!r.new_start_date || !r.new_end_date) { toast.error("The request has no new dates"); return; }
         const useOverride = overrideFor === r.id && overrideReason.trim().length > 0;
@@ -119,6 +132,27 @@ export function VacationChangeApprovals({
             area: r.leave.area,
             details: { start_date: r.new_start_date, end_date: r.new_end_date, reason: overrideReason.trim(), source: "change_request_approval", actor_name: actor.name },
           });
+        }
+        // Supervisor vacations: extra days need the cover to accept again.
+        const addsDays = r.new_start_date < r.leave.start_date || r.new_end_date > r.leave.end_date;
+        if (r.leave.area === "Supervisors" && r.leave.covering_supervisor_email && addsDays) {
+          await supabase.from("leave_requests").update({
+            stage: "covering",
+            status: "Pending",
+            cover_accepted_at: null,
+            cover_decline_reason: null,
+            approver_email: r.leave.covering_supervisor_email,
+          }).eq("id", r.leave.id);
+          await logAudit({
+            action: "cover_nominated", entity_type: "leave_request", entity_id: r.leave.id, area: r.leave.area,
+            details: { covering_supervisor_email: r.leave.covering_supervisor_email, start_date: r.new_start_date, end_date: r.new_end_date, source: "adjustment_added_days" },
+          });
+          await createNotification({ data: {
+            recipient_email: r.leave.covering_supervisor_email,
+            title: "Cover request — extended dates",
+            body: `${r.leave.staff_name}: ${r.new_start_date} → ${r.new_end_date}`,
+            link: "/approvals",
+          } });
         }
       }
       const ok = await finish(r, "approved");
