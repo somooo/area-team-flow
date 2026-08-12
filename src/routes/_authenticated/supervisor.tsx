@@ -16,7 +16,7 @@ import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
-import { planScheduleImport, type ImportedCell, type DirectoryPerson, type MissingPerson } from "@/lib/schedule-import";
+import { planScheduleImport, type ImportedCell, type ImportDirectoryPerson, type MissingPerson } from "@/lib/schedule-import";
 import { normalizeBadge, isProtectedTest } from "@/lib/staff-import";
 import { ScheduleMappingDialog, type ScheduleImportConfig } from "@/components/ScheduleMappingDialog";
 import { logAudit } from "@/lib/audit";
@@ -81,7 +81,7 @@ function SupervisorPage() {
   const [importConfig, setImportConfig] = useState<ScheduleImportConfig | null>(null);
   const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
   const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
-  const [directory, setDirectory] = useState<DirectoryPerson[]>([]);
+  const [directory, setDirectory] = useState<ImportDirectoryPerson[]>([]);
   const [missingPeople, setMissingPeople] = useState<MissingPerson[]>([]);
   const [addingMissing, setAddingMissing] = useState(false);
   const [addedToSchedule, setAddedToSchedule] = useState<StaffLite[]>([]);
