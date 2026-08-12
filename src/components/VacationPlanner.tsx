@@ -20,6 +20,7 @@ import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
 import { useDirectoryAreas, UNASSIGNED_AREA } from "@/lib/areas";
+import { isProtectedTest } from "@/lib/staff-import";
 import { maxOffPerDay } from "@/components/VacationCapsTable";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { fetchCoverCandidates, type CoverCandidate } from "@/lib/cover";
@@ -191,11 +192,13 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     const winStart = toISODate(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
     const winEnd = toISODate(new Date(cursor.getFullYear(), cursor.getMonth() + 2, 0));
     const year = new Date().getFullYear();
+    // Headcount comes from the Staff Directory only — never from the schedule.
+    // Active, non-test staff whose "Assigned to" is this area, each counted once.
     const hcQuery = isSupervisorsView
-      ? supabase.from("staff").select("id", { count: "exact", head: true }).eq("role", "supervisor")
-      : supabase.from("staff").select("id", { count: "exact", head: true }).eq("area", viewArea);
+      ? supabase.from("staff").select("id,name,first_name,status").eq("role", "supervisor")
+      : supabase.from("staff").select("id,name,first_name,status").eq("area", viewArea);
     const capArea = isSupervisorsView ? "Supervisor" : viewArea;
-    const [{ count: hc }, { data: area }, { data: mine }, { data: capData }] = await Promise.all([
+    const [{ data: hcRows }, { data: area }, { data: mine }, { data: capData }] = await Promise.all([
       hcQuery,
       supabase.from("leave_requests")
         .select("id,staff_email,staff_name,start_date,end_date,status,reason,approver_email,covering_supervisor_email,stage,cover_decline_reason")
@@ -208,7 +211,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
         .in("status", ["Approved", "Pending"]),
       supabase.from("vacation_caps").select("cap_pct,warn_pct").eq("area", capArea).maybeSingle(),
     ]);
-    setHeadcount(hc ?? 1);
+    const activeStaff = ((hcRows ?? []) as { name: string | null; first_name: string | null; status: string | null }[])
+      .filter((s) => !isProtectedTest(s))
+      .filter((s) => (s.status ?? "Active").toLowerCase() === "active");
+    setHeadcount(activeStaff.length);
     setCapRow((capData as { cap_pct: number; warn_pct: number } | null) ?? null);
     setLeaves((area ?? []) as LeaveRow[]);
     const ids = ((area ?? []) as LeaveRow[]).map((r) => r.id);

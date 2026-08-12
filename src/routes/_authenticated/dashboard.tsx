@@ -27,6 +27,7 @@ import { exportExcel, exportPdf } from "@/lib/schedule-export";
 import { totalsForStaff, groupByStaff } from "@/lib/roster-totals";
 import { useSystemRules } from "@/lib/system-rules";
 import { useDirectoryAreas } from "@/lib/areas";
+import { fetchVacationDays } from "@/lib/vacation-days";
 import { X } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -76,6 +77,8 @@ function SchedulePage() {
   const [reference, setReference] = useState<ZoneReferenceRow[]>([]);
   const [zones, setZones] = useState<ZoneAssignment[]>([]);
   const [tlOpen, setTlOpen] = useState(false);
+  const [vacationKeys, setVacationKeys] = useState<Set<string>>(new Set());
+  const [homeAreas, setHomeAreas] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     void getServerNow().then((r) => setServerNow(new Date(r.now)));
@@ -93,11 +96,21 @@ function SchedulePage() {
     if (!viewArea) return;
     const startISO = toISODate(new Date(year, month, 1));
     const endISO = toISODate(new Date(year, month + 1, 0));
-    const [{ data: sh }, { data: st }] = await Promise.all([
+    const [{ data: sh }, { data: st }, { data: all }, vac] = await Promise.all([
       supabase.from("shifts").select("*").eq("area", viewArea).gte("date", startISO).lte("date", endISO).order("date"),
       supabase.from("staff").select("id,name,email,role,area,department").eq("area", viewArea).order("name"),
+      supabase.from("staff").select("email,area"),
+      fetchVacationDays(startISO, endISO),
     ]);
     setShifts((sh as Shift[]) ?? []);
+    setVacationKeys(vac.keys);
+    setHomeAreas(
+      Object.fromEntries(
+        ((all ?? []) as { email: string | null; area: string | null }[])
+          .filter((s) => s.email)
+          .map((s) => [s.email!.toLowerCase(), s.area]),
+      ),
+    );
     // Anyone with a shift this month belongs on the grid, even if their
     // directory record is not assigned to this area (e.g. added by an import).
     const base = (st as Staff[]) ?? [];
@@ -284,6 +297,9 @@ function SchedulePage() {
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             groups={gridGroups}
+            vacationKeys={vacationKeys}
+            homeAreaByEmail={homeAreas}
+            currentArea={viewArea}
             onCellClick={handleCell}
             isCellClickable={cellClickable}
           />

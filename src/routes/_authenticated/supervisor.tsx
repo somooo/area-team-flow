@@ -26,7 +26,11 @@ import {
   type SheetCell,
   type SheetSource,
   type SheetPlanResult,
+  type SideConflict,
+  type VacationConflict,
+  type ScheduleMembership,
 } from "@/lib/sheet-schedule-import";
+import { fetchVacationDays } from "@/lib/vacation-days";
 import { buildScheduleGroups, fetchZoneAssignments, type ZoneAssignment } from "@/lib/zones";
 import { normalizeBadge, isProtectedTest } from "@/lib/staff-import";
 import { SheetMappingDialog, type SheetImportConfig } from "@/components/SheetMappingDialog";
@@ -104,6 +108,12 @@ function SupervisorPage() {
   const [addedToSchedule, setAddedToSchedule] = useState<StaffLite[]>([]);
   const [removalPreview, setRemovalPreview] = useState<{ name: string; badge: string }[]>([]);
   const [scopeWarning, setScopeWarning] = useState<string | null>(null);
+  const [vacationKeys, setVacationKeys] = useState<Set<string>>(new Set());
+  const [homeAreas, setHomeAreas] = useState<Record<string, string | null>>({});
+  const [sideConflicts, setSideConflicts] = useState<SideConflict[]>([]);
+  const [vacationConflicts, setVacationConflicts] = useState<VacationConflict[]>([]);
+  /** badge -> how the admin wants the one-side rule resolved. */
+  const [conflictChoice, setConflictChoice] = useState<Record<string, "move" | "skip">>({});
   /** Every non-blank cell in the file, used when the import replaces the whole month. */
   const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<SheetCell>[]>([]);
 
@@ -159,15 +169,25 @@ function SupervisorPage() {
     if (!canManage || !viewArea) return;
     const start = toISODate(new Date(year, month, 1));
     const end = toISODate(new Date(year, month + 1, 0));
-    const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }, { data: tl }] = await Promise.all([
+    const [{ data: sh }, { data: st }, { data: lv }, { data: ch }, { data: sup }, { data: tl }, { data: allStaff }, vac] = await Promise.all([
       supabase.from("shifts").select("*").eq("area", viewArea).gte("date", start).lte("date", end).order("date"),
       supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active,badge_id").eq("area", viewArea).order("name"),
       supabase.from("leave_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("schedule_change_requests").select("*").eq("area", viewArea).order("created_at", { ascending: false }),
       supabase.from("staff").select("id,name,email,role,area,department,supervisor_email,delegated_to_email,delegation_active").eq("role", "supervisor"),
       supabase.from("team_leader_reports").select("*").eq("area", viewArea).order("shift_date", { ascending: false }).limit(30),
+      supabase.from("staff").select("email,area"),
+      fetchVacationDays(start, end),
     ]);
     setShifts((sh as Shift[]) ?? []);
+    setVacationKeys(vac.keys);
+    setHomeAreas(
+      Object.fromEntries(
+        ((allStaff ?? []) as { email: string | null; area: string | null }[])
+          .filter((s) => s.email)
+          .map((s) => [s.email!.toLowerCase(), s.area]),
+      ),
+    );
     const staffRows = (st as (Staff & { badge_id?: string | null })[]) ?? [];
     setStaff(staffRows as Staff[]);
     setBadges(Object.fromEntries(staffRows.filter((s) => s.badge_id).map((s) => [s.email.toLowerCase(), String(s.badge_id)])));
@@ -257,7 +277,32 @@ function SupervisorPage() {
     for (const d of directory) if (!staffIdByEmail.has(d.email.toLowerCase())) staffIdByEmail.set(d.email.toLowerCase(), d.id);
     const ranges = importRanges(importMonths);
     // In replace mode nothing survives to diff against, so every parsed cell is written.
-    const source = replace ? replaceAllItems : items;
+    const allItems = replace ? replaceAllItems : items;
+
+    // One side per area / one side across areas: skipped badges never reach the database,
+    // and "move" badges have their conflicting membership cleared first.
+    const skipEmails = new Set(
+      sideConflicts.filter((c) => (conflictChoice[c.badge] ?? "skip") === "skip").map((c) => c.email),
+    );
+    const source = skipEmails.size
+      ? allItems.filter((i) => !i.payload || !skipEmails.has(i.payload.staff.email.toLowerCase()))
+      : allItems;
+    const moving = sideConflicts.filter((c) => conflictChoice[c.badge] === "move");
+    for (const c of moving) {
+      const mStart = c.monthStart;
+      const [my, mm] = mStart.split("-").map(Number);
+      const mEnd = toISODate(new Date(my, mm, 0));
+      setProgress(`Moving ${c.name} off the ${c.otherArea} ${c.otherSide} schedule…`);
+      const { error } = await supabase.from("shifts").delete()
+        .eq("area", c.otherArea).ilike("staff_email", c.email)
+        .gte("date", mStart).lte("date", mEnd);
+      if (error) throw new Error(`Could not move ${c.name}: ${error.message}`);
+      await logAudit({
+        action: "schedule_side_moved", entity_type: "schedule", entity_id: `${c.email}-${mStart}`,
+        actor_email: me?.staff?.email, actor_role: me?.staff?.role, area: viewArea,
+        details: { staff: c.name, badge: c.badge, from_area: c.otherArea, from_side: c.otherSide, to_area: viewArea, to_side: c.side, month: c.monthLabel },
+      });
+    }
 
     // Deletions first (merge mode only clears cells that were emptied in the file).
     const toDelete = replace ? [] : source.filter((i) => i.payload && !i.payload.payload && i.payload.existingId)
@@ -663,9 +708,54 @@ function SupervisorPage() {
                     </p>
                   )}
                   {(sheetSummary?.bothSheets.length ?? 0) > 0 && (
-                    <p className="text-muted-foreground">
-                      {sheetSummary!.bothSheets.length} badge{sheetSummary!.bothSheets.length === 1 ? "" : "s"} appear on both sheets: {sheetSummary!.bothSheets.join(", ")}
+                    <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-destructive">
+                      {sheetSummary!.bothSheets.length} badge{sheetSummary!.bothSheets.length === 1 ? "" : "s"} appear on both the Day and Night sheet: {sheetSummary!.bothSheets.join(", ")}.
+                      A staff member cannot be on both sides of the same area — fix the file before importing.
                     </p>
+                  )}
+                  {sideConflicts.length > 0 && (
+                    <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                      <p className="font-medium text-destructive">
+                        {sideConflicts.length} shift-side conflict{sideConflicts.length === 1 ? "" : "s"}
+                      </p>
+                      {sideConflicts.map((c) => (
+                        <div key={c.badge} className="space-y-1 border-t pt-2 first:border-t-0 first:pt-0">
+                          <p>{c.message}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant={conflictChoice[c.badge] === "move" ? "default" : "outline"}
+                              onClick={() => setConflictChoice((p) => ({ ...p, [c.badge]: "move" }))}
+                            >
+                              Move to {c.sameArea ? viewArea : viewArea} {c.side === "night" ? "Night" : "Day"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={(conflictChoice[c.badge] ?? "skip") === "skip" ? "default" : "outline"}
+                              onClick={() => setConflictChoice((p) => ({ ...p, [c.badge]: "skip" }))}
+                            >
+                              Skip this row
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-muted-foreground">
+                        “Move” clears their {sideConflicts[0].otherArea} rows for that month before importing. Nothing is created on both sides.
+                      </p>
+                    </div>
+                  )}
+                  {vacationConflicts.length > 0 && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      <p className="font-medium">
+                        Assigned while on vacation — {vacationConflicts.length} staff. The codes are imported, but the
+                        schedule shows V for those days. Correct them at source.
+                      </p>
+                      <ul>
+                        {vacationConflicts.map((v) => (
+                          <li key={v.badge}>{v.badge} · {v.name} — {v.dates.join(", ")}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                   {addedToSchedule.length > 0 && (
                     <p className="text-muted-foreground">
@@ -708,12 +798,33 @@ function SupervisorPage() {
                   shifts,
                   knownAssignmentNumbers: new Set(zones.map((z) => z.assignment_no)),
                 };
-                const diff = planSheetImport({ ...common, replace: false });
-                const full = planSheetImport({ ...common, replace: true });
+                // Existing memberships and approved vacations for the month(s) in the file.
+                const monthStarts = Array.from(
+                  new Set(sources.map((s) => `${s.layout.year}-${String(s.layout.month).padStart(2, "0")}-01`)),
+                );
+                const { data: memberRows } = await supabase
+                  .from("schedule_memberships")
+                  .select("staff_id,area,month_start,side")
+                  .in("month_start", monthStarts);
+                const memberships = (memberRows ?? []) as ScheduleMembership[];
+                const monthEnds = monthStarts.map((ms) => {
+                  const [my, mm] = ms.split("-").map(Number);
+                  return toISODate(new Date(my, mm, 0));
+                });
+                const vac = await fetchVacationDays(
+                  monthStarts.slice().sort()[0],
+                  monthEnds.slice().sort().reverse()[0],
+                );
+                const withRules = { ...common, area: viewArea, memberships, vacationKeys: vac.keys };
+                const diff = planSheetImport({ ...withRules, replace: false });
+                const full = planSheetImport({ ...withRules, replace: true });
                 setLabelRowsSkipped(0);
                 setMissingPeople(full.missing);
                 setAddedToSchedule(full.addedToSchedule);
                 setReplaceAllItems(full.items.filter((i) => i.status !== "skip"));
+                setSideConflicts(full.sideConflicts);
+                setVacationConflicts(full.vacationConflicts);
+                setConflictChoice(Object.fromEntries(full.sideConflicts.map((c) => [c.badge, "skip" as const])));
                 setSheetSummary({
                   perSheet: full.perSheet,
                   crossSheetWarnings: full.crossSheetWarnings,
@@ -829,6 +940,9 @@ function SupervisorPage() {
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             pendingKeys={pendingKeys}
             groups={gridGroups}
+            vacationKeys={vacationKeys}
+            homeAreaByEmail={homeAreas}
+            currentArea={viewArea}
             onCellClick={canEditViewedArea ? ({ staff: s, date, shift }) => setEditor({ staff: s, date, shift }) : undefined}
           />
           )}
