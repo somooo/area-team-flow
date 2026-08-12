@@ -460,6 +460,44 @@ export type Database = {
           },
         ]
       }
+      schedule_memberships: {
+        Row: {
+          area: string
+          created_at: string
+          id: string
+          month_start: string
+          side: string
+          staff_id: string
+          updated_at: string
+        }
+        Insert: {
+          area: string
+          created_at?: string
+          id?: string
+          month_start: string
+          side: string
+          staff_id: string
+          updated_at?: string
+        }
+        Update: {
+          area?: string
+          created_at?: string
+          id?: string
+          month_start?: string
+          side?: string
+          staff_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_memberships_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shifts: {
         Row: {
           area: string
