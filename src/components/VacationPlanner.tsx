@@ -168,6 +168,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    void supabase.from("staff").select("email,badge_id,area").then(({ data }) => {
+      const map: Record<string, { badge: string | null; area: string | null }> = {};
+      for (const s of (data ?? []) as { email: string; badge_id: string | null; area: string | null }[]) {
+        map[s.email.toLowerCase()] = { badge: s.badge_id, area: s.area };
+      }
+      setStaffMeta(map);
+    });
+  }, []);
+
   const cap = useMemo(
     () => Math.floor((headcount * ruleNumber(rules, "vacation_cap_pct", 30)) / 100),
     [headcount, rules],
