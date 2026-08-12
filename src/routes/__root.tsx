@@ -139,6 +139,12 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){var K='kadir:chunk-reload';function bad(m){return /dynamically imported module|Importing a module script failed|ChunkLoadError|Loading chunk|Failed to fetch/i.test(String(m||''))}function go(){try{var l=Number(sessionStorage.getItem(K)||0);if(l&&Date.now()-l<30000)return;sessionStorage.setItem(K,String(Date.now()));location.reload()}catch(e){}}addEventListener('error',function(e){if(bad(e&&(e.message||(e.error&&e.error.message))))go()});addEventListener('unhandledrejection',function(e){var r=e&&e.reason;if(bad(r&&r.message||r))go()})})();",
+          }}
+        />
       </head>
       <body>
         {children}
