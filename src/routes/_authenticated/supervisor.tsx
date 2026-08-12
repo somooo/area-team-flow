@@ -545,6 +545,7 @@ function SupervisorPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
+            {canEditViewedArea && (
             <ExcelImportButton<ImportedCell, ScheduleImportConfig>
               title={`Import ${viewArea} schedule`}
               description="Read from cell text only — colour is applied by the app from the overtime type. Re-importing an untouched export produces no changes."
