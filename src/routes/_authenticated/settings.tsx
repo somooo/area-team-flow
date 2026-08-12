@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { logAudit } from "@/lib/audit";
+import VacationCapsTable from "@/components/VacationCapsTable";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "System rules — KADIR Staff Management" }] }),
@@ -26,6 +27,9 @@ type Rule = {
 };
 
 const GROUP_ORDER = ["Vacation", "Pre-schedule", "Overtime", "Import", "General"];
+
+/** Rules rendered by dedicated UI instead of the generic list. */
+const CUSTOM_RULE_KEYS = new Set(["vacation_cap_pct", "vacation_change_deadline_day"]);
 
 /** Longer explanations shown under specific rules. */
 const HELP: Record<string, { title: string; body: string }> = {
@@ -66,12 +70,18 @@ function SettingsPage() {
   const grouped = useMemo(() => {
     const m = new Map<string, Rule[]>();
     for (const r of rules) {
+      if (CUSTOM_RULE_KEYS.has(r.key)) continue;
       const g = GROUP_ORDER.includes(r.group) ? r.group : "General";
       if (!m.has(g)) m.set(g, []);
       m.get(g)!.push(r);
     }
     return GROUP_ORDER.filter((g) => m.has(g)).map((g) => [g, m.get(g)!] as const);
   }, [rules]);
+
+  const deadlineRule = useMemo(
+    () => rules.find((r) => r.key === "vacation_change_deadline_day"),
+    [rules],
+  );
 
   if ((me?.staff?.role as string) !== "admin") return <p>Admins only.</p>;
 
@@ -129,6 +139,49 @@ function SettingsPage() {
           Vacation caps, auto-approve window, OT limits and other operational rules.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Vacation caps</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <VacationCapsTable actorEmail={me?.staff?.email} />
+        </CardContent>
+      </Card>
+
+      {deadlineRule && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Change requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid sm:grid-cols-[320px_1fr_auto] gap-2 items-start">
+              <div>
+                <Label className="text-xs">Change request deadline day</Label>
+                <div className="text-[11px] text-muted-foreground">
+                  Staff may request cancel/adjust until this day of the month before the vacation
+                  starts.
+                </div>
+                <div className="text-[10px] text-muted-foreground/70">
+                  {deadlineRule.key}
+                </div>
+              </div>
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                value={draft[deadlineRule.key] ?? ""}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, [deadlineRule.key]: e.target.value }))
+                }
+              />
+              <Button size="sm" onClick={() => saveTyped(deadlineRule)}>
+                Save
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {grouped.map(([group, list]) => (
         <Card key={group}>
