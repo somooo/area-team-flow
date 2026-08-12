@@ -672,6 +672,8 @@ function SupervisorPage() {
               }}
               commit={commitScheduleImport}
             />
+            )}
+            {canEditViewedArea && (
             <Button
               size="sm"
               variant="outline"
@@ -679,6 +681,7 @@ function SupervisorPage() {
             >
               Export to Excel
             </Button>
+            )}
             {Object.keys(pending).length > 0 && (
               <>
                 <Badge variant="secondary">{Object.keys(pending).length} unsaved</Badge>
