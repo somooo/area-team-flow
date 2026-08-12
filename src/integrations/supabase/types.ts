@@ -921,6 +921,10 @@ export type Database = {
         Args: { _origin: string; _req: string }
         Returns: undefined
       }
+      vacation_change_deadline: {
+        Args: { _start_date: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "staff" | "supervisor" | "admin" | "team_leader"

@@ -305,11 +305,31 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     [changeMode, chgStart, chgEnd, blockedIn],
   );
 
+  /**
+   * Staff may request a change only until `vacation_change_deadline_day` of the month
+   * BEFORE the vacation month. Supervisors/admins are exempt.
+   */
+  const deadlineDay = ruleNumber(rules, "vacation_change_deadline_day", 15);
+  const changeDeadline = useCallback((startISO: string) => {
+    const [y, m] = startISO.split("-").map(Number);
+    const d = new Date(y!, (m! - 1) - 1, Math.min(Math.max(deadlineDay, 1), 28));
+    const monthName = new Date(y!, m! - 1, 1).toLocaleDateString("en-GB", { month: "long" });
+    const label = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const exempt = me.role !== "staff";
+    const passed = !exempt && toISODate(new Date()) > toISODate(d);
+    return { passed, label, monthName };
+  }, [deadlineDay, me.role]);
+
   const closeChange = () => { setChangeMode(null); setChgReason(""); setChgStart(""); setChgEnd(""); };
 
   /** Staff-initiated change request against their own booked vacation. Never mutates the vacation. */
   const submitChangeRequest = async () => {
     if (!detail || !changeMode) return;
+    const dl = changeDeadline(detail.start_date);
+    if (dl.passed) {
+      toast.error(`The deadline to change ${dl.monthName} leave was ${dl.label}. Contact your supervisor.`);
+      return;
+    }
     if (!chgReason.trim()) { toast.error("A short reason is required"); return; }
     if (changeMode === "adjust") {
       if (!chgStart || !chgEnd || chgEnd < chgStart) { toast.error("Pick a valid date range"); return; }
@@ -898,12 +918,26 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                   </div>
                 ) : detail.staff_email.toLowerCase() === me.email.toLowerCase() ? (
                   changeMode === null ? (
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="destructive" className="flex-1" onClick={() => { setChangeMode("cancel"); setChgReason(""); }}>Request cancellation</Button>
-                      <Button variant="outline" className="flex-1"
-                        onClick={() => { setChangeMode("adjust"); setChgReason(""); setChgStart(detail.start_date); setChgEnd(detail.end_date); }}>
-                        Request adjustment
-                      </Button>
+                    <div className="space-y-2 pt-1">
+                      <div className="flex gap-2">
+                        <Button variant="destructive" className="flex-1" disabled={changeDeadline(detail.start_date).passed}
+                          onClick={() => { setChangeMode("cancel"); setChgReason(""); }}>Request cancellation</Button>
+                        <Button variant="outline" className="flex-1" disabled={changeDeadline(detail.start_date).passed}
+                          onClick={() => { setChangeMode("adjust"); setChgReason(""); setChgStart(detail.start_date); setChgEnd(detail.end_date); }}>
+                          Request adjustment
+                        </Button>
+                      </div>
+                      {changeDeadline(detail.start_date).passed ? (
+                        <p className="text-[11px] text-destructive">
+                          The deadline to change {changeDeadline(detail.start_date).monthName} leave was {changeDeadline(detail.start_date).label}. Contact your supervisor.
+                        </p>
+                      ) : (
+                        me.role === "staff" && (
+                          <p className="text-[11px] text-muted-foreground">
+                            You can change this until {changeDeadline(detail.start_date).label}.
+                          </p>
+                        )
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-2 rounded-md border p-2">
