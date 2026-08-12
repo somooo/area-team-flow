@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { logAudit } from "@/lib/audit";
-import { AREAS, SUPERVISORS_TEAM } from "@/lib/areas";
+import { AREAS } from "@/lib/areas";
 
 type Cap = { id: string; area: string; cap_pct: number; warn_pct: number };
 type StaffRow = { area: string | null; role: string; status: string | null };
