@@ -1,6 +1,7 @@
 import type { ImportItem } from "@/components/ExcelImportButton";
 import type { StaffLite } from "@/components/MonthGrid";
-import { toISODate, type Duty, type OtType, type RosterShift } from "@/lib/roster";
+import { type Duty, type OtType, type RosterShift } from "@/lib/roster";
+import { partsToISO, readDateParts, type DateParts } from "@/lib/xlsx-io";
 import { normalizeBadge } from "@/lib/staff-import";
 import type { DirectoryPerson, MissingPerson } from "@/lib/schedule-import";
 
@@ -23,11 +24,17 @@ export type SheetLayout = {
   side: SheetSide;
   /** Every column in row 1 holding a real date, in sheet order. */
   dateCols: { col: number; iso: string }[];
+  /** Real month number, 1-12 — never a JS month index. */
   month: number;
   year: number;
+  /** First and last dated column, as written in the header. */
+  firstDate: string | null;
+  lastDate: string | null;
   rows: SheetRow[];
   blankRowsSkipped: number;
   warnings: string[];
+  /** Columns whose header date falls outside the detected month — these abort the import. */
+  outOfMonth: { col: number; header: string; iso: string }[];
 };
 
 export type SheetPayload = {
@@ -47,17 +54,13 @@ export type SheetCell = {
   payload: null | SheetPayload;
 };
 
-const asDate = (v: unknown): Date | null => {
-  if (v instanceof Date && !isNaN(v.getTime())) return v;
-  if (typeof v === "string") {
-    const s = v.trim();
-    if (/^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(s)) {
-      const d = new Date(s);
-      if (!isNaN(d.getTime())) return d;
-    }
-  }
-  return null;
-};
+const headerText = (v: unknown): string => (v == null ? "" : v instanceof Date ? v.toString() : String(v).trim());
+
+/** Number of days in a real (1-12) month, without touching any Date-string parsing. */
+export const daysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
+
+export const monthLabelOf = (year: number, month: number) =>
+  new Date(year, month - 1, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
 const text = (v: unknown): string => {
   if (v == null) return "";
@@ -73,35 +76,46 @@ export function detectSheetLayout(
 ): SheetLayout {
   const warnings: string[] = [];
   const header = matrix[0] ?? [];
-  const dateCols: { col: number; iso: string; d: Date }[] = [];
+  const dateCols: { col: number; iso: string; p: DateParts }[] = [];
   for (let c = 2; c < header.length; c++) {
-    const d = asDate(header[c]);
-    if (d) dateCols.push({ col: c, iso: toISODate(d), d });
+    const p = readDateParts(header[c]);
+    if (p) dateCols.push({ col: c, iso: partsToISO(p), p });
   }
   if (dateCols.length === 0) {
     return {
       sheetName,
       side,
       dateCols: [],
-      month: new Date().getMonth(),
+      month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
+      firstDate: null,
+      lastDate: null,
       rows: [],
       blankRowsSkipped: 0,
       warnings: [`No dated header cells were found in row 1 of "${sheetName}".`],
+      outOfMonth: [],
     };
   }
 
-  const first = dateCols[0].d;
-  const month = first.getMonth();
-  const year = first.getFullYear();
-  const otherMonth = dateCols.filter((c) => c.d.getMonth() !== month);
-  if (otherMonth.length) {
+  // The month the header claims: the one most of the dated columns belong to.
+  const tally = new Map<string, number>();
+  for (const c of dateCols) {
+    const k = `${c.p.year}-${c.p.month}`;
+    tally.set(k, (tally.get(k) ?? 0) + 1);
+  }
+  const [bestKey] = Array.from(tally.entries()).sort((a, b) => b[1] - a[1])[0];
+  const [year, month] = bestKey.split("-").map(Number);
+
+  const outOfMonth = dateCols
+    .filter((c) => c.p.year !== year || c.p.month !== month)
+    .map((c) => ({ col: c.col, header: headerText(header[c.col]), iso: c.iso }));
+  if (outOfMonth.length) {
     warnings.push(
-      `${otherMonth.length} dated header cell${otherMonth.length === 1 ? "" : "s"} on "${sheetName}" fall outside ${new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" })}.`,
+      `${outOfMonth.length} dated header cell${outOfMonth.length === 1 ? "" : "s"} on "${sheetName}" fall outside ${monthLabelOf(year, month)}.`,
     );
   }
-  const expectedDays = new Date(year, month + 1, 0).getDate();
-  if (!otherMonth.length && dateCols.length !== expectedDays) {
+  const expectedDays = daysInMonth(year, month);
+  if (!outOfMonth.length && dateCols.length !== expectedDays) {
     warnings.push(
       `"${sheetName}" has ${dateCols.length} dated columns but that month has ${expectedDays} days.`,
     );
@@ -130,9 +144,12 @@ export function detectSheetLayout(
     dateCols: dateCols.map(({ col, iso }) => ({ col, iso })),
     month,
     year,
+    firstDate: dateCols[0].iso,
+    lastDate: dateCols[dateCols.length - 1].iso,
     rows,
     blankRowsSkipped,
     warnings,
+    outOfMonth,
   };
 }
 
@@ -221,8 +238,13 @@ export type SheetPlanResult = {
   crossSheetWarnings: string[];
   unmappedNumbers: string[];
   bothSheets: string[];
-  perSheet: { side: SheetSide; sheetName: string; rows: number; matched: number; dateCols: number; blankRowsSkipped: number }[];
+  perSheet: {
+    side: SheetSide; sheetName: string; rows: number; matched: number; dateCols: number;
+    blankRowsSkipped: number; monthLabel: string; firstDate: string | null; lastDate: string | null;
+  }[];
   warnings: string[];
+  /** Inclusive date range every written row must fall inside. */
+  range: { start: string; end: string } | null;
 };
 
 export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
@@ -249,6 +271,16 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
     const { layout, matrix, side } = src;
     warnings.push(...layout.warnings);
     let matched = 0;
+
+    // Fail loudly: a header date outside the detected month means the date
+    // handling is wrong, and nothing may be written.
+    if (layout.outOfMonth.length) {
+      const bad = layout.outOfMonth[0];
+      throw new Error(
+        `Date check failed on sheet "${layout.sheetName}": column ${bad.col + 1} has header “${bad.header}” which reads as ${bad.iso}, outside ${monthLabelOf(layout.year, layout.month)}. Import aborted — no rows were written.`,
+      );
+    }
+    const monthPrefix = `${layout.year}-${String(layout.month).padStart(2, "0")}-`;
 
     for (const row of layout.rows) {
       const member = row.badge ? byBadge.get(row.badge) : undefined;
@@ -277,6 +309,11 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
       if (!onSchedule.has(member.email.toLowerCase())) added.set(member.email.toLowerCase(), member);
 
       for (const dc of layout.dateCols) {
+        if (!dc.iso.startsWith(monthPrefix)) {
+          throw new Error(
+            `Date check failed on sheet "${layout.sheetName}": column ${dc.col + 1} was about to be written as ${dc.iso}, outside ${monthLabelOf(layout.year, layout.month)}. Import aborted — no rows were written.`,
+          );
+        }
         const raw = text(matrix[row.row]?.[dc.col]);
         const existing = current.get(`${member.email.toLowerCase()}|${dc.iso}`);
         if (!raw) continue;
@@ -329,12 +366,18 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
       matched,
       dateCols: layout.dateCols.length,
       blankRowsSkipped: layout.blankRowsSkipped,
+      monthLabel: monthLabelOf(layout.year, layout.month),
+      firstDate: layout.firstDate,
+      lastDate: layout.lastDate,
     });
   }
 
   const bothSheets = Array.from(seenByBadgeSide.entries())
     .filter(([, sides]) => sides.size > 1)
     .map(([badge]) => badge);
+
+  const allDates = input.sources.flatMap((s) => s.layout.dateCols.map((d) => d.iso)).sort();
+  const range = allDates.length ? { start: allDates[0], end: allDates[allDates.length - 1] } : null;
 
   return {
     items,
@@ -345,5 +388,6 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
     bothSheets,
     perSheet,
     warnings,
+    range,
   };
 }

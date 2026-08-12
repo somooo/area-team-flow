@@ -18,7 +18,7 @@ export function normalizeBadge(v: unknown): string {
   return digits;
 }
 
-const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+import { readDateParts } from "@/lib/xlsx-io";
 
 function iso(y: number, m: number, d: number) {
   return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -31,47 +31,11 @@ function iso(y: number, m: number, d: number) {
  */
 export function parseHireDate(v: unknown): { date: string | null; warning?: string } {
   if (v == null || v === "") return { date: null };
-  if (v instanceof Date && !isNaN(v.getTime())) {
-    // Excel dates come back as UTC midnight; read the UTC parts, no timezone shift.
-    return { date: iso(v.getUTCFullYear(), v.getUTCMonth() + 1, v.getUTCDate()) };
-  }
-  if (typeof v === "number" && v > 0 && v < 80000) {
-    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
-    return { date: iso(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()) };
-  }
+  // One shared reader for every import path: no timezone conversion, no new Date(string).
+  const parts = readDateParts(v);
+  if (parts) return { date: iso(parts.year, parts.month, parts.day) };
   const s = String(v).trim();
   if (!s) return { date: null };
-  if (/^\d{5}$/.test(s)) return parseHireDate(Number(s));
-
-  const isoM = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (isoM) return { date: iso(+isoM[1], +isoM[2], +isoM[3]) };
-
-  // "16 Oct'19", "16-Oct-2019", "Oct 16, 2019"
-  const named = s.match(/^(\d{1,2})[\s.\-/]*([A-Za-z]{3,})[\s.\-/']*(\d{2,4})$/);
-  const named2 = s.match(/^([A-Za-z]{3,})[\s.\-/]*(\d{1,2})[\s,.\-/']*(\d{2,4})$/);
-  const hit = named
-    ? { d: +named[1], mon: named[2], y: named[3] }
-    : named2
-    ? { d: +named2[2], mon: named2[1], y: named2[3] }
-    : null;
-  if (hit) {
-    const mi = MONTHS.indexOf(hit.mon.slice(0, 3).toLowerCase());
-    if (mi >= 0) {
-      const yr = hit.y.length <= 2 ? (+hit.y > 50 ? 1900 + +hit.y : 2000 + +hit.y) : +hit.y;
-      return { date: iso(yr, mi + 1, hit.d) };
-    }
-  }
-
-  // Numeric d/m/y text. Day-first is the sheet's convention; if the first part
-  // cannot be a day it is treated as a month instead.
-  const parts = s.match(/^(\d{1,4})[/.\-](\d{1,2})[/.\-](\d{1,4})$/);
-  if (parts) {
-    const a = +parts[1], b = +parts[2], c = +parts[3];
-    if (String(parts[1]).length === 4) return { date: iso(a, b, c) };
-    const yr = c < 100 ? (c > 50 ? 1900 + c : 2000 + c) : c;
-    if (a >= 1 && a <= 31 && b >= 1 && b <= 12) return { date: iso(yr, b, a) };
-    if (b >= 1 && b <= 31 && a >= 1 && a <= 12) return { date: iso(yr, a, b) };
-  }
   return { date: null, warning: `Could not read the hire date "${s}" — imported without it` };
 }
 
@@ -129,7 +93,7 @@ export function cell(values: Record<string, unknown>, ...names: string[]): unkno
 export function text(values: Record<string, unknown>, ...names: string[]): string {
   const v = cell(values, ...names);
   if (v == null) return "";
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date) return parseHireDate(v).date ?? "";
   return String(v).trim();
 }
 

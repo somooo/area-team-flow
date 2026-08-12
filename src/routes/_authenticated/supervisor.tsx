@@ -94,7 +94,7 @@ function SupervisorPage() {
   const [zones, setZones] = useState<ZoneAssignment[]>([]);
   const [sheetSummary, setSheetSummary] = useState<Pick<
     SheetPlanResult,
-    "perSheet" | "crossSheetWarnings" | "unmappedNumbers" | "bothSheets" | "warnings"
+    "perSheet" | "crossSheetWarnings" | "unmappedNumbers" | "bothSheets" | "warnings" | "range"
   > | null>(null);
   const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
   const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
@@ -338,6 +338,27 @@ function SupervisorPage() {
       return { attempted, written: 0, confirmed: 0, failures };
     }
 
+    // Re-query what actually landed and compare with the header's own range.
+    let note: string | undefined;
+    const expectedStart = rows.reduce((a, r) => (a && a <= r.date ? a : r.date), "");
+    const expectedEnd = rows.reduce((a, r) => (a && a >= r.date ? a : r.date), "");
+    if (expectedStart && expectedEnd) {
+      const [{ data: lo }, { data: hi }] = await Promise.all([
+        supabase.from("shifts").select("date").eq("area", viewArea)
+          .gte("date", expectedStart).lte("date", expectedEnd).order("date", { ascending: true }).limit(1),
+        supabase.from("shifts").select("date").eq("area", viewArea)
+          .gte("date", expectedStart).lte("date", expectedEnd).order("date", { ascending: false }).limit(1),
+      ]);
+      const gotStart = lo?.[0]?.date ?? null;
+      const gotEnd = hi?.[0]?.date ?? null;
+      note = `Confirmed date range in the database: ${gotStart ?? "—"} to ${gotEnd ?? "—"} (file header: ${expectedStart} to ${expectedEnd}).`;
+      if (gotStart !== expectedStart || gotEnd !== expectedEnd) {
+        failures.push(
+          `Date range mismatch — the file covers ${expectedStart} to ${expectedEnd} but the database holds ${gotStart ?? "nothing"} to ${gotEnd ?? "nothing"}.`,
+        );
+      }
+    }
+
     if (replace) {
       for (const r of ranges) {
         await logAudit({
@@ -378,7 +399,7 @@ function SupervisorPage() {
     setPending({});
     await load();
     await loadDirectory();
-    return { attempted, written, confirmed, failures };
+    return { attempted, written, confirmed, failures, note };
   };
 
   /** Create real directory records for badges the file contains but the directory does not. */
@@ -609,6 +630,8 @@ function SupervisorPage() {
                   {(sheetSummary?.perSheet ?? []).map((s) => (
                     <p key={s.side} className="text-muted-foreground">
                       <span className="font-medium text-foreground capitalize">{s.side}</span> · sheet “{s.sheetName}” ·{" "}
+                      <span className="font-medium text-foreground">{s.monthLabel}</span> ·{" "}
+                      <span className="font-medium text-foreground">{s.firstDate} to {s.lastDate}</span> ·{" "}
                       {s.dateCols} date columns · {s.rows} staff rows · {s.matched} matched to the directory
                       {s.blankRowsSkipped > 0 ? ` · ${s.blankRowsSkipped} blank rows skipped` : ""}
                     </p>
@@ -697,9 +720,11 @@ function SupervisorPage() {
                   unmappedNumbers: full.unmappedNumbers,
                   bothSheets: full.bothSheets,
                   warnings: Array.from(new Set(full.warnings)),
+                  range: full.range,
                 });
 
-                const months = sources.map((s) => ({ year: s.layout.year, month: s.layout.month }));
+                // layout.month is a real month number (1-12); state months are JS indexes.
+                const months = sources.map((s) => ({ year: s.layout.year, month: s.layout.month - 1 }));
                 setImportMonths(months);
                 const ranges = importRanges(months);
                 const off = months.filter((b) => b.year !== year || b.month !== month);
