@@ -93,7 +93,7 @@ export function cell(values: Record<string, unknown>, ...names: string[]): unkno
 export function text(values: Record<string, unknown>, ...names: string[]): string {
   const v = cell(values, ...names);
   if (v == null) return "";
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date) return parseHireDate(v).date ?? "";
   return String(v).trim();
 }
 
