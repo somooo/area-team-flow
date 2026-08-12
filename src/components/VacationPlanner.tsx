@@ -236,7 +236,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     () => (isUnassignedView ? 0 : maxOffPerDay(headcount, capPct)),
     [headcount, capPct, isUnassignedView],
   );
-  const countsPending = rules["vacation_cap_counts_pending"] !== false;
+  // Supervisor vacations only block days once fully Approved (cover + admin).
+  const countsPending = isSupervisorsView ? false : rules["vacation_cap_counts_pending"] !== false;
   const capAreaLabel = isSupervisorsView ? "Supervisors" : viewArea;
   const yearlyCap = ruleNumber(rules, "vacation_yearly_days", 25);
   const remaining = Math.max(0, yearlyCap - balance.approved - balance.pending);
@@ -262,6 +263,24 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     }
     return { approvedByDay, mineByDay, rowsByDay };
   }, [leaves, me.email]);
+
+  const coverName = useCallback(
+    (email: string | null) => (email ? (staffMeta[email.toLowerCase()]?.name ?? email) : null),
+    [staffMeta],
+  );
+
+  /** Days where I am the accepted covering supervisor (read-only marker; blocks my own leave). */
+  const coveringByDay = useMemo(() => {
+    const map = new Map<string, LeaveRow>();
+    if (!isSupervisorsView) return map;
+    for (const r of leaves) {
+      if ((r.covering_supervisor_email ?? "").toLowerCase() !== me.email.toLowerCase()) continue;
+      if (r.status === "Rejected" || r.status === "Cancelled") continue;
+      if (!(r.status === "Approved" || r.stage === "admin")) continue;
+      for (const iso of eachDay(r.start_date, r.end_date)) map.set(iso, r);
+    }
+    return map;
+  }, [leaves, me.email, isSupervisorsView]);
 
   const todayISO = toISODate(new Date());
 
