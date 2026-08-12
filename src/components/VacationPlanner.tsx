@@ -1001,6 +1001,39 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
               <div><span className="text-muted-foreground">Stage: </span><span className="font-medium">{stageLabel(detail)}</span></div>
               <div><span className="text-muted-foreground">Approver: </span><span className="font-medium">{(detail.approver_email && detail.approver_email.toLowerCase() === approver?.toLowerCase() ? approverName : detail.approver_email) ?? "—"}</span></div>
               {detail.reason && <div><span className="text-muted-foreground">Reason: </span>{detail.reason}</div>}
+              {detail.covering_supervisor_email && (
+                <div><span className="text-muted-foreground">Covering: </span>
+                  <span className="font-medium">{coverName(detail.covering_supervisor_email)}</span></div>
+              )}
+              {detail.stage === "cover_declined" && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-2">
+                  <div className="text-xs font-semibold text-destructive">Cover declined</div>
+                  {detail.cover_decline_reason && (
+                    <div className="text-xs text-muted-foreground">Reason: {detail.cover_decline_reason}</div>
+                  )}
+                  {detail.staff_email.toLowerCase() === me.email.toLowerCase() && (
+                    <>
+                      <Label className="text-xs">Nominate another covering supervisor</Label>
+                      <Select value={renominate} onValueChange={setRenominate}>
+                        <SelectTrigger><SelectValue placeholder="Select a supervisor" /></SelectTrigger>
+                        <SelectContent>
+                          {renomOptions.length === 0 && (
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground">No supervisors available</div>
+                          )}
+                          {renomOptions.map((s) => (
+                            <SelectItem key={s.email} value={s.email} disabled={!s.available}>
+                              {s.name}
+                              {!s.available && <span className="ml-1 text-[10px] text-muted-foreground">— {s.reason}</span>}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" className="w-full" disabled={busy || !renominate}
+                        onClick={() => renominateCover(detail)}>Send cover request</Button>
+                    </>
+                  )}
+                </div>
+              )}
               {detail.status === "Approved" ? (
                 changeByLeave[detail.id] ? (
                   <div className="rounded-md border border-copper/50 bg-copper/10 p-2 space-y-2">
