@@ -753,12 +753,33 @@ function SupervisorPage() {
                   shifts,
                   knownAssignmentNumbers: new Set(zones.map((z) => z.assignment_no)),
                 };
-                const diff = planSheetImport({ ...common, replace: false });
-                const full = planSheetImport({ ...common, replace: true });
+                // Existing memberships and approved vacations for the month(s) in the file.
+                const monthStarts = Array.from(
+                  new Set(sources.map((s) => `${s.layout.year}-${String(s.layout.month).padStart(2, "0")}-01`)),
+                );
+                const { data: memberRows } = await supabase
+                  .from("schedule_memberships")
+                  .select("staff_id,area,month_start,side")
+                  .in("month_start", monthStarts);
+                const memberships = (memberRows ?? []) as ScheduleMembership[];
+                const monthEnds = monthStarts.map((ms) => {
+                  const [my, mm] = ms.split("-").map(Number);
+                  return toISODate(new Date(my, mm, 0));
+                });
+                const vac = await fetchVacationDays(
+                  monthStarts.slice().sort()[0],
+                  monthEnds.slice().sort().reverse()[0],
+                );
+                const withRules = { ...common, area: viewArea, memberships, vacationKeys: vac.keys };
+                const diff = planSheetImport({ ...withRules, replace: false });
+                const full = planSheetImport({ ...withRules, replace: true });
                 setLabelRowsSkipped(0);
                 setMissingPeople(full.missing);
                 setAddedToSchedule(full.addedToSchedule);
                 setReplaceAllItems(full.items.filter((i) => i.status !== "skip"));
+                setSideConflicts(full.sideConflicts);
+                setVacationConflicts(full.vacationConflicts);
+                setConflictChoice(Object.fromEntries(full.sideConflicts.map((c) => [c.badge, "skip" as const])));
                 setSheetSummary({
                   perSheet: full.perSheet,
                   crossSheetWarnings: full.crossSheetWarnings,
