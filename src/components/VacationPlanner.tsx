@@ -784,6 +784,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                   mine ? "bg-steel-100" : "bg-muted/40",
                                 ].join(" ")}>
                                   <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-ink">{r.staff_name}</span>
+                                  {changeByLeave[r.id] && (
+                                    <span className="shrink-0 rounded bg-copper/60 px-1 text-[8px] font-semibold leading-[13px] text-ink">C</span>
+                                  )}
                                   <span className={[
                                     "shrink-0 rounded px-1 text-[8px] font-semibold leading-[13px]",
                                     r.status === "Approved" ? "bg-steel-600 text-white" : "bg-copper/25 text-ink",
@@ -791,7 +794,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-56">
-                                <div className="text-xs">{r.staff_name} — {r.status}</div>
+                                <div className="text-xs">
+                                  {r.staff_name} — {r.status}
+                                  {changeByLeave[r.id] ? ` · Change pending (${changeByLeave[r.id].type})` : ""}
+                                </div>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -831,6 +837,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                       {meta?.badge ? `#${meta.badge} · ` : ""}{meta?.area ?? UNASSIGNED_AREA}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
+                                    {changeByLeave[r.id] && (
+                                      <div className="text-[10px] font-medium text-copper-700">Change pending — {changeByLeave[r.id].type}</div>
+                                    )}
                                     {isUnassignedView && me.role === "admin" && (
                                       <Link to="/directory" className="text-[10px] underline text-steel-700">
                                         Fix area in directory
