@@ -153,6 +153,9 @@ export type Database = {
           end_date: string
           id: string
           leave_type: Database["public"]["Enums"]["leave_type"]
+          over_cap_by: string | null
+          over_cap_override: boolean
+          over_cap_reason: string | null
           reason: string | null
           staff_email: string
           staff_id: string | null
@@ -170,6 +173,9 @@ export type Database = {
           end_date: string
           id?: string
           leave_type: Database["public"]["Enums"]["leave_type"]
+          over_cap_by?: string | null
+          over_cap_override?: boolean
+          over_cap_reason?: string | null
           reason?: string | null
           staff_email: string
           staff_id?: string | null
@@ -187,6 +193,9 @@ export type Database = {
           end_date?: string
           id?: string
           leave_type?: Database["public"]["Enums"]["leave_type"]
+          over_cap_by?: string | null
+          over_cap_override?: boolean
+          over_cap_reason?: string | null
           reason?: string | null
           staff_email?: string
           staff_id?: string | null

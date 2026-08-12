@@ -114,6 +114,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
   const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === me.area;
@@ -231,7 +232,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     const used = countsPending
       ? (rowsByDay.get(iso)?.length ?? 0)
       : (approvedByDay.get(iso)?.length ?? 0);
-    if (cap > 0 && used >= cap) return;
+    if (cap > 0 && used >= cap) {
+      toast.error(`Cap reached — ${capAreaLabel} is full on ${iso} (${used}/${cap})`);
+      return;
+    }
     if (!start || (start && end)) { setStart(iso); setEnd(null); return; }
     if (iso < start) { setStart(iso); return; }
     setEnd(iso);
@@ -240,12 +244,31 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const officeHours = isOfficeHoursRole(me.role);
   const totalDays = start ? countVacationDays(start, end ?? start, me.role) : 0;
 
+  /** Days in the current selection that are already at the area cap. */
+  const blockedDates = useMemo(() => {
+    if (!start || cap <= 0) return [] as string[];
+    return eachDay(start, end ?? start).filter((iso) => {
+      if (mineByDay.get(iso)) return false;
+      const used = countsPending ? (rowsByDay.get(iso)?.length ?? 0) : (approvedByDay.get(iso)?.length ?? 0);
+      return used >= cap;
+    });
+  }, [start, end, cap, countsPending, rowsByDay, approvedByDay, mineByDay]);
+  const canOverrideCap = me.role === "admin" || me.role === "supervisor";
+
   const submit = async () => {
     if (!start) return;
     const s = start, e = end ?? start;
     if (isSupervisorsView && !covering) { toast.error("Select a covering supervisor"); return; }
     const routeTo = isSupervisorsView ? covering : approver;
     if (!routeTo) { toast.error("No approver available"); return; }
+    const isOverride = blockedDates.length > 0;
+    if (isOverride) {
+      if (!canOverrideCap) {
+        toast.error(`Blocked: ${blockedDates.join(", ")} are at capacity.`);
+        return;
+      }
+      if (!overrideReason.trim()) { toast.error("An override reason is required"); return; }
+    }
     setBusy(true);
     const { data: inserted, error } = await supabase.from("leave_requests").insert({
       staff_email: me.email.toLowerCase(), staff_name: me.name,
@@ -254,14 +277,25 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       staff_id: me.id, start_date: s, end_date: e, reason, approver_email: routeTo,
       covering_supervisor_email: isSupervisorsView ? covering : null,
       stage: isSupervisorsView ? "covering" : null,
+      over_cap_override: isOverride,
+      over_cap_reason: isOverride ? overrideReason.trim() : null,
     }).select("id").maybeSingle();
     setBusy(false);
     if (error) { toast.error(error.message); return; }
+    if (isOverride) {
+      await logAudit({
+        action: "vacation_cap_override",
+        entity_type: "leave_request",
+        entity_id: inserted?.id ?? null,
+        area: isSupervisorsView ? SUPERVISORS_AREA : me.area,
+        details: { start_date: s, end_date: e, blocked_dates: blockedDates, reason: overrideReason.trim(), cap, area_label: capAreaLabel },
+      });
+    }
     await notify({ data: { event: "request_submitted", staff_name: me.name, staff_email: me.email, supervisor_email: routeTo, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, leave_type: "Vacation", start_date: s, end_date: e, reason } });
     await createNotification({ data: { recipient_email: routeTo, title: isSupervisorsView ? "Cover + approve vacation" : "Vacation leave request", body: `${me.name}: ${s} → ${e}`, link: "/approvals" } });
     await logAudit({ action: "leave_requested", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, details: { start_date: s, end_date: e, leave_type: "Vacation", covering_supervisor_email: isSupervisorsView ? covering : null } });
     toast.success("Vacation request submitted");
-    setConfirmOpen(false); setStart(null); setEnd(null); setReason(""); setCovering("");
+    setConfirmOpen(false); setStart(null); setEnd(null); setReason(""); setCovering(""); setOverrideReason("");
     await load(); onDone();
   };
 
@@ -370,7 +404,33 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 <Label className="text-xs">Reason (optional)</Label>
                 <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
               </div>
-              <Button className="w-full" disabled={busy || (isSupervisorsView && !covering)} onClick={submit}>Submit request</Button>
+              {blockedDates.length > 0 && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-2">
+                  <p className="text-[11px] text-destructive">
+                    Blocked: {blockedDates.join(", ")} {blockedDates.length === 1 ? "is" : "are"} at capacity.
+                  </p>
+                  {canOverrideCap ? (
+                    <div>
+                      <Label className="text-xs">Override reason (required)</Label>
+                      <Textarea rows={2} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+                      <p className="mt-1 text-[10px] text-muted-foreground">Marked as an over-cap override and logged to Audit.</p>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">Pick dates that are not full.</p>
+                  )}
+                </div>
+              )}
+              <Button
+                className="w-full"
+                disabled={
+                  busy ||
+                  (isSupervisorsView && !covering) ||
+                  (blockedDates.length > 0 && (!canOverrideCap || !overrideReason.trim()))
+                }
+                onClick={submit}
+              >
+                {blockedDates.length > 0 && canOverrideCap ? "Submit with override" : "Submit request"}
+              </Button>
             </PopoverContent>
           </Popover>
         </div>
@@ -483,16 +543,19 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 const past = iso < todayISO;
                 const selected = selectedSet.has(iso);
                 const clickable = !!own || (canManage && dayRows.length > 0) || (isOwnArea && !full && !past);
+                const capBlocked = isOwnArea && full && !past && !(canManage && dayRows.length > 0);
                 const visible = dayRows.slice(0, 3);
                 const overflow = dayRows.length - visible.length;
                 return (
                   <div
                     key={i}
-                    role={clickable ? "button" : undefined}
-                    tabIndex={clickable ? 0 : undefined}
-                    onClick={() => { if (clickable) onDayClick(iso); }}
+                    role={clickable || capBlocked ? "button" : undefined}
+                    tabIndex={clickable || capBlocked ? 0 : undefined}
+                    aria-disabled={capBlocked || undefined}
+                    title={capBlocked ? capTip : undefined}
+                    onClick={() => { if (clickable || capBlocked) onDayClick(iso); }}
                     onKeyDown={(e) => {
-                      if (clickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onDayClick(iso); }
+                      if ((clickable || capBlocked) && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onDayClick(iso); }
                     }}
                     className={[
                       "min-h-[86px] max-h-[86px] overflow-hidden border-b border-r p-1 text-left align-top flex flex-col gap-0.5 transition-colors",
@@ -503,7 +566,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                           : "bg-card",
                       past && !own ? "opacity-50" : "",
                       selected && !own ? "ring-2 ring-inset ring-steel-500 bg-steel-50" : "",
-                      clickable ? "hover:bg-steel-50/70 cursor-pointer" : "cursor-default",
+                      capBlocked ? "cursor-not-allowed" : clickable ? "hover:bg-steel-50/70 cursor-pointer" : "cursor-default",
                     ].join(" ")}
                   >
                     <div className="flex items-center justify-between gap-1">
