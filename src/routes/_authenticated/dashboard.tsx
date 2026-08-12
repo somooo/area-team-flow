@@ -96,7 +96,16 @@ function SchedulePage() {
       supabase.from("staff").select("id,name,email,role,area,department").eq("area", viewArea).order("name"),
     ]);
     setShifts((sh as Shift[]) ?? []);
-    setRoster((st as Staff[]) ?? []);
+    // Anyone with a shift this month belongs on the grid, even if their
+    // directory record is not assigned to this area (e.g. added by an import).
+    const base = (st as Staff[]) ?? [];
+    const map = new Map(base.map((s) => [(s.email ?? "").toLowerCase(), s]));
+    for (const row of ((sh as Shift[]) ?? [])) {
+      const k = row.staff_email.toLowerCase();
+      if (map.has(k)) continue;
+      map.set(k, { id: k, name: row.staff_name, email: row.staff_email, role: "staff", area: viewArea, department: null } as Staff);
+    }
+    setRoster(Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name)));
   };
 
   useEffect(() => { void load(); }, [year, month, viewArea]);
