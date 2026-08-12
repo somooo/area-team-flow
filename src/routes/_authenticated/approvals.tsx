@@ -12,6 +12,7 @@ import { logAudit } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications.functions";
 import { isAdmin } from "@/lib/permissions";
 import { VacationChangeApprovals } from "@/components/VacationChangeApprovals";
+import { detectCoverConflicts, type CoverConflict } from "@/lib/cover";
 
 export const Route = createFileRoute("/_authenticated/approvals")({
   head: () => ({ meta: [{ title: "Approvals — KADIR Staff Management" }] }),
@@ -30,6 +31,7 @@ function ApprovalsPage() {
   const [changes, setChanges] = useState<Change[]>([]);
   const [pre, setPre] = useState<Pre[]>([]);
   const [reports, setReports] = useState<TlReport[]>([]);
+  const [coverConflicts, setCoverConflicts] = useState<Record<string, CoverConflict>>({});
 
   const role = me?.staff?.role as string | undefined;
   const canApprove = role === "supervisor" || role === "admin" || role === "team_leader";
@@ -42,7 +44,9 @@ function ApprovalsPage() {
       supabase.from("preschedule_requests").select("*").eq("status", "Pending").order("created_at", { ascending: false }),
       supabase.from("team_leader_reports").select("*").eq("status", "Pending").order("shift_date", { ascending: false }),
     ]);
-    setLeaves((lv as Leave[]) ?? []);
+    const leaveRows = (lv as Leave[]) ?? [];
+    setLeaves(leaveRows);
+    setCoverConflicts(await detectCoverConflicts(leaveRows));
     setChanges((ch as Change[]) ?? []);
     setPre((pr as Pre[]) ?? []);
     setReports((tl as unknown as TlReport[]) ?? []);
@@ -137,6 +141,14 @@ function ApprovalsPage() {
                   {l.stage === "covering" && " · Pending covering supervisor approval"}
                   {l.stage === "admin" && " · Pending admin approval"}
                 </div>
+                {coverConflicts[l.id] && (
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Badge variant="destructive">Cover conflict</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {coverConflicts[l.id].coverName} — {coverConflicts[l.id].reason}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => decideLeave(l, "Approved")}>
