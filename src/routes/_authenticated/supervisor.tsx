@@ -89,7 +89,13 @@ function SupervisorPage() {
   const [pending, setPending] = useState<Record<string, PendingEdit>>({});
   const [saving, setSaving] = useState(false);
   const [badges, setBadges] = useState<Record<string, string>>({});
-  const [importConfig, setImportConfig] = useState<ScheduleImportConfig | null>(null);
+  const [importConfig, setImportConfig] = useState<SheetImportConfig | null>(null);
+  const [importMonths, setImportMonths] = useState<{ year: number; month: number }[]>([]);
+  const [zones, setZones] = useState<ZoneAssignment[]>([]);
+  const [sheetSummary, setSheetSummary] = useState<Pick<
+    SheetPlanResult,
+    "perSheet" | "crossSheetWarnings" | "unmappedNumbers" | "bothSheets" | "warnings"
+  > | null>(null);
   const [replaceInfo, setReplaceInfo] = useState<{ count: number; label: string }>({ count: 0, label: "" });
   const [labelRowsSkipped, setLabelRowsSkipped] = useState(0);
   const [directory, setDirectory] = useState<ImportDirectoryPerson[]>([]);
@@ -99,7 +105,7 @@ function SupervisorPage() {
   const [removalPreview, setRemovalPreview] = useState<{ name: string; badge: string }[]>([]);
   const [scopeWarning, setScopeWarning] = useState<string | null>(null);
   /** Every non-blank cell in the file, used when the import replaces the whole month. */
-  const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<ImportedCell>[]>([]);
+  const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<SheetCell>[]>([]);
 
   const role = me?.staff?.role;
   const admin = isAdmin(me?.staff);
@@ -116,6 +122,7 @@ function SupervisorPage() {
     if (!viewArea) return;
     void fetchAssignmentCodes(viewArea).then(setCodes);
     void fetchZoneReference(viewArea).then(setReference);
+    void fetchZoneAssignments(viewArea).then(setZones);
   }, [viewArea]);
 
   /** The whole directory is the match source for imports — not just this area's roster. */
