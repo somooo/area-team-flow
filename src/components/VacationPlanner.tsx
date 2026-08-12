@@ -108,6 +108,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [covering, setCovering] = useState<string>("");
   const [manageDay, setManageDay] = useState<{ iso: string; rows: LeaveRow[] } | null>(null);
   const [manageRow, setManageRow] = useState<LeaveRow | null>(null);
+  const [staffMeta, setStaffMeta] = useState<Record<string, { badge: string | null; area: string | null }>>({});
+  const [openDay, setOpenDay] = useState<string | null>(null);
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
 
@@ -165,6 +167,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   }, [viewArea, cursor, me.email, me.role, isSupervisorsView]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    void supabase.from("staff").select("email,badge_id,area").then(({ data }) => {
+      const map: Record<string, { badge: string | null; area: string | null }> = {};
+      for (const s of (data ?? []) as { email: string; badge_id: string | null; area: string | null }[]) {
+        map[s.email.toLowerCase()] = { badge: s.badge_id, area: s.area };
+      }
+      setStaffMeta(map);
+    });
+  }, []);
 
   const cap = useMemo(
     () => Math.floor((headcount * ruleNumber(rules, "vacation_cap_pct", 30)) / 100),
@@ -445,9 +457,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
             <div className="grid grid-cols-7 text-[10px] uppercase tracking-wide text-muted-foreground border-b">
               {WEEKDAYS.map((w) => <div key={w} className="px-1 py-0.5 text-center">{w}</div>)}
             </div>
-            <div className="grid grid-cols-7">
+            <div className="grid grid-cols-7 relative">
               {monthMatrix(m.getFullYear(), m.getMonth()).map((d, i) => {
-                if (!d) return <div key={i} className="aspect-square border-b border-r bg-muted/20" />;
+                if (!d) return <div key={i} className="min-h-[86px] border-b border-r bg-muted/20" />;
                 const iso = toISODate(d);
                 const names = approvedByDay.get(iso) ?? [];
                 const own = mineByDay.get(iso);
@@ -457,14 +469,19 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 const past = iso < todayISO;
                 const selected = selectedSet.has(iso);
                 const clickable = !!own || (canManage && dayRows.length > 0) || (isOwnArea && !full && !past);
+                const visible = dayRows.slice(0, 3);
+                const overflow = dayRows.length - visible.length;
                 return (
-                  <button
+                  <div
                     key={i}
-                    type="button"
-                    onClick={() => onDayClick(iso)}
-                    disabled={!clickable}
+                    role={clickable ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    onClick={() => { if (clickable) onDayClick(iso); }}
+                    onKeyDown={(e) => {
+                      if (clickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onDayClick(iso); }
+                    }}
                     className={[
-                      "aspect-square border-b border-r p-1 text-left align-top flex flex-col gap-0.5 transition-colors",
+                      "min-h-[86px] max-h-[86px] overflow-hidden border-b border-r p-1 text-left align-top flex flex-col gap-0.5 transition-colors",
                       full ? "bg-muted text-muted-foreground" : "bg-card",
                       past && !own ? "opacity-50" : "",
                       selected && !own ? "ring-2 ring-inset ring-steel-500 bg-steel-50" : "",
@@ -472,25 +489,74 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                     ].join(" ")}
                   >
                     <span className="text-[11px] font-semibold text-ink">{d.getDate()}</span>
-                    {own && (
-                      <span className={[
-                        "rounded px-1 py-0 text-[9px] font-semibold w-fit leading-none",
-                        own.status === "Approved" ? "bg-steel-600 text-white" : "bg-copper/25 text-ink",
-                      ].join(" ")}>{own.status === "Approved" ? "Approved" : "Pending"}</span>
-                    )}
-                    {names.length > 0 && (
-                      <TooltipProvider delayDuration={150}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-[9px] leading-tight text-muted-foreground truncate w-full">
-                              {names.slice(0, 2).join(", ")}{names.length > 2 ? ` +${names.length - 2}` : ""}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent><div className="text-xs">{names.join(", ")}</div></TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </button>
+                    <div className="flex flex-col gap-px w-full min-w-0 overflow-y-auto">
+                      {visible.map((r) => {
+                        const mine = r.staff_email.toLowerCase() === me.email.toLowerCase();
+                        return (
+                          <TooltipProvider key={r.id} delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className={[
+                                  "flex items-center gap-1 rounded px-1 py-px w-full min-w-0",
+                                  mine ? "bg-steel-100" : "bg-muted/40",
+                                ].join(" ")}>
+                                  <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-ink">{r.staff_name}</span>
+                                  <span className={[
+                                    "shrink-0 rounded px-1 text-[8px] font-semibold leading-[13px]",
+                                    r.status === "Approved" ? "bg-steel-600 text-white" : "bg-copper/25 text-ink",
+                                  ].join(" ")}>{r.status === "Approved" ? "A" : "P"}</span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-56">
+                                <div className="text-xs">{r.staff_name} — {r.status}</div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })}
+                      {overflow > 0 && (
+                        <Popover open={openDay === iso} onOpenChange={(o) => setOpenDay(o ? iso : null)}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setOpenDay(iso); }}
+                              className="text-[9px] leading-tight text-steel-700 underline underline-offset-2 text-left w-full"
+                            >
+                              +{overflow} more
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="start"
+                            collisionPadding={8}
+                            className="w-64 p-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="text-xs font-semibold mb-1">{iso} — {dayRows.length} on leave</div>
+                            <div className="max-h-56 overflow-y-auto space-y-1">
+                              {dayRows.map((r) => {
+                                const meta = staffMeta[r.staff_email.toLowerCase()];
+                                return (
+                                  <div key={r.id} className="rounded border px-1.5 py-1">
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <span className="text-xs truncate flex-1 min-w-0">{r.staff_name}</span>
+                                      <span className={[
+                                        "shrink-0 rounded px-1 text-[9px] font-semibold",
+                                        r.status === "Approved" ? "bg-steel-600 text-white" : "bg-copper/25 text-ink",
+                                      ].join(" ")}>{r.status}</span>
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground truncate">
+                                      {meta?.badge ? `#${meta.badge} · ` : ""}{meta?.area ?? viewArea}
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>
