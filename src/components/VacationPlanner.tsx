@@ -543,16 +543,19 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 const past = iso < todayISO;
                 const selected = selectedSet.has(iso);
                 const clickable = !!own || (canManage && dayRows.length > 0) || (isOwnArea && !full && !past);
+                const capBlocked = isOwnArea && full && !past && !(canManage && dayRows.length > 0);
                 const visible = dayRows.slice(0, 3);
                 const overflow = dayRows.length - visible.length;
                 return (
                   <div
                     key={i}
-                    role={clickable ? "button" : undefined}
-                    tabIndex={clickable ? 0 : undefined}
-                    onClick={() => { if (clickable) onDayClick(iso); }}
+                    role={clickable || capBlocked ? "button" : undefined}
+                    tabIndex={clickable || capBlocked ? 0 : undefined}
+                    aria-disabled={capBlocked || undefined}
+                    title={capBlocked ? capTip : undefined}
+                    onClick={() => { if (clickable || capBlocked) onDayClick(iso); }}
                     onKeyDown={(e) => {
-                      if (clickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onDayClick(iso); }
+                      if ((clickable || capBlocked) && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onDayClick(iso); }
                     }}
                     className={[
                       "min-h-[86px] max-h-[86px] overflow-hidden border-b border-r p-1 text-left align-top flex flex-col gap-0.5 transition-colors",
@@ -563,7 +566,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                           : "bg-card",
                       past && !own ? "opacity-50" : "",
                       selected && !own ? "ring-2 ring-inset ring-steel-500 bg-steel-50" : "",
-                      clickable ? "hover:bg-steel-50/70 cursor-pointer" : "cursor-default",
+                      capBlocked ? "cursor-not-allowed" : clickable ? "hover:bg-steel-50/70 cursor-pointer" : "cursor-default",
                     ].join(" ")}
                   >
                     <div className="flex items-center justify-between gap-1">
