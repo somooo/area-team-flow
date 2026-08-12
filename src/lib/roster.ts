@@ -41,10 +41,9 @@ export function cellFor(shift: RosterShift | undefined, isWeekend: boolean): Cel
       title: "",
     };
   }
+  // Codes render exactly as stored; night keeps the source's lowercase "s" prefix.
   const unit = shift.unit_code ?? "";
-  const letter =
-    shift.duty === "Day" ? "D" :
-    shift.duty === "Night" ? "N" : "";
+  const base = shift.duty === "Night" && unit ? `s${unit}` : unit;
 
   // MedEvac OT is a standalone entry and can never be sick — checked before the sick tag.
   if (shift.ot_type === "MedEvac") {
@@ -53,17 +52,17 @@ export function cellFor(shift: RosterShift | undefined, isWeekend: boolean): Cel
 
   // Sick tag layers on top of the original assignment: keep the code, colour it red.
   if (shift.sick_tag) {
-    const base = `${letter}${unit}` || "S";
+    const b = base || "S";
     return {
-      code: `s${base}`,
+      code: b,
       className: "bg-red-500 text-white",
-      title: `Sick leave (assigned ${base}) · ${shift.date}`,
+      title: `Sick leave (assigned ${b}) · ${shift.date}`,
     };
   }
 
   switch (shift.duty) {
     case "Sick":
-      return { code: `s${letter || "S"}${unit}`, className: "bg-red-500 text-white", title: `Sick · ${shift.date}` };
+      return { code: base || "S", className: "bg-red-500 text-white", title: `Sick · ${shift.date}` };
     case "Vacation":
       return { code: "V", className: "bg-[#A2ABD8] text-slate-900", title: `Vacation · ${shift.date}` };
     case "Off":
@@ -73,10 +72,10 @@ export function cellFor(shift: RosterShift | undefined, isWeekend: boolean): Cel
     case "Day":
     case "Night": {
       if (shift.ot_type === "BuiltIn")
-        return { code: `${letter}${unit}`, className: "bg-[#F2C94C] text-black", title: `Built-in OT · ${shift.date}` };
+        return { code: base, className: "bg-[#F2C94C] text-black", title: `Built-in OT · ${shift.date}` };
       if (shift.ot_type === "Additional")
-        return { code: `${letter}${unit}`, className: "bg-[#E88B2A] text-black", title: `Additional OT · ${shift.date}` };
-      return { code: `${letter}${unit}`, className: "bg-white text-black border", title: `${shift.duty} duty · ${shift.date}` };
+        return { code: base, className: "bg-[#E88B2A] text-black", title: `Additional OT · ${shift.date}` };
+      return { code: base, className: "bg-white text-black border", title: `${shift.duty} duty · ${shift.date}` };
     }
   }
 }
