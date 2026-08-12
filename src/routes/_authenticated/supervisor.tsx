@@ -216,8 +216,15 @@ function SupervisorPage() {
       const dir = directory.find((d) => d.email.toLowerCase() === k);
       map.set(k, dir ?? { id: k, name: sh.staff_name, email: sh.staff_email, role: "staff", area: viewArea, department: null });
     }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    // Display order comes from the imported sheet order, never from the alphabet.
+    return Array.from(map.values());
   }, [staff, mergedShifts, directory, viewArea]);
+
+  /** Zone separator rows with the Excel row order preserved inside each zone. */
+  const gridGroups = useMemo(
+    () => buildScheduleGroups({ staff: gridStaff, shifts: mergedShifts, zones }),
+    [gridStaff, mergedShifts, zones],
+  );
 
   if (!me?.staff) return null;
   if (!canManage) return <p>Supervisor / admin access only.</p>;
@@ -228,10 +235,10 @@ function SupervisorPage() {
     setEditor(null);
   };
 
-  /** The month(s) the confirmed mapping covers, as ISO date ranges. */
-  const importRanges = (config: ScheduleImportConfig | null) => {
+  /** The month(s) the mapped sheets cover, as ISO date ranges. */
+  const importRanges = (months: { year: number; month: number }[]) => {
     const seen = new Map<string, { year: number; month: number }>();
-    for (const b of config?.blocks ?? []) seen.set(`${b.year}-${b.month}`, { year: b.year, month: b.month });
+    for (const b of months) seen.set(`${b.year}-${b.month}`, { year: b.year, month: b.month });
     return Array.from(seen.values()).map((m) => ({
       ...m,
       start: toISODate(new Date(m.year, m.month, 1)),
@@ -242,13 +249,13 @@ function SupervisorPage() {
 
   /** Bulk apply an imported grid after the mapping and preview steps. */
   const commitScheduleImport = async (
-    items: ImportItem<ImportedCell>[],
+    items: ImportItem<SheetCell>[],
     { replace, setProgress }: { replace: boolean; setProgress: (t: string | null) => void },
   ) => {
     const staffIdByEmail = new Map<string, string>();
     for (const s of staff) staffIdByEmail.set(s.email.toLowerCase(), s.id);
     for (const d of directory) if (!staffIdByEmail.has(d.email.toLowerCase())) staffIdByEmail.set(d.email.toLowerCase(), d.id);
-    const ranges = importRanges(importConfig);
+    const ranges = importRanges(importMonths);
     // In replace mode nothing survives to diff against, so every parsed cell is written.
     const source = replace ? replaceAllItems : items;
 
