@@ -398,6 +398,16 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (!start) return;
     const s = start, e = end ?? start;
     if (isSupervisorsView && !covering) { toast.error("Select a covering supervisor"); return; }
+    if (isSupervisorsView && covering) {
+      const fresh = await fetchCoverCandidates({ start: s, end: e, requesterEmail: me.email });
+      const pick = fresh.find((c) => c.email === covering);
+      setSupervisors(fresh);
+      if (!pick || !pick.available) {
+        toast.error(`${pick?.name ?? "That supervisor"} can no longer cover — ${pick?.reason ?? "not available"}`);
+        setCovering("");
+        return;
+      }
+    }
     const routeTo = isSupervisorsView ? covering : approver;
     if (!routeTo) { toast.error("No approver available"); return; }
     const isOverride = blockedDates.length > 0;
