@@ -1168,7 +1168,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
 
       {/* Supervisor / admin management */}
       <Dialog open={!!manageDay} onOpenChange={(o) => { if (!o) { setManageDay(null); setManageRow(null); } }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm max-h-[80vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{manageRow ? "Adjust vacation" : `Vacations on ${manageDay?.iso}`}</DialogTitle></DialogHeader>
           {!manageRow && manageDay && (
             <div className="space-y-2">
