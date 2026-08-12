@@ -137,6 +137,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [chgStart, setChgStart] = useState("");
   const [chgEnd, setChgEnd] = useState("");
   const [chgReason, setChgReason] = useState("");
+  const [renominate, setRenominate] = useState("");
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
   const isUnassignedView = viewArea === UNASSIGNED_AREA;
