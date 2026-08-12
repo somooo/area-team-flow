@@ -50,6 +50,17 @@ type LeaveRow = {
   stage: string | null;
 };
 
+type ChangeReq = {
+  id: string;
+  leave_request_id: string;
+  type: "cancel" | "adjust";
+  new_start_date: string | null;
+  new_end_date: string | null;
+  reason: string | null;
+  requested_by: string;
+  status: string;
+};
+
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function monthMatrix(year: number, month: number): (Date | null)[] {
@@ -118,6 +129,11 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [editEnd, setEditEnd] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
   const [importOverrideReason, setImportOverrideReason] = useState("");
+  const [changeByLeave, setChangeByLeave] = useState<Record<string, ChangeReq>>({});
+  const [changeMode, setChangeMode] = useState<null | "cancel" | "adjust">(null);
+  const [chgStart, setChgStart] = useState("");
+  const [chgEnd, setChgEnd] = useState("");
+  const [chgReason, setChgReason] = useState("");
 
   const isSupervisorsView = viewArea === SUPERVISORS_AREA;
   const isUnassignedView = viewArea === UNASSIGNED_AREA;
@@ -167,6 +183,18 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     setHeadcount(hc ?? 1);
     setCapRow((capData as { cap_pct: number; warn_pct: number } | null) ?? null);
     setLeaves((area ?? []) as LeaveRow[]);
+    const ids = ((area ?? []) as LeaveRow[]).map((r) => r.id);
+    if (ids.length > 0) {
+      const { data: chg } = await supabase
+        .from("vacation_change_requests")
+        .select("id,leave_request_id,type,new_start_date,new_end_date,reason,requested_by,status")
+        .in("leave_request_id", ids).eq("status", "pending");
+      const map: Record<string, ChangeReq> = {};
+      for (const c of ((chg ?? []) as ChangeReq[])) map[c.leave_request_id] = c;
+      setChangeByLeave(map);
+    } else {
+      setChangeByLeave({});
+    }
     let approved = 0, pending = 0;
     for (const r of mine ?? []) {
       const n = countVacationDays(r.start_date, r.end_date, me.role);
@@ -261,6 +289,79 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     });
   }, [start, end, cap, countsPending, rowsByDay, approvedByDay, mineByDay]);
   const canOverrideCap = me.role === "admin" || me.role === "supervisor";
+
+  /** Days in an arbitrary range that are already at the area cap (ignoring my own existing days). */
+  const blockedIn = useCallback((s: string, e: string) => {
+    if (cap <= 0) return [] as string[];
+    return eachDay(s, e).filter((iso) => {
+      if (mineByDay.get(iso)) return false;
+      const used = countsPending ? (rowsByDay.get(iso)?.length ?? 0) : (approvedByDay.get(iso)?.length ?? 0);
+      return used >= cap;
+    });
+  }, [cap, countsPending, rowsByDay, approvedByDay, mineByDay]);
+
+  const chgBlocked = useMemo(
+    () => (changeMode === "adjust" && chgStart && chgEnd && chgEnd >= chgStart ? blockedIn(chgStart, chgEnd) : []),
+    [changeMode, chgStart, chgEnd, blockedIn],
+  );
+
+  const closeChange = () => { setChangeMode(null); setChgReason(""); setChgStart(""); setChgEnd(""); };
+
+  /** Staff-initiated change request against their own booked vacation. Never mutates the vacation. */
+  const submitChangeRequest = async () => {
+    if (!detail || !changeMode) return;
+    if (!chgReason.trim()) { toast.error("A short reason is required"); return; }
+    if (changeMode === "adjust") {
+      if (!chgStart || !chgEnd || chgEnd < chgStart) { toast.error("Pick a valid date range"); return; }
+      if (chgBlocked.length > 0) {
+        toast.error(`Blocked: ${chgBlocked.join(", ")} ${chgBlocked.length === 1 ? "is" : "are"} at capacity.`);
+        return;
+      }
+    }
+    setBusy(true);
+    const { data: created, error } = await supabase.from("vacation_change_requests").insert({
+      leave_request_id: detail.id,
+      requested_by: me.email.toLowerCase(),
+      type: changeMode,
+      new_start_date: changeMode === "adjust" ? chgStart : null,
+      new_end_date: changeMode === "adjust" ? chgEnd : null,
+      reason: chgReason.trim(),
+      status: "pending",
+    }).select("id").maybeSingle();
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    await logAudit({
+      action: changeMode === "cancel" ? "vacation_cancellation_requested" : "vacation_adjustment_requested",
+      entity_type: "vacation_change_request",
+      entity_id: created?.id ?? null,
+      area: viewArea,
+      details: { leave_request_id: detail.id, from: [detail.start_date, detail.end_date], to: changeMode === "adjust" ? [chgStart, chgEnd] : null, reason: chgReason.trim() },
+    });
+    if (detail.approver_email) {
+      await createNotification({ data: {
+        recipient_email: detail.approver_email,
+        title: changeMode === "cancel" ? "Vacation cancellation requested" : "Vacation adjustment requested",
+        body: `${me.name}: ${detail.start_date} → ${detail.end_date}${changeMode === "adjust" ? ` ⇒ ${chgStart} → ${chgEnd}` : ""}`,
+        link: "/approvals",
+      } });
+    }
+    toast.success("Change request submitted for approval");
+    closeChange();
+    setDetail(null);
+    await load(); onDone();
+  };
+
+  const withdrawChangeRequest = async (req: ChangeReq) => {
+    setBusy(true);
+    const { error, count } = await supabase.from("vacation_change_requests")
+      .delete({ count: "exact" }).eq("id", req.id).eq("status", "pending");
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    if (!count) { toast.error("Could not withdraw — the request may already have been decided"); return; }
+    await logAudit({ action: "vacation_change_request_withdrawn", entity_type: "vacation_change_request", entity_id: req.id, area: viewArea, details: { leave_request_id: req.leave_request_id, type: req.type } });
+    toast.success("Change request withdrawn");
+    await load(); onDone();
+  };
 
   const submit = async () => {
     if (!start) return;
@@ -683,6 +784,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                   mine ? "bg-steel-100" : "bg-muted/40",
                                 ].join(" ")}>
                                   <span className="text-[9px] leading-tight truncate flex-1 min-w-0 text-ink">{r.staff_name}</span>
+                                  {changeByLeave[r.id] && (
+                                    <span className="shrink-0 rounded bg-copper/60 px-1 text-[8px] font-semibold leading-[13px] text-ink">C</span>
+                                  )}
                                   <span className={[
                                     "shrink-0 rounded px-1 text-[8px] font-semibold leading-[13px]",
                                     r.status === "Approved" ? "bg-steel-600 text-white" : "bg-copper/25 text-ink",
@@ -690,7 +794,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-56">
-                                <div className="text-xs">{r.staff_name} — {r.status}</div>
+                                <div className="text-xs">
+                                  {r.staff_name} — {r.status}
+                                  {changeByLeave[r.id] ? ` · Change pending (${changeByLeave[r.id].type})` : ""}
+                                </div>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -730,6 +837,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                       {meta?.badge ? `#${meta.badge} · ` : ""}{meta?.area ?? UNASSIGNED_AREA}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
+                                    {changeByLeave[r.id] && (
+                                      <div className="text-[10px] font-medium text-copper">Change pending — {changeByLeave[r.id].type}</div>
+                                    )}
                                     {isUnassignedView && me.role === "admin" && (
                                       <Link to="/directory" className="text-[10px] underline text-steel-700">
                                         Fix area in directory
@@ -752,7 +862,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       </div>
 
       {/* Own request detail */}
-      <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); closeChange(); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{detail?.status === "Approved" ? "Approved vacation" : "Pending request"}</DialogTitle></DialogHeader>
           {detail && (
@@ -763,7 +873,78 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
               <div><span className="text-muted-foreground">Approver: </span><span className="font-medium">{(detail.approver_email && detail.approver_email.toLowerCase() === approver?.toLowerCase() ? approverName : detail.approver_email) ?? "—"}</span></div>
               {detail.reason && <div><span className="text-muted-foreground">Reason: </span>{detail.reason}</div>}
               {detail.status === "Approved" ? (
-                <p className="text-xs text-muted-foreground">Approved vacations can only be changed by your supervisor.</p>
+                changeByLeave[detail.id] ? (
+                  <div className="rounded-md border border-copper/50 bg-copper/10 p-2 space-y-2">
+                    <div className="text-xs font-semibold text-ink">
+                      Change pending — {changeByLeave[detail.id].type === "cancel" ? "cancellation" : "adjustment"}
+                    </div>
+                    {changeByLeave[detail.id].type === "adjust" && (
+                      <div className="text-xs text-muted-foreground">
+                        Requested dates: {changeByLeave[detail.id].new_start_date} → {changeByLeave[detail.id].new_end_date}
+                      </div>
+                    )}
+                    {changeByLeave[detail.id].reason && (
+                      <div className="text-xs text-muted-foreground">Reason: {changeByLeave[detail.id].reason}</div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      The vacation stays approved and keeps its calendar days until a manager decides.
+                    </p>
+                    {changeByLeave[detail.id].requested_by.toLowerCase() === me.email.toLowerCase() && (
+                      <Button size="sm" variant="outline" className="w-full" disabled={busy}
+                        onClick={() => withdrawChangeRequest(changeByLeave[detail.id])}>
+                        Withdraw request
+                      </Button>
+                    )}
+                  </div>
+                ) : detail.staff_email.toLowerCase() === me.email.toLowerCase() ? (
+                  changeMode === null ? (
+                    <div className="flex gap-2 pt-1">
+                      <Button variant="destructive" className="flex-1" onClick={() => { setChangeMode("cancel"); setChgReason(""); }}>Request cancellation</Button>
+                      <Button variant="outline" className="flex-1"
+                        onClick={() => { setChangeMode("adjust"); setChgReason(""); setChgStart(detail.start_date); setChgEnd(detail.end_date); }}>
+                        Request adjustment
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 rounded-md border p-2">
+                      <div className="text-xs font-semibold text-ink">
+                        {changeMode === "cancel" ? "Request cancellation" : "Request adjustment"}
+                      </div>
+                      {changeMode === "adjust" && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">New start</Label>
+                            <Input type="date" value={chgStart} onChange={(e) => setChgStart(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label className="text-xs">New end</Label>
+                            <Input type="date" value={chgEnd} onChange={(e) => setChgEnd(e.target.value)} />
+                          </div>
+                        </div>
+                      )}
+                      {chgBlocked.length > 0 && (
+                        <p className="text-[11px] text-destructive">
+                          Blocked: {chgBlocked.join(", ")} {chgBlocked.length === 1 ? "is" : "are"} at capacity.
+                        </p>
+                      )}
+                      <div>
+                        <Label className="text-xs">Reason (required)</Label>
+                        <Textarea rows={2} value={chgReason} onChange={(e) => setChgReason(e.target.value)} />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Your vacation stays approved until a manager approves this request.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" className="flex-1" onClick={closeChange}>Back</Button>
+                        <Button className="flex-1" disabled={busy || !chgReason.trim() || chgBlocked.length > 0} onClick={submitChangeRequest}>
+                          Submit request
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <p className="text-xs text-muted-foreground">Approved vacations can only be changed by your supervisor.</p>
+                )
               ) : (
                 <div className="flex gap-2 pt-1">
                   <Button variant="outline" className="flex-1" onClick={() => { setStart(detail.start_date); setEnd(detail.end_date); setDetail(null); }}>Edit dates</Button>
