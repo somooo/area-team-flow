@@ -11,6 +11,7 @@ import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { logAudit } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications.functions";
 import { isAdmin } from "@/lib/permissions";
+import { VacationChangeApprovals } from "@/components/VacationChangeApprovals";
 
 export const Route = createFileRoute("/_authenticated/approvals")({
   head: () => ({ meta: [{ title: "Approvals — KADIR Staff Management" }] }),
