@@ -568,17 +568,13 @@ function SupervisorPage() {
           <CardTitle>Area schedule</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             {canEditViewedArea && (
-            <ExcelImportButton<ImportedCell, ScheduleImportConfig>
+            <ExcelImportButton<SheetCell, SheetImportConfig>
               title={`Import ${viewArea} schedule`}
-              description="Read from cell text only — colour is applied by the app from the overtime type. Re-importing an untouched export produces no changes."
+              description="Two-sheet format: row 1 holds the dates, column A the name and column B the badge. Day rows go to the Day schedule and Night rows to the Night schedule — codes are stored exactly as written."
               disabled={!canEditViewedArea}
               configure={({ input, onConfirm, onCancel }) => (
-                <ScheduleMappingDialog
+                <SheetMappingDialog
                   input={input}
-                  area={viewArea}
-                  codes={codes}
-                  uiYear={year}
-                  uiMonth={month}
                   onCancel={onCancel}
                   onConfirm={(cfg) => { setImportConfig(cfg); onConfirm(cfg); }}
                 />
@@ -606,11 +602,46 @@ function SupervisorPage() {
                   <p className="text-muted-foreground">
                     Scope: <span className="font-medium text-foreground">{viewArea}</span> ·{" "}
                     <span className="font-medium text-foreground">{replaceInfo.label || monthLabel(year, month)}</span> ·{" "}
-                    <span className="font-medium text-foreground">{isAssistants ? "single grid" : effectiveLayer === "night" ? "Night" : "Day"}</span>
+                    <span className="font-medium text-foreground">
+                      {importConfig?.side === "both" ? "Day + Night" : importConfig?.side === "night" ? "Night only" : "Day only"}
+                    </span>
                   </p>
+                  {(sheetSummary?.perSheet ?? []).map((s) => (
+                    <p key={s.side} className="text-muted-foreground">
+                      <span className="font-medium text-foreground capitalize">{s.side}</span> · sheet “{s.sheetName}” ·{" "}
+                      {s.dateCols} date columns · {s.rows} staff rows · {s.matched} matched to the directory
+                      {s.blankRowsSkipped > 0 ? ` · ${s.blankRowsSkipped} blank rows skipped` : ""}
+                    </p>
+                  ))}
+                  {(sheetSummary?.warnings ?? []).map((w) => (
+                    <p key={w} className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      {w}
+                    </p>
+                  ))}
                   {scopeWarning && (
                     <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
                       {scopeWarning}
+                    </p>
+                  )}
+                  {(sheetSummary?.crossSheetWarnings.length ?? 0) > 0 && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      <p className="font-medium">
+                        {sheetSummary!.crossSheetWarnings.length} code{sheetSummary!.crossSheetWarnings.length === 1 ? "" : "s"} look like they belong to the other sheet
+                      </p>
+                      <ul>
+                        {sheetSummary!.crossSheetWarnings.slice(0, 10).map((w) => <li key={w}>{w}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {(sheetSummary?.unmappedNumbers.length ?? 0) > 0 && (
+                    <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      Assignment numbers with no zone mapped: {sheetSummary!.unmappedNumbers.join(", ")} — these staff are grouped under “Unassigned”.{" "}
+                      <a className="underline" href="/settings#zone-map">Edit the zone map in Settings</a>
+                    </p>
+                  )}
+                  {(sheetSummary?.bothSheets.length ?? 0) > 0 && (
+                    <p className="text-muted-foreground">
+                      {sheetSummary!.bothSheets.length} badge{sheetSummary!.bothSheets.length === 1 ? "" : "s"} appear on both sheets: {sheetSummary!.bothSheets.join(", ")}
                     </p>
                   )}
                   {addedToSchedule.length > 0 && (
@@ -622,7 +653,7 @@ function SupervisorPage() {
                   {missingPeople.length > 0 && (
                     <div className="rounded-md border p-2 space-y-2">
                       <p className="font-medium">
-                        {missingPeople.length} badge{missingPeople.length === 1 ? "" : "s"} not in the directory — needs a directory record
+                        {missingPeople.length} badge{missingPeople.length === 1 ? "" : "s"} not in the directory — review and add them there first
                       </p>
                       <ul className="text-muted-foreground">
                         {missingPeople.map((m) => (
@@ -634,27 +665,44 @@ function SupervisorPage() {
                       </Button>
                     </div>
                   )}
-                  {labelRowsSkipped > 0 && (
-                    <p className="text-muted-foreground">{labelRowsSkipped} label rows skipped (zone headings and footers).</p>
-                  )}
                 </div>
               )}
               parse={async (input, config) => {
                 if (!config) return [];
-                const matrix = input.workbook.sheets[config.sheetName] ?? [];
+                const sources: SheetSource[] = [];
+                if (config.side !== "night" && config.daySheet) {
+                  const m = input.workbook.sheets[config.daySheet] ?? [];
+                  sources.push({ side: "day", matrix: m, layout: detectSheetLayout(m, config.daySheet, "day") });
+                }
+                if (config.side !== "day" && config.nightSheet) {
+                  const m = input.workbook.sheets[config.nightSheet] ?? [];
+                  sources.push({ side: "night", matrix: m, layout: detectSheetLayout(m, config.nightSheet, "night") });
+                }
                 const common = {
-                  matrix, blocks: config.blocks, staff: staff as StaffLite[], badges, directory,
-                  shifts, codes, codeMap: config.codeMap,
+                  sources,
+                  staff: staff as StaffLite[],
+                  directory,
+                  shifts,
+                  knownAssignmentNumbers: new Set(zones.map((z) => z.assignment_no)),
                 };
-                const diff = planScheduleImport({ ...common, replace: false });
-                const full = planScheduleImport({ ...common, replace: true });
-                setLabelRowsSkipped(diff.labelRowsSkipped);
+                const diff = planSheetImport({ ...common, replace: false });
+                const full = planSheetImport({ ...common, replace: true });
+                setLabelRowsSkipped(0);
                 setMissingPeople(full.missing);
                 setAddedToSchedule(full.addedToSchedule);
                 setReplaceAllItems(full.items.filter((i) => i.status !== "skip"));
+                setSheetSummary({
+                  perSheet: full.perSheet,
+                  crossSheetWarnings: full.crossSheetWarnings,
+                  unmappedNumbers: full.unmappedNumbers,
+                  bothSheets: full.bothSheets,
+                  warnings: Array.from(new Set(full.warnings)),
+                });
 
-                const ranges = importRanges(config);
-                const off = config.blocks.filter((b) => b.year !== year || b.month !== month);
+                const months = sources.map((s) => ({ year: s.layout.year, month: s.layout.month }));
+                setImportMonths(months);
+                const ranges = importRanges(months);
+                const off = months.filter((b) => b.year !== year || b.month !== month);
                 setScopeWarning(
                   off.length
                     ? `The file contains dates outside ${monthLabel(year, month)} (${off
