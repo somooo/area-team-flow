@@ -450,7 +450,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       .update({ start_date: editStart, end_date: editEnd }).eq("id", manageRow.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    await logAudit({ action: "leave_dates_adjusted_by_manager", entity_type: "leave_request", entity_id: manageRow.id, area: viewArea, details: { from: [manageRow.start_date, manageRow.end_date], to: [editStart, editEnd] } });
+    await logAudit({ action: "leave_dates_adjusted_by_manager", entity_type: "leave_request", entity_id: manageRow.id, area: viewArea, details: { from: [manageRow.start_date, manageRow.end_date], to: [editStart, editEnd], actor_name: me.name, direct_admin_change: true } });
     await createNotification({ data: { recipient_email: manageRow.staff_email, title: "Vacation dates updated", body: `${me.name} set your vacation to ${editStart} → ${editEnd}`, link: "/vacations" } });
     await notify({ data: { event: "schedule_changed", staff_name: manageRow.staff_name, staff_email: manageRow.staff_email, area: viewArea, start_date: editStart, end_date: editEnd } });
     toast.success("Vacation updated — schedule synced");
@@ -460,10 +460,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
 
   const cancelVacation = async (row: LeaveRow) => {
     setBusy(true);
-    const { error } = await supabase.from("leave_requests").update({ status: "Rejected" }).eq("id", row.id);
+    const { error } = await supabase.from("leave_requests").update({ status: "Cancelled" }).eq("id", row.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    await logAudit({ action: "leave_cancelled_by_manager", entity_type: "leave_request", entity_id: row.id, area: viewArea, details: { start_date: row.start_date, end_date: row.end_date } });
+    await logAudit({ action: "leave_cancelled_by_manager", entity_type: "leave_request", entity_id: row.id, area: viewArea, details: { start_date: row.start_date, end_date: row.end_date, actor_name: me.name, direct_admin_change: true } });
     await createNotification({ data: { recipient_email: row.staff_email, title: "Vacation cancelled", body: `${me.name} cancelled ${row.start_date} → ${row.end_date}`, link: "/vacations" } });
     await notify({ data: { event: "schedule_changed", staff_name: row.staff_name, staff_email: row.staff_email, area: viewArea, start_date: row.start_date, end_date: row.end_date } });
     toast.success("Vacation cancelled — schedule reverted");
