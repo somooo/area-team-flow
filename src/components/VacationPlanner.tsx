@@ -120,7 +120,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [detail, setDetail] = useState<LeaveRow | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [supervisors, setSupervisors] = useState<{ email: string; name: string }[]>([]);
+  const [supervisors, setSupervisors] = useState<CoverCandidate[]>([]);
   const [covering, setCovering] = useState<string>("");
   const [manageDay, setManageDay] = useState<{ iso: string; rows: LeaveRow[] } | null>(null);
   const [manageRow, setManageRow] = useState<LeaveRow | null>(null);
@@ -142,13 +142,23 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   /** Supervisors manage their own area; admins manage every area including the supervisors calendar. */
   const canManage = canManageVacationsIn(me, viewArea, SUPERVISORS_AREA);
 
+  // Covering-supervisor options, recomputed whenever the selected range changes so that
+  // availability (own leave / already covering someone) reflects the requested dates.
   useEffect(() => {
-    if (!canSeeSupervisorsCalendar) return;
-    void supabase.from("staff").select("email,name,role").eq("role", "supervisor").then(({ data }) => {
-      setSupervisors(((data ?? []) as { email: string; name: string }[])
-        .filter((s) => s.email.toLowerCase() !== me.email.toLowerCase()));
+    if (!canSeeSupervisorsCalendar || !start) { setSupervisors([]); return; }
+    let cancelled = false;
+    void fetchCoverCandidates({ start, end: end ?? start, requesterEmail: me.email }).then((list) => {
+      if (!cancelled) setSupervisors(list);
     });
-  }, [canSeeSupervisorsCalendar, me.email]);
+    return () => { cancelled = true; };
+  }, [canSeeSupervisorsCalendar, me.email, start, end]);
+
+  // Clear a nominated cover that is no longer available for the new range.
+  useEffect(() => {
+    if (!covering) return;
+    const c = supervisors.find((s) => s.email === covering);
+    if (c && !c.available) setCovering("");
+  }, [supervisors, covering]);
 
   useEffect(() => {
     void resolveApprover(me).then(async (email) => {
