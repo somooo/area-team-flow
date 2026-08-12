@@ -225,11 +225,42 @@ export type SheetPlanInput = {
   staff: StaffLite[];
   directory: DirectoryPerson[];
   shifts: RosterShift[];
+  /** The area being imported into — used for the one-side-per-area rule. */
+  area?: string;
+  /** Existing schedule memberships for the imported month(s). */
+  memberships?: ScheduleMembership[];
+  /** `email|YYYY-MM-DD` keys covered by an approved vacation. */
+  vacationKeys?: Set<string>;
   /** Known assignment numbers from the zone map, used to flag unmapped ones. */
   knownAssignmentNumbers?: Set<string>;
   replace?: boolean;
   defaultHours?: number;
 };
+
+export type ScheduleMembership = {
+  staff_id: string;
+  area: string;
+  month_start: string;
+  side: "Day" | "Night";
+};
+
+/** A badge that cannot be written on the side the file puts them on. */
+export type SideConflict = {
+  badge: string;
+  name: string;
+  email: string;
+  /** The side the file is importing them on. */
+  side: SheetSide;
+  otherArea: string;
+  otherSide: "Day" | "Night";
+  monthStart: string;
+  monthLabel: string;
+  sameArea: boolean;
+  message: string;
+};
+
+/** An imported assignment that lands on a day the person is already on approved vacation. */
+export type VacationConflict = { badge: string; name: string; dates: string[] };
 
 export type SheetPlanResult = {
   items: ImportItem<SheetCell>[];
@@ -238,6 +269,8 @@ export type SheetPlanResult = {
   crossSheetWarnings: string[];
   unmappedNumbers: string[];
   bothSheets: string[];
+  sideConflicts: SideConflict[];
+  vacationConflicts: VacationConflict[];
   perSheet: {
     side: SheetSide; sheetName: string; rows: number; matched: number; dateCols: number;
     blankRowsSkipped: number; monthLabel: string; firstDate: string | null; lastDate: string | null;
@@ -266,6 +299,14 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
   const warnings: string[] = [];
   const perSheet: SheetPlanResult["perSheet"] = [];
   const seenByBadgeSide = new Map<string, Set<SheetSide>>();
+  const sideConflicts = new Map<string, SideConflict>();
+  const vacationConflicts = new Map<string, VacationConflict>();
+  const membershipsByStaff = new Map<string, ScheduleMembership[]>();
+  for (const m of input.memberships ?? []) {
+    const list = membershipsByStaff.get(m.staff_id) ?? [];
+    list.push(m);
+    membershipsByStaff.set(m.staff_id, list);
+  }
 
   for (const src of input.sources) {
     const { layout, matrix, side } = src;
@@ -308,6 +349,25 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
       seenByBadgeSide.set(row.badge, seen);
       if (!onSchedule.has(member.email.toLowerCase())) added.set(member.email.toLowerCase(), member);
 
+      // One side per area, and one side across areas, for this month.
+      const monthStart = `${layout.year}-${String(layout.month).padStart(2, "0")}-01`;
+      const importSide: "Day" | "Night" = side === "night" ? "Night" : "Day";
+      const targetArea = input.area ?? "";
+      for (const m of membershipsByStaff.get(member.id) ?? []) {
+        if (m.month_start !== monthStart || m.side === importSide) continue;
+        const sameArea = !!targetArea && m.area.toLowerCase() === targetArea.toLowerCase();
+        const label = monthLabelOf(layout.year, layout.month);
+        const key = `${row.badge}|${monthStart}`;
+        if (sideConflicts.has(key)) continue;
+        sideConflicts.set(key, {
+          badge: row.badge, name: member.name, email: member.email.toLowerCase(),
+          side, otherArea: m.area, otherSide: m.side, monthStart, monthLabel: label, sameArea,
+          message: sameArea
+            ? `${member.name} (badge ${row.badge}) is already on the ${m.area} ${m.side} schedule for ${label}. A staff member cannot be on both sides of the same area.`
+            : `${member.name} (badge ${row.badge}) is ${m.side} in ${m.area} for ${label} and cannot be added to ${targetArea || "this area"} ${importSide}.`,
+        });
+      }
+
       for (const dc of layout.dateCols) {
         if (!dc.iso.startsWith(monthPrefix)) {
           throw new Error(
@@ -339,13 +399,26 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
         if (num && input.knownAssignmentNumbers && !input.knownAssignmentNumbers.has(num))
           unmapped.add(num);
 
+        // Vacation always wins: the code is still imported but the grid will show V.
+        let vacationNote: string | undefined;
+        if (
+          parsed.payload &&
+          parsed.payload.duty !== "Off" &&
+          input.vacationKeys?.has(`${member.email.toLowerCase()}|${dc.iso}`)
+        ) {
+          const entry = vacationConflicts.get(row.badge) ?? { badge: row.badge, name: member.name, dates: [] };
+          if (!entry.dates.includes(dc.iso)) entry.dates.push(dc.iso);
+          vacationConflicts.set(row.badge, entry);
+          vacationNote = "Assigned while on vacation — the schedule will show V";
+        }
+
         items.push({
           id,
           label: member.name,
           badge: row.badge,
           area: side === "night" ? "Night" : "Day",
           change,
-          warning: cross ?? undefined,
+          warning: [cross, vacationNote].filter(Boolean).join(" · ") || undefined,
           status: input.replace || !existing ? "add" : "update",
           payload: {
             staff: member,
@@ -386,6 +459,8 @@ export function planSheetImport(input: SheetPlanInput): SheetPlanResult {
     crossSheetWarnings,
     unmappedNumbers: Array.from(unmapped).sort((a, b) => Number(a) - Number(b)),
     bothSheets,
+    sideConflicts: Array.from(sideConflicts.values()),
+    vacationConflicts: Array.from(vacationConflicts.values()),
     perSheet,
     warnings,
     range,
