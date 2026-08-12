@@ -187,6 +187,9 @@ function SupervisorPage() {
 
   const pendingKeys = useMemo(() => new Set(Object.keys(pending)), [pending]);
 
+  const monthLabel = (y: number, m: number) =>
+    new Date(y, m, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
+
   /**
    * Grid roster = staff assigned to this area PLUS anyone who has a shift in the
    * visible month, so people added by an import show up immediately.
