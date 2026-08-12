@@ -108,6 +108,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [covering, setCovering] = useState<string>("");
   const [manageDay, setManageDay] = useState<{ iso: string; rows: LeaveRow[] } | null>(null);
   const [manageRow, setManageRow] = useState<LeaveRow | null>(null);
+  const [staffMeta, setStaffMeta] = useState<Record<string, { badge: string | null; area: string | null }>>({});
+  const [openDay, setOpenDay] = useState<string | null>(null);
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
 
