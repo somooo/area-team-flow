@@ -784,6 +784,7 @@ export type Database = {
           created_at: string
           decided_at: string | null
           decided_by: string | null
+          decision_reason: string | null
           id: string
           leave_request_id: string
           new_end_date: string | null
@@ -797,6 +798,7 @@ export type Database = {
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
+          decision_reason?: string | null
           id?: string
           leave_request_id: string
           new_end_date?: string | null
@@ -810,6 +812,7 @@ export type Database = {
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
+          decision_reason?: string | null
           id?: string
           leave_request_id?: string
           new_end_date?: string | null
@@ -935,7 +938,7 @@ export type Database = {
         | "Rejected"
       change_type: "give_ot" | "switch_area" | "switch_date"
       duty_type: "Day" | "Night" | "Off" | "Vacation" | "Sick" | "Paternity"
-      leave_status: "Pending" | "Approved" | "Rejected"
+      leave_status: "Pending" | "Approved" | "Rejected" | "Cancelled"
       leave_type: "Vacation" | "Sick"
       ot_type: "None" | "BuiltIn" | "Additional" | "MedEvac"
       shift_type: "Morning" | "Evening" | "Night" | "Off"
@@ -1077,7 +1080,7 @@ export const Constants = {
       ],
       change_type: ["give_ot", "switch_area", "switch_date"],
       duty_type: ["Day", "Night", "Off", "Vacation", "Sick", "Paternity"],
-      leave_status: ["Pending", "Approved", "Rejected"],
+      leave_status: ["Pending", "Approved", "Rejected", "Cancelled"],
       leave_type: ["Vacation", "Sick"],
       ot_type: ["None", "BuiltIn", "Additional", "MedEvac"],
       shift_type: ["Morning", "Evening", "Night", "Off"],
