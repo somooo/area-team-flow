@@ -808,6 +808,21 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
         </div>
       )}
 
+      {canManage && importOverCapSummary.length > 0 && (
+        <div className="rounded-md border border-copper/40 bg-copper/5 p-3 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-ink">
+              {importOverCapSummary.length} day{importOverCapSummary.length === 1 ? "" : "s"} now exceed the area cap after the import
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => setImportOverCapSummary([])}>Dismiss</Button>
+          </div>
+          <ul className="text-[11px] text-muted-foreground space-y-0.5 max-h-32 overflow-auto">
+            {importOverCapSummary.map((s) => <li key={s}>{s}</li>)}
+          </ul>
+          <p className="text-[10px] text-muted-foreground">Those days stay locked on the calendar, so nobody can add to them.</p>
+        </div>
+      )}
+
       {/* Calendars */}
       <div className="grid gap-3 lg:grid-cols-2 max-w-4xl mx-auto">
         {months.map((m, idx) => (
