@@ -133,7 +133,8 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
     const approverEmail = (me.role === "supervisor" || me.role === "team_leader") ? approver : resolvedApprover;
     if (!approverEmail) { toast.error("No approver available"); return; }
     const { error } = await supabase.from("leave_requests").insert({
-      staff_email: me.email.toLowerCase(), staff_name: me.name, area: me.area!, leave_type: type, staff_id: me.id,
+      // `area` is derived server-side from the staff directory record.
+      staff_email: me.email.toLowerCase(), staff_name: me.name, leave_type: type, staff_id: me.id,
       start_date: start, end_date: end, reason, approver_email: approverEmail,
     });
     if (error) { toast.error(error.message); return; }
