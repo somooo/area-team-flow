@@ -26,7 +26,11 @@ import {
   type SheetCell,
   type SheetSource,
   type SheetPlanResult,
+  type SideConflict,
+  type VacationConflict,
+  type ScheduleMembership,
 } from "@/lib/sheet-schedule-import";
+import { fetchVacationDays } from "@/lib/vacation-days";
 import { buildScheduleGroups, fetchZoneAssignments, type ZoneAssignment } from "@/lib/zones";
 import { normalizeBadge, isProtectedTest } from "@/lib/staff-import";
 import { SheetMappingDialog, type SheetImportConfig } from "@/components/SheetMappingDialog";
@@ -104,6 +108,12 @@ function SupervisorPage() {
   const [addedToSchedule, setAddedToSchedule] = useState<StaffLite[]>([]);
   const [removalPreview, setRemovalPreview] = useState<{ name: string; badge: string }[]>([]);
   const [scopeWarning, setScopeWarning] = useState<string | null>(null);
+  const [vacationKeys, setVacationKeys] = useState<Set<string>>(new Set());
+  const [homeAreas, setHomeAreas] = useState<Record<string, string | null>>({});
+  const [sideConflicts, setSideConflicts] = useState<SideConflict[]>([]);
+  const [vacationConflicts, setVacationConflicts] = useState<VacationConflict[]>([]);
+  /** badge -> how the admin wants the one-side rule resolved. */
+  const [conflictChoice, setConflictChoice] = useState<Record<string, "move" | "skip">>({});
   /** Every non-blank cell in the file, used when the import replaces the whole month. */
   const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<SheetCell>[]>([]);
 
