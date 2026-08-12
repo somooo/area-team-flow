@@ -674,7 +674,7 @@ function SupervisorPage() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => void exportExcel({ area: viewArea, year, month, staff: staff as StaffLite[], shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
+              onClick={() => void exportExcel({ area: viewArea, year, month, staff: gridStaff, shifts: mergedShifts, layer: effectiveLayer, withSummary: true })}
             >
               Export to Excel
             </Button>
