@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { toISODate } from "@/lib/roster";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
@@ -190,7 +191,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   /** Per-day cap for this area, from vacation_caps (falls back to the legacy rule). */
   const capPct = capRow?.cap_pct ?? ruleNumber(rules, "vacation_cap_pct", 30);
   const warnPct = capRow?.warn_pct ?? 80;
-  const cap = useMemo(() => maxOffPerDay(headcount, capPct), [headcount, capPct]);
+  const cap = useMemo(
+    () => (isUnassignedView ? 0 : maxOffPerDay(headcount, capPct)),
+    [headcount, capPct, isUnassignedView],
+  );
   const countsPending = rules["vacation_cap_counts_pending"] !== false;
   const capAreaLabel = isSupervisorsView ? "Supervisors" : viewArea;
   const yearlyCap = ruleNumber(rules, "vacation_yearly_days", 25);
@@ -273,9 +277,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       if (!overrideReason.trim()) { toast.error("An override reason is required"); return; }
     }
     setBusy(true);
+    // `area` is never sent: the database derives it from the staff directory record.
     const { data: inserted, error } = await supabase.from("leave_requests").insert({
       staff_email: me.email.toLowerCase(), staff_name: me.name,
-      area: isSupervisorsView ? SUPERVISORS_AREA : me.area!,
       leave_type: "Vacation",
       staff_id: me.id, start_date: s, end_date: e, reason, approver_email: routeTo,
       covering_supervisor_email: isSupervisorsView ? covering : null,
@@ -347,7 +351,12 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   };
 
   const months = [cursor, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)];
-  const areaOptions = canSeeSupervisorsCalendar ? [SUPERVISORS_AREA, ...areas.filter((a) => a !== SUPERVISORS_AREA)] : areas;
+  const baseAreas = areas.filter((a) => a !== SUPERVISORS_AREA && a !== UNASSIGNED_AREA);
+  const areaOptions = [
+    ...(canSeeSupervisorsCalendar ? [SUPERVISORS_AREA] : []),
+    ...baseAreas,
+    UNASSIGNED_AREA,
+  ];
 
   return (
     <div className="space-y-4">
@@ -708,9 +717,14 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                       ].join(" ")}>{r.status}</span>
                                     </div>
                                     <div className="text-[10px] text-muted-foreground truncate">
-                                      {meta?.badge ? `#${meta.badge} · ` : ""}{meta?.area ?? viewArea}
+                                      {meta?.badge ? `#${meta.badge} · ` : ""}{meta?.area ?? UNASSIGNED_AREA}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
+                                    {isUnassignedView && me.role === "admin" && (
+                                      <Link to="/directory" className="text-[10px] underline text-steel-700">
+                                        Fix area in directory
+                                      </Link>
+                                    )}
                                   </div>
                                 );
                               })}
