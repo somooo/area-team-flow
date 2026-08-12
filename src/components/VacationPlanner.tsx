@@ -19,6 +19,7 @@ import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
 import { AREAS } from "@/lib/areas";
+import { maxOffPerDay } from "@/components/VacationCapsTable";
 import { ExcelImportButton, type ImportItem } from "@/components/ExcelImportButton";
 import { commitVacationImport, exportVacationsExcel, planVacationImport, type DirectoryStaffLite, type ExistingLeave, type VacationImportPayload } from "@/lib/vacation-io";
 
@@ -95,6 +96,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
   const [headcount, setHeadcount] = useState(1);
+  const [capRow, setCapRow] = useState<{ cap_pct: number; warn_pct: number } | null>(null);
   const [balance, setBalance] = useState<{ approved: number; pending: number }>({ approved: 0, pending: 0 });
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
@@ -143,7 +145,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     const hcQuery = isSupervisorsView
       ? supabase.from("staff").select("id", { count: "exact", head: true }).eq("role", "supervisor")
       : supabase.from("staff").select("id", { count: "exact", head: true }).eq("area", viewArea);
-    const [{ count: hc }, { data: area }, { data: mine }] = await Promise.all([
+    const capArea = isSupervisorsView ? "Supervisor" : viewArea;
+    const [{ count: hc }, { data: area }, { data: mine }, { data: capData }] = await Promise.all([
       hcQuery,
       supabase.from("leave_requests")
         .select("id,staff_email,staff_name,start_date,end_date,status,reason,approver_email,covering_supervisor_email,stage")
@@ -154,8 +157,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
         .ilike("staff_email", me.email).eq("leave_type", "Vacation")
         .gte("start_date", `${year}-01-01`).lte("end_date", `${year}-12-31`)
         .in("status", ["Approved", "Pending"]),
+      supabase.from("vacation_caps").select("cap_pct,warn_pct").eq("area", capArea).maybeSingle(),
     ]);
     setHeadcount(hc ?? 1);
+    setCapRow((capData as { cap_pct: number; warn_pct: number } | null) ?? null);
     setLeaves((area ?? []) as LeaveRow[]);
     let approved = 0, pending = 0;
     for (const r of mine ?? []) {
@@ -178,10 +183,12 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     });
   }, []);
 
-  const cap = useMemo(
-    () => Math.floor((headcount * ruleNumber(rules, "vacation_cap_pct", 30)) / 100),
-    [headcount, rules],
-  );
+  /** Per-day cap for this area, from vacation_caps (falls back to the legacy rule). */
+  const capPct = capRow?.cap_pct ?? ruleNumber(rules, "vacation_cap_pct", 30);
+  const warnPct = capRow?.warn_pct ?? 80;
+  const cap = useMemo(() => maxOffPerDay(headcount, capPct), [headcount, capPct]);
+  const countsPending = rules["vacation_cap_counts_pending"] !== false;
+  const capAreaLabel = isSupervisorsView ? "Supervisors" : viewArea;
   const yearlyCap = ruleNumber(rules, "vacation_yearly_days", 25);
   const remaining = Math.max(0, yearlyCap - balance.approved - balance.pending);
 
@@ -221,7 +228,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (own) { setDetail(own); return; }
     if (!isOwnArea) return;
     if (iso < todayISO) return;
-    const used = approvedByDay.get(iso)?.length ?? 0;
+    const used = countsPending
+      ? (rowsByDay.get(iso)?.length ?? 0)
+      : (approvedByDay.get(iso)?.length ?? 0);
     if (cap > 0 && used >= cap) return;
     if (!start || (start && end)) { setStart(iso); setEnd(null); return; }
     if (iso < start) { setStart(iso); return; }
@@ -464,8 +473,13 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                 const names = approvedByDay.get(iso) ?? [];
                 const own = mineByDay.get(iso);
                 const dayRows = rowsByDay.get(iso) ?? [];
-                const used = names.length;
-                const full = cap > 0 && used >= cap && !own;
+                const used = countsPending ? dayRows.length : names.length;
+                const atCap = cap > 0 && used >= cap;
+                const nearCap = cap > 0 && !atCap && used >= Math.ceil((cap * warnPct) / 100) && used > 0;
+                const full = atCap && !own;
+                const capTip = atCap
+                  ? `Vacation cap reached for ${capAreaLabel} (${used}/${cap})`
+                  : `Almost full — ${used} of ${cap} slots used`;
                 const past = iso < todayISO;
                 const selected = selectedSet.has(iso);
                 const clickable = !!own || (canManage && dayRows.length > 0) || (isOwnArea && !full && !past);
@@ -482,13 +496,44 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                     }}
                     className={[
                       "min-h-[86px] max-h-[86px] overflow-hidden border-b border-r p-1 text-left align-top flex flex-col gap-0.5 transition-colors",
-                      full ? "bg-muted text-muted-foreground" : "bg-card",
+                      atCap
+                        ? "bg-muted text-muted-foreground"
+                        : nearCap
+                          ? "bg-copper/20"
+                          : "bg-card",
                       past && !own ? "opacity-50" : "",
                       selected && !own ? "ring-2 ring-inset ring-steel-500 bg-steel-50" : "",
                       clickable ? "hover:bg-steel-50/70 cursor-pointer" : "cursor-default",
                     ].join(" ")}
                   >
-                    <span className="text-[11px] font-semibold text-ink">{d.getDate()}</span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-semibold text-ink">{d.getDate()}</span>
+                      {cap > 0 && used > 0 && (
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className={[
+                                  "shrink-0 rounded px-1 text-[9px] font-semibold tabular-nums leading-[14px]",
+                                  atCap
+                                    ? "bg-muted-foreground/25 text-ink"
+                                    : nearCap
+                                      ? "bg-copper/40 text-ink"
+                                      : "bg-muted text-muted-foreground",
+                                ].join(" ")}
+                              >
+                                {used}/{cap}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-56">
+                              <div className="text-xs">
+                                {atCap || nearCap ? capTip : `${used} of ${cap} slots used`}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
                     <div className="flex flex-col gap-px w-full min-w-0 overflow-y-auto">
                       {visible.map((r) => {
                         const mine = r.staff_email.toLowerCase() === me.email.toLowerCase();
