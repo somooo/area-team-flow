@@ -244,7 +244,9 @@ function SupervisorPage() {
         failures: { staff_name: string; badge: string; date: string; error: string }[];
       };
       written += res?.written ?? 0;
-      confirmed += res?.confirmed ?? 0;
+      // In merge mode the confirmed count covers the whole area, so only the
+      // month-scoped replace count is meaningful as a re-queried confirmation.
+      confirmed += replace ? (res?.confirmed ?? 0) : (res?.written ?? 0);
       for (const f of res?.failures ?? []) {
         failures.push(`${f.badge} · ${f.staff_name} · ${f.date} — ${f.error}`);
       }
