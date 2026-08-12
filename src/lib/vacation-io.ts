@@ -251,7 +251,7 @@ export type VacationCommitResult = {
  */
 export async function commitVacationImport(
   items: ImportItem<VacationImportPayload>[],
-  opts: { approverEmail: string; setProgress?: (t: string | null) => void },
+  opts: { approverEmail: string; setProgress?: (t: string | null) => void; overrideReason?: string },
 ): Promise<VacationCommitResult> {
   const rows = items.map((i) => i.payload!).filter(Boolean);
   const errors: VacationCommitResult["errors"] = [];
@@ -282,6 +282,8 @@ export async function commitVacationImport(
       start_date: p.start_date, end_date: p.end_date,
       status: p.status as "Approved" | "Pending" | "Rejected",
       approver_email: opts.approverEmail,
+      over_cap_override: !!p.over_cap,
+      over_cap_reason: p.over_cap ? (opts.overrideReason?.trim() || null) : null,
     });
     const { error, data } = await supabase.from("leave_requests").insert(chunk.map(toRow)).select("id");
     if (!error && data && data.length === chunk.length) { written += data.length; continue; }
