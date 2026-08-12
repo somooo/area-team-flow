@@ -187,6 +187,22 @@ function SupervisorPage() {
 
   const pendingKeys = useMemo(() => new Set(Object.keys(pending)), [pending]);
 
+  /**
+   * Grid roster = staff assigned to this area PLUS anyone who has a shift in the
+   * visible month, so people added by an import show up immediately.
+   */
+  const gridStaff = useMemo(() => {
+    const map = new Map<string, StaffLite>();
+    for (const s of staff) map.set(s.email.toLowerCase(), s as StaffLite);
+    for (const sh of mergedShifts) {
+      const k = sh.staff_email.toLowerCase();
+      if (map.has(k)) continue;
+      const dir = directory.find((d) => d.email.toLowerCase() === k);
+      map.set(k, dir ?? { id: k, name: sh.staff_name, email: sh.staff_email, role: "staff", area: viewArea, department: null });
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [staff, mergedShifts, directory, viewArea]);
+
   if (!me?.staff) return null;
   if (!canManage) return <p>Supervisor / admin access only.</p>;
   const meStaff = me.staff;
