@@ -47,6 +47,17 @@ export type CommitOptions = {
   setProgress: (text: string | null) => void;
 };
 
+export type CommitReport = {
+  /** Rows the commit tried to write. */
+  attempted?: number;
+  /** Rows the database reported as written/updated. */
+  written: number;
+  /** Rows re-queried from the table after the write — the trustworthy number. */
+  confirmed?: number;
+  /** One human-readable line per failed row, including badge and the real error text. */
+  failures: string[];
+};
+
 /**
  * One shared import flow for every Excel import in the app:
  * pick file → (optional mapping step) → parse → validate → preview diff → confirm → commit.
@@ -73,7 +84,7 @@ export function ExcelImportButton<P, C = unknown>({
   commit: (
     items: ImportItem<P>[],
     options: CommitOptions,
-  ) => Promise<void | { written: number; failures: string[] }>;
+  ) => Promise<void | CommitReport>;
   disabled?: boolean;
   size?: "sm" | "default";
   variant?: "outline" | "default" | "secondary";
@@ -99,7 +110,9 @@ export function ExcelImportButton<P, C = unknown>({
   const [replace, setReplace] = useState(true);
   const [confirmDestructive, setConfirmDestructive] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [done, setDone] = useState<{ committed: number; skipped: number; failures: string[] } | null>(null);
+  const [done, setDone] = useState<
+    { attempted: number; committed: number; confirmed: number | null; skipped: number; failures: string[] } | null
+  >(null);
   const [toggleState, setToggleState] = useState<Record<string, boolean>>(() =>
     Object.fromEntries((toggles ?? []).map((t) => [t.key, false])),
   );
@@ -153,10 +166,23 @@ export function ExcelImportButton<P, C = unknown>({
       const result = await commit(applicable, { replace: destructive, setProgress });
       const failures = result?.failures ?? [];
       const written = result?.written ?? applicable.length;
-      if (failures.length > 0 && written === 0) {
-        throw new Error(failures.slice(0, 5).join("\n"));
+      const confirmed = result?.confirmed ?? null;
+      const committedForReal = confirmed ?? written;
+      // Never report success when nothing actually landed in the table.
+      if (committedForReal === 0) {
+        throw new Error(
+          failures.length > 0
+            ? `0 of ${applicable.length} rows were written.\n${failures.slice(0, 5).join("\n")}`
+            : `0 of ${applicable.length} rows were written. The database accepted the request but stored nothing.`,
+        );
       }
-      setDone({ committed: written, skipped: skipped.length, failures });
+      setDone({
+        attempted: result?.attempted ?? applicable.length,
+        committed: written,
+        confirmed,
+        skipped: skipped.length,
+        failures,
+      });
       setItems(null);
       setConfirmDestructive(false);
       onDone?.();
@@ -409,16 +435,32 @@ export function ExcelImportButton<P, C = unknown>({
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Import complete</DialogTitle>
+            <DialogTitle>
+              {(done?.failures.length ?? 0) > 0 ? "Import finished with errors" : "Import complete"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Rows applied</span>
+              <span className="text-muted-foreground">Rows attempted</span>
+              <span className="font-semibold">{done?.attempted ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Rows written</span>
               <span className="font-semibold">{done?.committed ?? 0}</span>
             </div>
+            {done?.confirmed != null && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Confirmed in database</span>
+                <span className="font-semibold">{done.confirmed}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Rows skipped</span>
               <span className="font-semibold">{done?.skipped ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Rows failed</span>
+              <span className="font-semibold">{done?.failures.length ?? 0}</span>
             </div>
             {(done?.failures.length ?? 0) > 0 && (
               <div className="mt-2 max-h-48 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
@@ -428,6 +470,17 @@ export function ExcelImportButton<P, C = unknown>({
             )}
           </div>
           <DialogFooter>
+            {(done?.failures.length ?? 0) > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void navigator.clipboard.writeText((done?.failures ?? []).join("\n"));
+                  toast.success("Copied failed rows");
+                }}
+              >
+                Copy errors
+              </Button>
+            )}
             <Button onClick={() => setDone(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
