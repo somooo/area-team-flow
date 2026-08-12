@@ -19,6 +19,7 @@ import { MyChangeRequests } from "@/components/MyChangeRequests";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { TeamLeaderReportDialog } from "@/components/TeamLeaderReportDialog";
 import { fetchZoneReference, isLeaderShift, type ZoneReferenceRow } from "@/lib/assignments";
+import { buildScheduleGroups, fetchZoneAssignments, type ZoneAssignment } from "@/lib/zones";
 import { toISODate, cellFor } from "@/lib/roster";
 import type { RosterShift } from "@/lib/roster";
 import { getServerNow } from "@/lib/server-time.functions";
@@ -105,15 +106,22 @@ function SchedulePage() {
       if (map.has(k)) continue;
       map.set(k, { id: k, name: row.staff_name, email: row.staff_email, role: "staff", area: viewArea, department: null } as Staff);
     }
-    setRoster(Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name)));
+    // Row order follows the imported sheet order, applied by buildScheduleGroups.
+    setRoster(Array.from(map.values()));
   };
 
   useEffect(() => { void load(); }, [year, month, viewArea]);
 
   useEffect(() => {
-    if (!viewArea) { setReference([]); return; }
+    if (!viewArea) { setReference([]); setZones([]); return; }
     void fetchZoneReference(viewArea).then(setReference);
+    void fetchZoneAssignments(viewArea).then(setZones);
   }, [viewArea]);
+
+  const gridGroups = useMemo(
+    () => buildScheduleGroups({ staff: roster, shifts, zones }),
+    [roster, shifts, zones],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPick(null); };
@@ -274,6 +282,7 @@ function SchedulePage() {
             meEmail={meStaff.email}
             layer={effectiveLayer}
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
+            groups={gridGroups}
             onCellClick={handleCell}
             isCellClickable={cellClickable}
           />
