@@ -421,8 +421,35 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     await load(); onDone();
   };
 
+  /** Re-send a declined supervisor request to a different covering supervisor. */
+  const renominateCover = async (row: LeaveRow) => {
+    if (!renominate) { toast.error("Pick a covering supervisor"); return; }
+    const fresh = await fetchCoverCandidates({ start: row.start_date, end: row.end_date, requesterEmail: me.email, excludeLeaveId: row.id });
+    const pick = fresh.find((c) => c.email === renominate);
+    setSupervisors(fresh);
+    if (!pick || !pick.available) {
+      toast.error(`${pick?.name ?? "That supervisor"} can no longer cover — ${pick?.reason ?? "not available"}`);
+      setRenominate("");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.from("leave_requests").update({
+      covering_supervisor_email: renominate,
+      approver_email: renominate,
+      stage: "covering",
+      cover_decline_reason: null,
+    }).eq("id", row.id);
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    await logAudit({ action: "cover_nominated", entity_type: "leave_request", entity_id: row.id, area: SUPERVISORS_AREA, details: { covering_supervisor_email: renominate, start_date: row.start_date, end_date: row.end_date, renominated: true } });
+    await createNotification({ data: { recipient_email: renominate, title: "Cover request", body: `${me.name}: ${row.start_date} → ${row.end_date}`, link: "/approvals" } });
+    toast.success("Cover request sent");
+    setRenominate("");
+    setDetail(null);
+    await load(); onDone();
+  };
+
   const submit = async () => {
-    void 0;
     if (!start) return;
     const s = start, e = end ?? start;
     if (isSupervisorsView && !covering) { toast.error("Select a covering supervisor"); return; }
