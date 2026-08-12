@@ -33,9 +33,18 @@ export type MonthGridProps = {
    * group is preserved exactly (no alphabetical sorting anywhere).
    */
   groups?: { label: string; staff: StaffLite[] }[];
+  /**
+   * `email|YYYY-MM-DD` keys covered by an approved vacation. These cells always render
+   * as V and are never clickable — the schedule reads vacation, it never edits it.
+   */
+  vacationKeys?: Set<string>;
+  /** Directory "Assigned to" per email, used to chip people visiting from another area. */
+  homeAreaByEmail?: Record<string, string | null>;
+  /** The area this grid belongs to, compared against each person's home area. */
+  currentArea?: string;
 };
 
-export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, isCellClickable, layer = "all", pendingKeys, groups }: MonthGridProps) {
+export function MonthGrid({ year, month, onMonthChange, staff, shifts, meEmail, areaLabel, headerRight, onCellClick, isCellClickable, layer = "all", pendingKeys, groups, vacationKeys, homeAreaByEmail, currentArea }: MonthGridProps) {
   const days = useMemo(() => monthDays(year, month), [year, month]);
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
