@@ -18,7 +18,7 @@ export function normalizeBadge(v: unknown): string {
   return digits;
 }
 
-const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+import { readDateParts } from "@/lib/xlsx-io";
 
 function iso(y: number, m: number, d: number) {
   return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
