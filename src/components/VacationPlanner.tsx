@@ -511,6 +511,9 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     await notify({ data: { event: "request_submitted", staff_name: me.name, staff_email: me.email, supervisor_email: routeTo, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, leave_type: "Vacation", start_date: s, end_date: e, reason } });
     await createNotification({ data: { recipient_email: routeTo, title: isSupervisorsView ? "Cover + approve vacation" : "Vacation leave request", body: `${me.name}: ${s} → ${e}`, link: "/approvals" } });
     await logAudit({ action: "leave_requested", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, details: { start_date: s, end_date: e, leave_type: "Vacation", covering_supervisor_email: isSupervisorsView ? covering : null } });
+    if (isSupervisorsView) {
+      await logAudit({ action: "cover_nominated", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: SUPERVISORS_AREA, details: { covering_supervisor_email: covering, start_date: s, end_date: e } });
+    }
     toast.success("Vacation request submitted");
     setConfirmOpen(false); setStart(null); setEnd(null); setReason(""); setCovering(""); setOverrideReason("");
     await load(); onDone();
