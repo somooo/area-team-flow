@@ -940,6 +940,9 @@ function SupervisorPage() {
             areaLabel={isAssistants ? viewArea : `${viewArea} · ${layer === "day" ? "Day" : "Night"}`}
             pendingKeys={pendingKeys}
             groups={gridGroups}
+            vacationKeys={vacationKeys}
+            homeAreaByEmail={homeAreas}
+            currentArea={viewArea}
             onCellClick={canEditViewedArea ? ({ staff: s, date, shift }) => setEditor({ staff: s, date, shift }) : undefined}
           />
           )}
