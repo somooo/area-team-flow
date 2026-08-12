@@ -500,17 +500,21 @@ const leaveCell = (duty: Duty): ImportedCell["payload"] => ({
   sick_tag: false,
 });
 
-/** Lookup keys for an assignment code: its own code and its exported form (letter + unit). */
+/**
+ * Lookup keys for an assignment code. Matching is case-insensitive, but no
+ * letter is ever prefixed: D1/D2/D3/D8 are zone D codes, not "day" markers.
+ */
 function codeKeys(c: AssignmentCode): string[] {
-  const letter = c.duty === "Day" ? "D" : c.duty === "Night" ? "N" : "";
-  const keys = [c.code];
-  if (c.unit_code) keys.push(`${letter}${c.unit_code}`);
-  return keys.map((k) => k.trim().toUpperCase()).filter(Boolean);
+  return [c.code, c.unit_code]
+    .map((k) => (k ?? "").trim().toUpperCase())
+    .filter(Boolean);
 }
 
 /**
  * Reverse of `exportCell`. Text only — cell fill colours are never read.
- * The `|BOT` / `|AOT` / `|MOT` suffix sets ot_type and is then discarded; only the base code is stored.
+ * The `|BOT` / `|AOT` / `|MOT` suffix sets ot_type and is then discarded.
+ * A leading lowercase "s" means a night shift and is recorded on `duty`, never in the code.
+ * The base code is stored EXACTLY as written in the cell — no prefix, no case change.
  */
 export function parseCellCode(
   raw: string,
@@ -526,9 +530,10 @@ export function parseCellCode(
   let base = parts[0].trim();
   const tag = (parts[1] ?? "").trim().toUpperCase();
 
-  let sick = false;
+  // Leading lowercase "s" = night shift marker (sA2, sD1, sE2). "SL" is sick leave.
+  let night = false;
   if (/^s[A-Za-z]/.test(base) && base.toUpperCase() !== "SL") {
-    sick = true;
+    night = true;
     base = base.slice(1);
   }
   const upper = base.toUpperCase();
@@ -536,9 +541,8 @@ export function parseCellCode(
   // MedEvac is a standalone entry: no ward code, never sick.
   if (upper === "MOT" || tag === "MOT") {
     if (upper !== "MOT") return { ok: false, reason: "MedEvac OT does not carry a ward code" };
-    if (sick) return { ok: false, reason: "MedEvac OT cannot be sick leave" };
     if (tag && tag !== "MOT") return { ok: false, reason: `unrecognised tag "${tag}"` };
-    const duty: Duty = (codes[0]?.duty as Duty) ?? "Day";
+    const duty: Duty = night ? "Night" : ((codes[0]?.duty as Duty) ?? "Day");
     return {
       ok: true,
       cell: { duty, unit_code: null, ot_type: "MedEvac", hours: fallbackHours, sick_tag: false },
@@ -549,7 +553,7 @@ export function parseCellCode(
     return { ok: false, reason: `unrecognised tag "${tag}"` };
   const otType: OtType = tag === "BOT" ? "BuiltIn" : tag === "AOT" ? "Additional" : "None";
 
-  if (!sick && !tag && LEAVE[upper]) return { ok: true, cell: leaveCell(LEAVE[upper]) };
+  if (!night && !tag && LEAVE[upper]) return { ok: true, cell: leaveCell(LEAVE[upper]) };
 
   const mapped = codeMap[upper];
   if (mapped) {
@@ -559,21 +563,23 @@ export function parseCellCode(
     if (mapped === "SICK") return { ok: true, cell: leaveCell("Sick") };
     if (mapped === "PAT") return { ok: true, cell: leaveCell("Paternity") };
   }
-  const target = (
-    mapped && !["SKIP", "VAC", "OFF", "SICK", "PAT"].includes(mapped) ? mapped : base
-  ).toUpperCase();
+  // A code map entry may rewrite the source code onto a known one; otherwise the
+  // cell text itself is the code and is stored verbatim.
+  const remapped =
+    mapped && !["SKIP", "VAC", "OFF", "SICK", "PAT"].includes(mapped) ? mapped : null;
+  const stored = remapped ?? base;
 
-  const known = codes.find((c) => codeKeys(c).includes(target));
+  const known = codes.find((c) => codeKeys(c).includes(stored.toUpperCase()));
   if (!known) return { ok: false, reason: `unrecognised code "${value}"` };
 
   return {
     ok: true,
     cell: {
-      duty: known.duty as Duty,
-      unit_code: known.unit_code ?? null,
+      duty: night ? "Night" : (known.duty as Duty),
+      unit_code: stored || null,
       ot_type: otType,
       hours: fallbackHours,
-      sick_tag: sick,
+      sick_tag: false,
     },
   };
 }
