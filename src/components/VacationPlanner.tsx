@@ -49,6 +49,7 @@ type LeaveRow = {
   approver_email: string | null;
   covering_supervisor_email: string | null;
   stage: string | null;
+  cover_decline_reason?: string | null;
 };
 
 type ChangeReq = {
@@ -93,8 +94,9 @@ function countDays(a: string, b: string) {
 export function stageLabel(r: { status: string; stage: string | null }) {
   if (r.status === "Approved") return "Approved";
   if (r.status === "Rejected") return "Rejected";
-  if (r.stage === "covering") return "Pending covering supervisor approval";
-  if (r.stage === "admin") return "Pending admin approval";
+  if (r.stage === "cover_declined") return "Cover declined";
+  if (r.stage === "covering") return "Pending cover";
+  if (r.stage === "admin") return "Pending approval";
   return "Pending";
 }
 
