@@ -582,7 +582,7 @@ function SupervisorPage() {
                 <div className="space-y-2 text-xs">
                   <p className="text-muted-foreground">
                     Scope: <span className="font-medium text-foreground">{viewArea}</span> ·{" "}
-                    <span className="font-medium text-foreground">{replaceInfo.label || `${MONTHS[month]} ${year}`}</span> ·{" "}
+                    <span className="font-medium text-foreground">{replaceInfo.label || monthLabel(year, month)}</span> ·{" "}
                     <span className="font-medium text-foreground">{isAssistants ? "single grid" : effectiveLayer === "night" ? "Night" : "Day"}</span>
                   </p>
                   {scopeWarning && (
@@ -634,8 +634,8 @@ function SupervisorPage() {
                 const off = config.blocks.filter((b) => b.year !== year || b.month !== month);
                 setScopeWarning(
                   off.length
-                    ? `The file contains dates outside ${MONTHS[month]} ${year} (${off
-                        .map((b) => `${MONTHS[b.month]} ${b.year}`)
+                    ? `The file contains dates outside ${monthLabel(year, month)} (${off
+                        .map((b) => monthLabel(b.month === undefined ? month : b.month, b.year))
                         .join(", ")}). They will be imported into that period, not the month shown above.`
                     : null,
                 );
