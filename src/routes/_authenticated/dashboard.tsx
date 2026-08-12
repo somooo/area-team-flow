@@ -223,7 +223,7 @@ function SchedulePage() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Monthly schedule</CardTitle>
-          <div className="flex flex-wrap gap-2">
+          <div className={`flex-wrap gap-2 ${canManageArea(meStaff, viewArea) || isMyArea ? "flex" : "hidden"}`}>
             <Button
               size="sm"
               variant="outline"
