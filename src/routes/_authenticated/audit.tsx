@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useMe } from "@/lib/use-me";
+import { useCapabilities } from "@/lib/use-can";
+import { NoAccess } from "@/components/NoAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -13,14 +14,15 @@ export const Route = createFileRoute("/_authenticated/audit")({
 type Row = { id: string; actor_email: string | null; actor_role: string | null; action: string; entity_type: string; entity_id: string | null; area: string | null; details: unknown; created_at: string };
 
 function AuditPage() {
-  const { me } = useMe();
+  const { can, loading } = useCapabilities();
   const [rows, setRows] = useState<Row[]>([]);
   useEffect(() => {
-    if ((me?.staff?.role as string) !== "admin") return;
+    if (!can("audit.view")) return;
     supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(300)
       .then(({ data }) => setRows((data as Row[]) ?? []));
-  }, [me?.staff?.role]);
-  if ((me?.staff?.role as string) !== "admin") return <p>Admins only.</p>;
+  }, [can]);
+  if (loading) return null;
+  if (!can("audit.view")) return <NoAccess what="View audit log" />;
   return (
     <div className="space-y-6">
       <div>
