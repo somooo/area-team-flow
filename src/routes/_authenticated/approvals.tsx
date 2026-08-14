@@ -10,7 +10,9 @@ import { notify } from "@/lib/notify.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { logAudit } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications.functions";
-import { isAdmin } from "@/lib/permissions";
+import { useCapabilities } from "@/lib/use-can";
+import { canAnywhere } from "@/lib/capabilities";
+import { NoAccess } from "@/components/NoAccess";
 import { VacationChangeApprovals } from "@/components/VacationChangeApprovals";
 import { detectCoverConflicts, type CoverConflict } from "@/lib/cover";
 
@@ -27,15 +29,16 @@ type TlReport = { id: string; reporter_name: string; reporter_email: string; are
 
 function ApprovalsPage() {
   const { me } = useMe();
+  const { actor, can, loading: capsLoading } = useCapabilities();
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [changes, setChanges] = useState<Change[]>([]);
   const [pre, setPre] = useState<Pre[]>([]);
   const [reports, setReports] = useState<TlReport[]>([]);
   const [coverConflicts, setCoverConflicts] = useState<Record<string, CoverConflict>>({});
 
-  const role = me?.staff?.role as string | undefined;
-  const canApprove = role === "supervisor" || role === "admin" || role === "team_leader";
-  const admin = isAdmin(me?.staff);
+  const canApprove =
+    canAnywhere(actor, "request.approve") || canAnywhere(actor, "leave.approve");
+  const admin = can("settings.manage") && can("roles.manage");
   const isMyCover = (l: Leave) =>
     !!l.covering_supervisor_email &&
     l.covering_supervisor_email.toLowerCase() === (me?.staff?.email ?? "").toLowerCase();
@@ -56,7 +59,8 @@ function ApprovalsPage() {
   };
   useEffect(() => { void load(); }, [me?.staff?.email]);
 
-  if (!canApprove) return <p>Approvals are limited to supervisors, team leaders and admins.</p>;
+  if (capsLoading) return null;
+  if (!canApprove) return <NoAccess what="Approve requests" />;
 
   const decideLeave = async (r: Leave, status: "Approved" | "Rejected") => {
     // Supervisor-calendar vacations: cover accepts first, then admin approves.
@@ -192,9 +196,9 @@ function ApprovalsPage() {
         </CardContent>
       </Card>
 
-      {(role === "supervisor" || role === "admin") && me?.staff && (
+      {canAnywhere(actor, "leave.manage") && me?.staff && (
         <VacationChangeApprovals
-          actor={{ email: me.staff.email, name: me.staff.name, role: role! }}
+          actor={{ email: me.staff.email, name: me.staff.name, role: me.staff.role }}
           onDecided={load}
         />
       )}

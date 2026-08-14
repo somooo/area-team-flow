@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
+import { useCapabilities } from "@/lib/use-can";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ type Row = {
 
 function PreschedulePage() {
   const { me } = useMe();
+  const { can } = useCapabilities();
   const { rules } = useSystemRules();
   const [rows, setRows] = useState<Row[]>([]);
   const [type, setType] = useState<"off" | "switch">("off");
@@ -202,7 +204,7 @@ function PreschedulePage() {
 
   const mine = rows.filter((r) => r.requester_email.toLowerCase() === meStaff.email.toLowerCase());
   const areaRows = rows.filter((r) => r.area === meStaff.area);
-  const isManager = meStaff.role === "supervisor" || meStaff.role === "team_leader" || (meStaff.role as string) === "admin";
+  const isManager = can("request.approve", meStaff.area);
 
   return (
     <div className="space-y-6">

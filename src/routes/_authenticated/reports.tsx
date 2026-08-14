@@ -2,6 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
+import { useCapabilities } from "@/lib/use-can";
+import { NoAccess } from "@/components/NoAccess";
+import { areasFor } from "@/lib/capabilities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +28,7 @@ type Row = {
 
 function ReportsPage() {
   const { me } = useMe();
+  const { actor, can, loading: capsLoading } = useCapabilities();
   const today = toISODate(new Date());
   const monthAgo = toISODate(new Date(Date.now() - 30 * 86400000));
   const [start, setStart] = useState(monthAgo);
@@ -34,20 +38,22 @@ function ReportsPage() {
   const [areas, setAreas] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
 
-  const isAdmin = me?.staff?.role === "admin";
-  const isSup = me?.staff?.role === "supervisor";
+  // Reports are area-scoped: you see the areas your roles grant, all areas if unscoped.
+  const reportAreas = areasFor(actor, "reports.view");
+  const allAreas = reportAreas.includes(null);
+  const myAreas = reportAreas.filter((a): a is string => !!a);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (allAreas) {
       setAreas(directoryAreas);
-    } else if (isSup && me?.staff?.area) {
-      setAreas([me.staff.area]);
-      setAreaFilter(me.staff.area);
+    } else if (myAreas.length) {
+      setAreas(myAreas);
+      setAreaFilter((f) => (f === "all" ? myAreas[0] : f));
     }
-  }, [isAdmin, isSup, me?.staff?.area, directoryAreas]);
+  }, [allAreas, myAreas.join(","), directoryAreas]);
 
   const load = async () => {
-    const scopedArea = isSup ? me!.staff!.area! : (areaFilter === "all" ? null : areaFilter);
+    const scopedArea = !allAreas ? (myAreas.includes(areaFilter) ? areaFilter : myAreas[0] ?? null) : (areaFilter === "all" ? null : areaFilter);
     let staffQ = supabase.from("staff").select("id,email,name,area,shift_base_override");
     if (scopedArea) staffQ = staffQ.eq("area", scopedArea);
     const { data: staff } = await staffQ;
@@ -124,13 +130,14 @@ function ReportsPage() {
     const a = document.createElement("a"); a.href = url; a.download = `report_${start}_${end}.csv`; a.click(); URL.revokeObjectURL(url);
   };
 
-  if (!isAdmin && !isSup) return <p>Reports are available to admins and supervisors.</p>;
+  if (capsLoading) return null;
+  if (!allAreas && myAreas.length === 0) return <NoAccess what="View reports" />;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Reports</h1>
-        <p className="text-sm text-muted-foreground">{isAdmin ? "Org-wide read-only report." : `Report for ${me?.staff?.area}.`}</p>
+        <p className="text-sm text-muted-foreground">{allAreas ? "Org-wide read-only report." : `Report for ${myAreas.join(", ")}.`}</p>
       </div>
 
       <Card>
@@ -141,10 +148,10 @@ function ReportsPage() {
             <div><Label>End</Label><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
             <div>
               <Label>Area</Label>
-              <Select value={areaFilter} onValueChange={setAreaFilter} disabled={!isAdmin}>
+              <Select value={areaFilter} onValueChange={setAreaFilter} disabled={!allAreas && myAreas.length < 2}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {isAdmin && <SelectItem value="all">All areas</SelectItem>}
+                  {allAreas && <SelectItem value="all">All areas</SelectItem>}
                   {areas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                 </SelectContent>
               </Select>

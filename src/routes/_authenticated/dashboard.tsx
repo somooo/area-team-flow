@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { notify } from "@/lib/notify.functions";
 import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
-import { canManageArea } from "@/lib/permissions";
+import { useCapabilities } from "@/lib/use-can";
 import { resolveApprover } from "@/lib/approver";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { MyChangeRequests } from "@/components/MyChangeRequests";
@@ -58,6 +58,7 @@ function isEmpty(shift?: Shift) {
 
 function SchedulePage() {
   const { me } = useMe();
+  const { can } = useCapabilities();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -245,13 +246,13 @@ function SchedulePage() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Monthly schedule</CardTitle>
-          <div className={`flex-wrap gap-2 ${canManageArea(meStaff, viewArea) || isMyArea ? "flex" : "hidden"}`}>
+          <div className={`flex-wrap gap-2 ${can("reports.view", viewArea) || isMyArea ? "flex" : "hidden"}`}>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => void exportExcel({ area: viewArea, year, month, staff: roster, shifts, layer: effectiveLayer, withSummary: meStaff.role !== "staff" })}
+              onClick={() => void exportExcel({ area: viewArea, year, month, staff: roster, shifts, layer: effectiveLayer, withSummary: can("reports.view", viewArea) })}
             >
-              {meStaff.role === "staff" ? "Download schedule" : "Download Excel"}
+              {can("reports.view", viewArea) ? "Download Excel" : "Download schedule"}
             </Button>
             <Button size="sm" variant="outline" onClick={() => void exportPdf({ area: viewArea, year, month, staff: roster, shifts })}>Download PDF</Button>
           </div>
@@ -304,7 +305,7 @@ function SchedulePage() {
             isCellClickable={cellClickable}
           />
           )}
-          {meStaff.role !== "staff" && <TotalsTable staff={roster} shifts={shifts} area={viewArea} year={year} month={month} canEdit={canManageArea(meStaff, viewArea)} actor={meStaff.email} />}
+          {can("reports.view", viewArea) && <TotalsTable staff={roster} shifts={shifts} area={viewArea} year={year} month={month} canEdit={can("overrides.manage", viewArea)} actor={meStaff.email} />}
         </CardContent>
       </Card>
 
