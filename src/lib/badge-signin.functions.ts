@@ -27,9 +27,12 @@ export const setBadgePassword = createServerFn({ method: "POST" })
     const target = data.email.toLowerCase();
     let allowed = callerEmail === target;
     if (!allowed) {
-      const { data: me } = await supabaseAdmin
-        .from("staff").select("role").eq("email", callerEmail).maybeSingle();
-      allowed = me?.role === "admin";
+      // Managing someone else's badge is a directory capability, not a job title.
+      const { data: mayEdit } = await context.supabase.rpc("can", {
+        _action: "directory.edit",
+        _area: undefined,
+      });
+      allowed = mayEdit === true;
     }
     if (!allowed) throw new Error("Forbidden");
     const saltBytes = new Uint8Array(16);

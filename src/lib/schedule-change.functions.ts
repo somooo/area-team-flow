@@ -17,13 +17,16 @@ export const applyScheduleChange = createServerFn({ method: "POST" })
 
     const { data: me } = await context.supabase
       .from("staff")
-      .select("email, role, area")
+      .select("email")
       .maybeSingle();
     const email = (me?.email ?? "").toLowerCase();
-    const isAreaSupervisor =
-      me?.role === "supervisor" && me?.area === req.area;
+    // Authorization comes from the capability resolver, evaluated as the caller.
+    const { data: mayApprove } = await context.supabase.rpc("can", {
+      _action: "request.approve",
+      _area: req.area,
+    });
     const isApprover = (req.approver_email ?? "").toLowerCase() === email;
-    if (!isAreaSupervisor && !isApprover) throw new Error("Forbidden");
+    if (!mayApprove && !isApprover) throw new Error("Forbidden");
     if (req.staff_response !== "Accepted") throw new Error("Target has not accepted");
     if (req.status === "Approved" || req.status === "Rejected")
       throw new Error("Already decided");
