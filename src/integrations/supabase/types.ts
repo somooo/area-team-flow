@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      area_aliases: {
+        Row: {
+          alias: string
+          area: string
+          created_at: string
+        }
+        Insert: {
+          alias: string
+          area: string
+          created_at?: string
+        }
+        Update: {
+          alias?: string
+          area?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       assignment_codes: {
         Row: {
           area: string
@@ -107,6 +125,33 @@ export type Database = {
           created_at?: string
           id?: string
           succeeded?: boolean
+        }
+        Relationships: []
+      }
+      capabilities: {
+        Row: {
+          area_scoped: boolean
+          category: string
+          description: string
+          key: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          area_scoped?: boolean
+          category: string
+          description: string
+          key: string
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          area_scoped?: boolean
+          category?: string
+          description?: string
+          key?: string
+          label?: string
+          sort_order?: number
         }
         Relationships: []
       }
@@ -382,6 +427,129 @@ export type Database = {
           },
         ]
       }
+      role_assignments: {
+        Row: {
+          area: string | null
+          created_at: string
+          end_date: string | null
+          granted_by_email: string
+          id: string
+          reason: string | null
+          revoked_at: string | null
+          revoked_by_email: string | null
+          role_id: string
+          staff_id: string
+          start_date: string | null
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          end_date?: string | null
+          granted_by_email: string
+          id?: string
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by_email?: string | null
+          role_id: string
+          staff_id: string
+          start_date?: string | null
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          end_date?: string | null
+          granted_by_email?: string
+          id?: string
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by_email?: string | null
+          role_id?: string
+          staff_id?: string
+          start_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_assignments_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_assignments_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_capabilities: {
+        Row: {
+          capability_key: string
+          role_id: string
+        }
+        Insert: {
+          capability_key: string
+          role_id: string
+        }
+        Update: {
+          capability_key?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_capabilities_capability_key_fkey"
+            columns: ["capability_key"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "role_capabilities_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_builtin: boolean
+          is_superuser: boolean
+          key: string
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_builtin?: boolean
+          is_superuser?: boolean
+          key: string
+          label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_builtin?: boolean
+          is_superuser?: boolean
+          key?: string
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       schedule_change_requests: {
         Row: {
           approver_email: string | null
@@ -605,6 +773,7 @@ export type Database = {
           extension: string | null
           first_name: string | null
           id: string
+          is_active: boolean
           last_name: string | null
           name: string
           notes: string | null
@@ -629,6 +798,7 @@ export type Database = {
           extension?: string | null
           first_name?: string | null
           id?: string
+          is_active?: boolean
           last_name?: string | null
           name: string
           notes?: string | null
@@ -653,6 +823,7 @@ export type Database = {
           extension?: string | null
           first_name?: string | null
           id?: string
+          is_active?: boolean
           last_name?: string | null
           name?: string
           notes?: string | null
