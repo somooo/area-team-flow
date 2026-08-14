@@ -130,13 +130,14 @@ function ReportsPage() {
     const a = document.createElement("a"); a.href = url; a.download = `report_${start}_${end}.csv`; a.click(); URL.revokeObjectURL(url);
   };
 
-  if (!isAdmin && !isSup) return <p>Reports are available to admins and supervisors.</p>;
+  if (capsLoading) return null;
+  if (!allAreas && myAreas.length === 0) return <NoAccess what="View reports" />;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Reports</h1>
-        <p className="text-sm text-muted-foreground">{isAdmin ? "Org-wide read-only report." : `Report for ${me?.staff?.area}.`}</p>
+        <p className="text-sm text-muted-foreground">{allAreas ? "Org-wide read-only report." : `Report for ${myAreas.join(", ")}.`}</p>
       </div>
 
       <Card>
@@ -147,10 +148,10 @@ function ReportsPage() {
             <div><Label>End</Label><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
             <div>
               <Label>Area</Label>
-              <Select value={areaFilter} onValueChange={setAreaFilter} disabled={!isAdmin}>
+              <Select value={areaFilter} onValueChange={setAreaFilter} disabled={!allAreas && myAreas.length < 2}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {isAdmin && <SelectItem value="all">All areas</SelectItem>}
+                  {allAreas && <SelectItem value="all">All areas</SelectItem>}
                   {areas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                 </SelectContent>
               </Select>
