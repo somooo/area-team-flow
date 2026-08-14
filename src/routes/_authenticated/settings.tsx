@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
+import { useCapabilities } from "@/lib/use-can";
+import { NoAccess } from "@/components/NoAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +50,7 @@ const HELP: Record<string, { title: string; body: string }> = {
 
 function SettingsPage() {
   const { me } = useMe();
+  const { can, loading: capsLoading } = useCapabilities();
   const [rules, setRules] = useState<Rule[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
 
@@ -84,7 +87,8 @@ function SettingsPage() {
     [rules],
   );
 
-  if ((me?.staff?.role as string) !== "admin") return <p>Admins only.</p>;
+  if (capsLoading) return null;
+  if (!can("settings.manage")) return <NoAccess what="Manage system settings" />;
 
   const persist = async (r: Rule, parsed: unknown) => {
     const { error } = await supabase
@@ -100,7 +104,6 @@ function SettingsPage() {
       entity_type: "system_rule",
       entity_id: r.id,
       actor_email: me?.staff?.email,
-      actor_role: "admin",
       details: { key: r.key, value: parsed },
     });
     toast.success(`Saved ${r.key}`);
