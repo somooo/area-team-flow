@@ -92,6 +92,7 @@ const emptyDraft = (): Record<string, string> => ({});
 
 function DirectoryPage() {
   const { me } = useMe();
+  const { can, loading: capsLoading } = useCapabilities();
   const [rows, setRows] = useState<Row[]>([]);
   const [customCols, setCustomCols] = useState<CustomCol[]>([]);
   const [search, setSearch] = useState("");
