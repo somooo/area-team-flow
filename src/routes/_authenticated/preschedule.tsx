@@ -202,7 +202,7 @@ function PreschedulePage() {
 
   const mine = rows.filter((r) => r.requester_email.toLowerCase() === meStaff.email.toLowerCase());
   const areaRows = rows.filter((r) => r.area === meStaff.area);
-  const isManager = meStaff.role === "supervisor" || meStaff.role === "team_leader" || (meStaff.role as string) === "admin";
+  const isManager = can("request.approve", meStaff.area);
 
   return (
     <div className="space-y-6">
