@@ -1158,10 +1158,20 @@ export type Database = {
         }
         Returns: undefined
       }
+      can: { Args: { _action: string; _area?: string }; Returns: boolean }
       current_email: { Args: never; Returns: string }
       derive_leave_area: {
         Args: { _staff_email: string; _staff_id: string }
         Returns: string
+      }
+      effective_capabilities: {
+        Args: { _area?: string; _staff_id: string }
+        Returns: {
+          capability_key: string
+          until: string
+          via_area: string
+          via_role: string
+        }[]
       }
       import_schedule_month: {
         Args: {
