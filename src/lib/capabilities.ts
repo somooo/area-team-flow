@@ -153,6 +153,26 @@ export function can(actor: CapabilityActor, action: Capability, area?: string | 
 }
 
 /** Every capability the actor holds in the given area, with the reason why. */
+/** True when the actor holds the capability in at least one area. */
+export function canAnywhere(actor: CapabilityActor, action: Capability): boolean {
+  if (!actor) return false;
+  if (!actor.isActive) return action === "profile.edit_own";
+  const areaScoped = AREA_SCOPED.get(action) ?? true;
+  return actor.assignments.some(
+    (a) =>
+      isAssignmentActive(a) &&
+      (a.isSuperuser || (a.capabilities.includes(action) && (!areaScoped || true))),
+  );
+}
+
+/** Areas in which the actor holds the capability; null means "all areas". */
+export function areasFor(actor: CapabilityActor, action: Capability): (string | null)[] {
+  if (!actor?.isActive) return [];
+  return actor.assignments
+    .filter((a) => isAssignmentActive(a) && (a.isSuperuser || a.capabilities.includes(action)))
+    .map((a) => (a.isSuperuser ? null : a.area));
+}
+
 export function explain(
   actor: CapabilityActor,
   area?: string | null,
