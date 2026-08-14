@@ -6,6 +6,8 @@ import { LogOut } from "lucide-react";
 import { KadirLogo } from "@/components/KadirLogo";
 import { useMe } from "@/lib/use-me";
 import { NotificationsBell } from "@/components/NotificationsBell";
+import { useCapabilities } from "@/lib/use-can";
+import { canAnywhere, type Capability } from "@/lib/capabilities";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -19,6 +21,7 @@ export const Route = createFileRoute("/_authenticated")({
 
 function Shell() {
   const { me, loading } = useMe();
+  const { actor, can, loading: capsLoading, covering } = useCapabilities();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [signingOut, setSigningOut] = useState(false);
@@ -36,7 +39,7 @@ function Shell() {
     navigate({ to: "/auth" });
   };
 
-  if (loading) {
+  if (loading || capsLoading) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
   }
 
@@ -56,18 +59,19 @@ function Shell() {
     );
   }
 
-  const role = me?.staff?.role as string | undefined;
-  const isAdmin = role === "admin";
+  // Navigation is derived from capabilities, using the same check the route guards
+  // use — a visible link is always loadable, a hidden one is always blocked.
+  const anywhere = (action: Capability) => canAnywhere(actor, action);
   const links: { to: string; label: string; show: boolean }[] = [
-    { to: "/dashboard", label: "Schedule", show: role === "staff" || role === "supervisor" || role === "team_leader" || isAdmin },
-    { to: "/vacations", label: "Vacations", show: role === "staff" || role === "supervisor" || role === "team_leader" || isAdmin },
-    { to: "/preschedule", label: "Requests", show: role === "staff" || role === "supervisor" || role === "team_leader" },
-    { to: "/supervisor", label: isAdmin ? "Edit schedule" : "Supervisor", show: role === "supervisor" || role === "team_leader" || isAdmin },
-    { to: "/approvals", label: "Approvals", show: role === "supervisor" || role === "team_leader" || role === "admin" },
-    { to: "/reports", label: "Reports", show: role === "admin" || role === "supervisor" },
-    { to: "/directory", label: "Staff Directory", show: role === "admin" },
-    { to: "/settings", label: "Settings", show: role === "admin" },
-    { to: "/audit", label: "Audit", show: role === "admin" },
+    { to: "/dashboard", label: "Schedule", show: can("schedule.view") },
+    { to: "/vacations", label: "Vacations", show: can("leave.request_own") || anywhere("leave.view") },
+    { to: "/preschedule", label: "Requests", show: can("request.create_own") },
+    { to: "/supervisor", label: "Edit schedule", show: anywhere("schedule.edit") },
+    { to: "/approvals", label: "Approvals", show: anywhere("request.approve") || anywhere("leave.approve") },
+    { to: "/reports", label: "Reports", show: anywhere("reports.view") },
+    { to: "/directory", label: "Staff Directory", show: anywhere("directory.view") },
+    { to: "/settings", label: "Settings", show: can("settings.manage") || can("roles.manage") },
+    { to: "/audit", label: "Audit", show: can("audit.view") },
   ];
 
   return (
@@ -107,6 +111,16 @@ function Shell() {
         </div>
       </header>
       <main className="max-w-6xl mx-auto p-4 md:p-6">
+        {covering.length > 0 && (
+          <div className="mb-4 rounded-md border border-copper-300 bg-copper-50 px-3 py-2 text-sm text-copper-900">
+            {covering.map((c) => (
+              <div key={c.id}>
+                You're covering as <strong>{c.roleLabel}</strong>
+                {c.area ? ` in ${c.area}` : " across all areas"} until {c.endDate}.
+              </div>
+            ))}
+          </div>
+        )}
         <Outlet />
       </main>
     </div>
