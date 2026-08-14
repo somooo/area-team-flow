@@ -18,7 +18,8 @@ import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
-import { canManageVacationsIn, canUseSupervisorsCalendar } from "@/lib/permissions";
+import { useCapabilities } from "@/lib/use-can";
+import { canAnywhere } from "@/lib/capabilities";
 import { useDirectoryAreas, UNASSIGNED_AREA } from "@/lib/areas";
 import { isProtectedTest } from "@/lib/staff-import";
 import { maxOffPerDay } from "@/components/VacationCapsTable";
@@ -103,13 +104,13 @@ export function stageLabel(r: { status: string; stage: string | null }) {
 
 export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () => void }) {
   const { rules } = useSystemRules();
-  const canSwitchArea = me.role !== "staff";
-  const canSeeSupervisorsCalendar = canUseSupervisorsCalendar(me);
+  const { actor, can } = useCapabilities();
+  /** Browsing other areas is a capability, not a job title. */
+  const canSwitchArea = canAnywhere(actor, "leave.view") || canAnywhere(actor, "leave.approve");
+  const canSeeSupervisorsCalendar = can("leave.view", SUPERVISORS_AREA);
   const { areas } = useDirectoryAreas();
-  const myArea = me.role === "supervisor" ? SUPERVISORS_AREA : (me.area ?? UNASSIGNED_AREA);
-  const [viewArea, setViewArea] = useState<string>(
-    me.role === "supervisor" || me.role === "admin" ? SUPERVISORS_AREA : myArea,
-  );
+  const myArea = canSeeSupervisorsCalendar && !me.area ? SUPERVISORS_AREA : (me.area ?? UNASSIGNED_AREA);
+  const [viewArea, setViewArea] = useState<string>(myArea);
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
   const [headcount, setHeadcount] = useState(1);
@@ -146,7 +147,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
   const isUnassignedView = viewArea === UNASSIGNED_AREA;
   const isOwnArea = isSupervisorsView ? canSeeSupervisorsCalendar : viewArea === myArea;
   /** Supervisors manage their own area; admins manage every area including the supervisors calendar. */
-  const canManage = canManageVacationsIn(me, viewArea, SUPERVISORS_AREA);
+  const canManage = can("leave.manage", viewArea);
 
   // Covering-supervisor options, recomputed whenever the selected range changes so that
   // availability (own leave / already covering someone) reflects the requested dates.
@@ -346,7 +347,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       return used >= cap;
     });
   }, [start, end, cap, countsPending, rowsByDay, approvedByDay, mineByDay]);
-  const canOverrideCap = me.role === "admin" || me.role === "supervisor";
+  const canOverrideCap = can("leave.manage", viewArea);
 
   /** Days in an arbitrary range that are already at the area cap (ignoring my own existing days). */
   const blockedIn = useCallback((s: string, e: string) => {
@@ -373,10 +374,10 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     const d = new Date(y!, (m! - 1) - 1, Math.min(Math.max(deadlineDay, 1), 28));
     const monthName = new Date(y!, m! - 1, 1).toLocaleDateString("en-GB", { month: "long" });
     const label = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-    const exempt = me.role !== "staff";
+    const exempt = canAnywhere(actor, "leave.manage");
     const passed = !exempt && toISODate(new Date()) > toISODate(d);
     return { passed, label, monthName };
-  }, [deadlineDay, me.role]);
+  }, [deadlineDay, actor]);
 
   const closeChange = () => { setChangeMode(null); setChgReason(""); setChgStart(""); setChgEnd(""); };
 
@@ -594,7 +595,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
         <div className="rounded-lg border border-copper/40 bg-copper/10 px-3 py-2 text-xs text-ink">
           These vacations belong to staff who are missing from the directory, inactive, or have no
           area assigned. They stay visible here until the directory is fixed.{" "}
-          {me.role === "admin" && (
+          {can("directory.edit") && (
             <Link to="/directory" className="underline font-medium">Open Staff Directory</Link>
           )}
         </div>
@@ -1009,7 +1010,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                                     {changeByLeave[r.id] && (
                                       <div className="text-[10px] font-medium text-copper">Change pending — {changeByLeave[r.id].type}</div>
                                     )}
-                                    {isUnassignedView && me.role === "admin" && (
+                                    {isUnassignedView && can("directory.edit") && (
                                       <Link to="/directory" className="text-[10px] underline text-steel-700">
                                         Fix area in directory
                                       </Link>
@@ -1114,7 +1115,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
                           The deadline to change {changeDeadline(detail.start_date).monthName} leave was {changeDeadline(detail.start_date).label}. Contact your supervisor.
                         </p>
                       ) : (
-                        me.role === "staff" && (
+                        !canAnywhere(actor, "leave.manage") && (
                           <p className="text-[11px] text-muted-foreground">
                             You can change this until {changeDeadline(detail.start_date).label}.
                           </p>
