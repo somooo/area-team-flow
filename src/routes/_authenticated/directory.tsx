@@ -14,20 +14,20 @@ import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { ExcelImportButton, type ImportItem, type CommitReport } from "@/components/ExcelImportButton";
 import { downloadSheet } from "@/lib/xlsx-io";
-import { isAdmin } from "@/lib/permissions";
+import { canServer } from "@/lib/capabilities";
+import { useCapabilities } from "@/lib/use-can";
+import { NoAccess } from "@/components/NoAccess";
 import { logAudit } from "@/lib/audit";
 import {
   cell, isFormula, isProtectedTest, normalizeBadge, parseHireDate, readStaffRows, text,
 } from "@/lib/staff-import";
 
 export const Route = createFileRoute("/_authenticated/directory")({
-  // Route-level gate: non-admins never reach the page, even by typing the URL.
+  // Route-level gate: the same capability the nav link uses, so deep links match the menu.
   beforeLoad: async () => {
     const { data: u } = await supabase.auth.getUser();
-    const email = u.user?.email ?? "";
-    if (!email) throw redirect({ to: "/auth" });
-    const { data: staff } = await supabase.from("staff").select("role").ilike("email", email).maybeSingle();
-    if ((staff as { role?: string } | null)?.role !== "admin") throw redirect({ to: "/dashboard" });
+    if (!u.user?.email) throw redirect({ to: "/auth" });
+    if (!(await canServer("directory.view"))) throw redirect({ to: "/dashboard" });
   },
   head: () => ({
     meta: [
@@ -108,9 +108,9 @@ function DirectoryPage() {
   const draftRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
-  const admin = isAdmin(me?.staff);
-  /** Directory is admin-only; route gate and RLS enforce the same rule. */
-  const allowed = admin;
+  /** Directory access follows capabilities; the route gate and RLS use the same check. */
+  const admin = can("directory.edit");
+  const allowed = can("directory.view") || admin;
 
   const load = useCallback(async () => {
     const [{ data: st }, { data: cc }] = await Promise.all([
@@ -403,7 +403,8 @@ function DirectoryPage() {
   };
 
   if (!me?.staff) return null;
-  if (!allowed) return <p>Admin access only.</p>;
+  if (capsLoading) return null;
+  if (!allowed) return <NoAccess what="View staff directory" />;
 
   const draftCellValue = (key: string) => draft?.[key] ?? "";
 
