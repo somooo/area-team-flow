@@ -43,6 +43,7 @@ type Row = {
 
 function PreschedulePage() {
   const { me } = useMe();
+  const { can } = useCapabilities();
   const { rules } = useSystemRules();
   const [rows, setRows] = useState<Row[]>([]);
   const [type, setType] = useState<"off" | "switch">("off");
