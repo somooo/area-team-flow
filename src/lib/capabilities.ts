@@ -207,6 +207,12 @@ type AssignmentRow = {
 };
 
 /** Load the full capability set for one staff member (used for self and for the viewer). */
+/** Server-side check, used by route guards before the page loads. */
+export async function canServer(action: Capability, area?: string | null): Promise<boolean> {
+  const { data } = await supabase.rpc("can", { _action: action, _area: area ?? undefined });
+  return data === true;
+}
+
 export async function loadActor(staffId: string): Promise<CapabilityActor> {
   const { data: staff } = await supabase
     .from("staff")
