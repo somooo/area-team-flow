@@ -2,7 +2,6 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ImportItem } from "@/components/ExcelImportButton";
 import { downloadSheet, field, toISODateValue } from "@/lib/xlsx-io";
 import { countVacationDays } from "@/lib/hours-model";
-import type { AppRole } from "@/lib/permissions";
 import { UNASSIGNED_AREA } from "@/lib/areas";
 
 export type VacationRow = {
@@ -18,8 +17,11 @@ export type VacationRow = {
 };
 
 export type DirectoryStaffLite = {
-  id: string; email: string; name: string; role: AppRole; area: string | null; badge_id?: string | null;
+  id: string; email: string; name: string; role: JobRole; area: string | null; badge_id?: string | null;
 };
+
+/** Job title text used for hour rules only — never for privileges. */
+type JobRole = string;
 
 /** Export the selected area's vacation rows for one calendar year. */
 export async function exportVacationsExcel(area: string, year: number) {
@@ -32,9 +34,9 @@ export async function exportVacationsExcel(area: string, year: number) {
     supabase.from("staff").select("email,name,role,badge_id"),
   ]);
   const nameByEmail = new Map<string, string>();
-  const roleByEmail = new Map<string, AppRole>();
+  const roleByEmail = new Map<string, JobRole>();
   const badgeByEmail = new Map<string, string>();
-  for (const s of (staff as { email: string; name: string; role: AppRole; badge_id: string | null }[]) ?? []) {
+  for (const s of (staff as { email: string; name: string; role: JobRole; badge_id: string | null }[]) ?? []) {
     nameByEmail.set(s.email.toLowerCase(), s.name);
     roleByEmail.set(s.email.toLowerCase(), s.role);
     if (s.badge_id) badgeByEmail.set(s.email.toLowerCase(), String(s.badge_id));
