@@ -35,7 +35,9 @@ import { buildScheduleGroups, fetchZoneAssignments, type ZoneAssignment } from "
 import { normalizeBadge, isProtectedTest } from "@/lib/staff-import";
 import { SheetMappingDialog, type SheetImportConfig } from "@/components/SheetMappingDialog";
 import { logAudit } from "@/lib/audit";
-import { canManageArea, isAdmin } from "@/lib/permissions";
+import { useCapabilities } from "@/lib/use-can";
+import { canAnywhere } from "@/lib/capabilities";
+import { NoAccess } from "@/components/NoAccess";
 import { useDirectoryAreas } from "@/lib/areas";
 import { ReferenceTable } from "@/components/ReferenceTable";
 import { BookingLeaveDialog } from "@/components/BookingLeaveDialog";
@@ -75,6 +77,7 @@ const keyOf = (email: string, date: string) => `${email.toLowerCase()}|${date}`;
 
 function SupervisorPage() {
   const { me, reload } = useMe();
+  const { actor, can, loading: capsLoading } = useCapabilities();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -117,11 +120,14 @@ function SupervisorPage() {
   /** Every non-blank cell in the file, used when the import replaces the whole month. */
   const [replaceAllItems, setReplaceAllItems] = useState<ImportItem<SheetCell>[]>([]);
 
-  const role = me?.staff?.role;
-  const admin = isAdmin(me?.staff);
-  const canManage = admin || role === "supervisor";
-  /** Admin bypasses area scoping entirely; supervisors are limited to their own area. */
-  const canEditViewedArea = canManageArea(me?.staff, viewArea);
+  /**
+   * One rule for the door and the cells: you may open this page if you can edit
+   * any area's schedule, and you may edit the area you are looking at if you can
+   * edit that area. Areas you can only view stay read-only.
+   */
+  const canManage = canAnywhere(actor, "schedule.edit");
+  const canEditViewedArea = can("schedule.edit", viewArea);
+  const admin = can("directory.edit") && can("settings.manage");
 
   useEffect(() => {
     if (viewArea) return;
@@ -247,7 +253,8 @@ function SupervisorPage() {
   );
 
   if (!me?.staff) return null;
-  if (!canManage) return <p>Supervisor / admin access only.</p>;
+  if (capsLoading) return null;
+  if (!canManage) return <NoAccess what="Edit schedule" />;
   const meStaff = me.staff;
 
   const stageEdit = (edit: PendingEdit) => {
@@ -559,7 +566,7 @@ function SupervisorPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{admin ? "Admin" : "Supervisor"} · {viewArea}</h1>
+        <h1 className="text-2xl font-semibold">Edit schedule · {viewArea}</h1>
         <p className="text-sm text-muted-foreground">Manage the schedule and approvals.</p>
       </div>
 
