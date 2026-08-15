@@ -11,6 +11,8 @@ import { createNotification } from "@/lib/notifications.functions";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 import { toast } from "sonner";
 import { toISODate } from "@/lib/roster";
+import { useCapabilities } from "@/lib/use-can";
+import { canAnywhere, fetchCapabilityHolders } from "@/lib/capabilities";
 import { CalendarDays } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
@@ -36,6 +38,9 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
   const [approver, setApprover] = useState<string>(me.supervisor_email ?? "");
   const [resolvedApprover, setResolvedApprover] = useState<string>("");
   const [supervisors, setSupervisors] = useState<{ id: string; name: string; email: string; area: string | null }[]>([]);
+  const { actor } = useCapabilities();
+  /** People who approve their own leave elsewhere pick an approver themselves. */
+  const picksOwnApprover = canAnywhere(actor, "leave.approve");
   const { rules } = useSystemRules();
   const [dailyUsed, setDailyUsed] = useState<Map<string, number>>(new Map());
   const [headcount, setHeadcount] = useState(1);
@@ -97,9 +102,13 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
 
   useEffect(() => {
     if (!active) return;
-    if (me.role === "supervisor" || me.role === "team_leader") {
-      supabase.from("staff").select("id,name,email,area").eq("role", "supervisor").then(({ data }) => {
-        setSupervisors((data ?? []).filter((s) => s.email && s.email !== me.email).map((s) => ({ ...s, email: s.email as string })));
+    if (picksOwnApprover) {
+      void fetchCapabilityHolders("leave.approve").then((holders) => {
+        setSupervisors(
+          holders
+            .filter((h) => h.email && h.email !== me.email.toLowerCase())
+            .map((h) => ({ id: h.staffId, name: h.name, email: h.email, area: h.area })),
+        );
       });
       setResolvedApprover(approver);
     } else if (me.supervisor_email) {
@@ -113,7 +122,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
           else setResolvedApprover(data?.email ?? me.supervisor_email!);
         });
     }
-  }, [active, me, approver]);
+  }, [active, me, approver, picksOwnApprover]);
 
   const days = useMemo(() => {
     if (!range?.from || !range?.to) return 0;
@@ -130,7 +139,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
     if (!range?.from || !range?.to) { toast.error("Pick your dates"); return; }
     const start = toISODate(range.from);
     const end = toISODate(range.to);
-    const approverEmail = (me.role === "supervisor" || me.role === "team_leader") ? approver : resolvedApprover;
+    const approverEmail = picksOwnApprover ? approver : resolvedApprover;
     if (!approverEmail) { toast.error("No approver available"); return; }
     const { error } = await supabase.from("leave_requests").insert({
       // `area` is derived server-side from the staff directory record.
@@ -202,9 +211,9 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
             ) : (
               <div className="text-xs text-muted-foreground">Leave type: <span className="font-medium text-slate-700">Vacation</span></div>
             )}
-            {me.role === "supervisor" ? (
+            {picksOwnApprover ? (
               <div>
-                <Label className="text-xs">Approver (another supervisor)</Label>
+                <Label className="text-xs">Approver (another approver)</Label>
                 <Select value={approver} onValueChange={setApprover}>
                   <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>
