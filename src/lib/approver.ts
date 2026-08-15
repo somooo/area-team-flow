@@ -1,14 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
+import { canServer } from "@/lib/capabilities";
 
 export type ApproverInput = {
   email: string;
-  role: string;
   supervisor_email: string | null;
   delegated_to_email: string | null;
   delegation_active: boolean;
+  area?: string | null;
 };
 
-/** Resolve the approver: the area supervisor, honoring their active delegation. */
+/**
+ * Resolve the approver: the area's approver, honoring their active delegation.
+ * Eligibility comes from the `leave.approve` capability, never from role text.
+ */
 export async function resolveApprover(me: ApproverInput): Promise<string | null> {
   if (me.supervisor_email) {
     const { data: sup } = await supabase
@@ -19,7 +23,7 @@ export async function resolveApprover(me: ApproverInput): Promise<string | null>
     if (sup?.delegation_active && sup.delegated_to_email) return sup.delegated_to_email;
     return sup?.email ?? me.supervisor_email;
   }
-  if (me.role === "supervisor" || me.role === "team_leader") {
+  if (await canServer("leave.approve", me.area ?? null)) {
     return me.delegation_active && me.delegated_to_email ? me.delegated_to_email : null;
   }
   return null;
