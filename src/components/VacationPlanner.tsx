@@ -19,7 +19,7 @@ import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { useCapabilities } from "@/lib/use-can";
-import { canAnywhere } from "@/lib/capabilities";
+import { canAnywhere, fetchCapabilityHolders } from "@/lib/capabilities";
 import { useDirectoryAreas, UNASSIGNED_AREA } from "@/lib/areas";
 import { isProtectedTest } from "@/lib/staff-import";
 import { maxOffPerDay } from "@/components/VacationCapsTable";
