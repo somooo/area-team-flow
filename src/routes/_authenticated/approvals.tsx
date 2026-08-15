@@ -11,7 +11,7 @@ import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { logAudit } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications.functions";
 import { useCapabilities } from "@/lib/use-can";
-import { canAnywhere } from "@/lib/capabilities";
+import { canAnywhere, isAssignmentActive, fetchCapabilityHolders } from "@/lib/capabilities";
 import { NoAccess } from "@/components/NoAccess";
 import { VacationChangeApprovals } from "@/components/VacationChangeApprovals";
 import { detectCoverConflicts, type CoverConflict } from "@/lib/cover";
@@ -39,6 +39,8 @@ function ApprovalsPage() {
   const canApprove =
     canAnywhere(actor, "request.approve") || canAnywhere(actor, "leave.approve");
   const admin = can("settings.manage") && can("roles.manage");
+  /** Audit metadata only — the role label the actor is acting under. */
+  const role = actor?.assignments.find((a) => isAssignmentActive(a))?.roleKey ?? "staff";
   const isMyCover = (l: Leave) =>
     !!l.covering_supervisor_email &&
     l.covering_supervisor_email.toLowerCase() === (me?.staff?.email ?? "").toLowerCase();
@@ -76,7 +78,7 @@ function ApprovalsPage() {
 
   /** Covering supervisor accepts: request moves on to admin approval. */
   const acceptCover = async (r: Leave) => {
-    const { data: adminRow } = await supabase.from("staff").select("email").eq("role", "admin").limit(1).maybeSingle();
+    const adminRow = (await fetchCapabilityHolders("roles.manage"))[0];
     if (!adminRow?.email) { toast.error("No admin available for final approval"); return; }
     const { error } = await supabase.from("leave_requests")
       .update({ stage: "admin", approver_email: adminRow.email, cover_accepted_at: new Date().toISOString(), cover_decline_reason: null })

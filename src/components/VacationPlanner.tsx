@@ -19,7 +19,7 @@ import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { useCapabilities } from "@/lib/use-can";
-import { canAnywhere } from "@/lib/capabilities";
+import { canAnywhere, fetchCapabilityHolders } from "@/lib/capabilities";
 import { useDirectoryAreas, UNASSIGNED_AREA } from "@/lib/areas";
 import { isProtectedTest } from "@/lib/staff-import";
 import { maxOffPerDay } from "@/components/VacationCapsTable";
@@ -718,22 +718,27 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
             }}
             parse={async ({ rows, toggles }) => {
               const allAreas = !!toggles["allAreas"];
-              const [{ data: st }, { data: lv }, { data: capRows }] = await Promise.all([
+              const [{ data: st }, { data: lv }, { data: capRows }, approverHolders] = await Promise.all([
                 supabase.from("staff").select("id,email,name,role,area,badge_id"),
                 supabase.from("leave_requests")
                   .select("id,staff_id,staff_email,area,start_date,end_date,status")
                   .eq("leave_type", "Vacation"),
                 supabase.from("vacation_caps").select("area,cap_pct"),
+                fetchCapabilityHolders("leave.approve"),
               ]);
+              // Supervisor calendar membership comes from the leave.approve capability.
+              const approverEmails = new Set(approverHolders.map((h) => h.email.toLowerCase()));
+              const isApprover = (m: DirectoryStaffLite) =>
+                approverEmails.has((m.email ?? "").toLowerCase());
               const staff = ((st ?? []) as unknown as DirectoryStaffLite[]).filter((m) =>
-                isSupervisorsView ? m.role === "supervisor" : true,
+                isSupervisorsView ? isApprover(m) : true,
               );
               const all = (st ?? []) as unknown as DirectoryStaffLite[];
               const capByArea: Record<string, number> = {};
               for (const c of ((capRows ?? []) as { area: string; cap_pct: number }[])) {
                 const target = c.area === "Supervisor" ? SUPERVISORS_AREA : c.area;
                 const hc = target === SUPERVISORS_AREA
-                  ? all.filter((m) => m.role === "supervisor").length
+                  ? all.filter(isApprover).length
                   : all.filter((m) => m.area === target).length;
                 capByArea[target] = maxOffPerDay(hc, c.cap_pct);
               }

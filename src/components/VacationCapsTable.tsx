@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { logAudit } from "@/lib/audit";
 import { SUPERVISORS_TEAM, UNASSIGNED_AREA } from "@/lib/areas";
+import { fetchCapabilityHolders } from "@/lib/capabilities";
 
 type Cap = { id: string; area: string; cap_pct: number; warn_pct: number };
-type StaffRow = { area: string | null; role: string; status: string | null; name?: string | null; first_name?: string | null };
+type StaffRow = { email: string | null; area: string | null; role: string; status: string | null; name?: string | null; first_name?: string | null };
 
 export function maxOffPerDay(activeStaff: number, capPct: number): number {
   return Math.max(1, Math.floor((activeStaff * capPct) / 100));
@@ -21,16 +22,20 @@ function isActive(s: StaffRow) {
 export default function VacationCapsTable({ actorEmail }: { actorEmail?: string | null }) {
   const [caps, setCaps] = useState<Cap[]>([]);
   const [staff, setStaff] = useState<StaffRow[]>([]);
+  const [approvers, setApprovers] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<Record<string, { cap: string; warn: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [{ data: capData }, { data: staffData }] = await Promise.all([
+    const [{ data: capData }, { data: staffData }, holders] = await Promise.all([
       supabase.from("vacation_caps").select("id,area,cap_pct,warn_pct"),
-      supabase.from("staff").select("area,role,status,name,first_name"),
+      supabase.from("staff").select("email,area,role,status,name,first_name"),
+      // The "Supervisor" row counts people who can approve leave, by capability.
+      fetchCapabilityHolders("leave.approve"),
     ]);
     const list = (capData ?? []) as Cap[];
     setCaps(list);
+    setApprovers(new Set(holders.map((h) => h.email.toLowerCase())));
     setStaff(((staffData ?? []) as StaffRow[]).filter((s) => !isProtectedTest(s)));
     setDraft(
       Object.fromEntries(
@@ -59,11 +64,11 @@ export default function VacationCapsTable({ actorEmail }: { actorEmail?: string 
     for (const row of capRows) {
       m[row] =
         (row as string) === "Supervisor"
-          ? staff.filter((s) => isActive(s) && s.role === "supervisor").length
+          ? staff.filter((s) => isActive(s) && approvers.has((s.email ?? "").toLowerCase())).length
           : staff.filter((s) => isActive(s) && s.area === row).length;
     }
     return m;
-  }, [staff, capRows]);
+  }, [staff, capRows, approvers]);
 
   const save = async (cap: Cap) => {
     const d = draft[cap.area] ?? { cap: "", warn: "" };

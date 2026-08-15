@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isProtectedTest } from "@/lib/staff-import";
+import { fetchCapabilityHolders } from "@/lib/capabilities";
 
 /** Inclusive date-range overlap on ISO (YYYY-MM-DD) strings. */
 export function rangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string) {
@@ -25,22 +26,24 @@ type LeaveLite = {
   covering_supervisor_email: string | null;
 };
 
-/** Active directory members of the Supervisor area (role supervisor counts as well). */
-function isSupervisorArea(s: StaffLite) {
-  const area = (s.area ?? "").trim().toLowerCase();
-  return area === "supervisor" || area === "supervisors" || s.role === "supervisor";
-}
-
 async function loadCoverData(start: string, end: string) {
-  const [{ data: staff }, { data: leaves }] = await Promise.all([
+  const [{ data: staff }, { data: leaves }, holders] = await Promise.all([
     supabase.from("staff").select("email,name,area,role,status,first_name"),
     supabase.from("leave_requests")
       .select("id,staff_email,staff_name,start_date,end_date,status,covering_supervisor_email")
       .in("status", ["Approved", "Pending"])
       .lte("start_date", end).gte("end_date", start),
+    // Cover eligibility comes from the leave.approve capability, never job-title text.
+    fetchCapabilityHolders("leave.approve"),
   ]);
+  const eligible = new Set(holders.map((h) => h.email.toLowerCase()));
   return {
-    staff: ((staff ?? []) as StaffLite[]).filter((s) => (s.status ?? "Active") === "Active" && !isProtectedTest(s) && isSupervisorArea(s)),
+    staff: ((staff ?? []) as StaffLite[]).filter(
+      (s) =>
+        (s.status ?? "Active") === "Active" &&
+        !isProtectedTest(s) &&
+        eligible.has((s.email ?? "").toLowerCase()),
+    ),
     leaves: (leaves ?? []) as LeaveLite[],
   };
 }

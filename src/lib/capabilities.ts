@@ -267,3 +267,65 @@ export async function loadActor(staffId: string): Promise<CapabilityActor> {
     assignments: resolved,
   };
 }
+
+export type CapabilityHolder = {
+  staffId: string;
+  email: string;
+  name: string;
+  area: string | null;
+  /** null = holds the capability in every area. */
+  areas: (string | null)[];
+};
+
+/**
+ * Everyone who currently holds a capability (optionally in a given area).
+ * Used wherever the app needs "the people who can approve/cover", so eligibility
+ * comes from role assignments — never from job-title or area text.
+ */
+export async function fetchCapabilityHolders(
+  action: Capability,
+  area?: string | null,
+): Promise<CapabilityHolder[]> {
+  const [{ data: assignments }, { data: roles }, { data: caps }, { data: staff }] = await Promise.all([
+    supabase.from("role_assignments").select("staff_id,area,start_date,end_date,revoked_at,role_id"),
+    supabase.from("roles").select("id,is_superuser"),
+    supabase.from("role_capabilities").select("role_id,capability_key"),
+    supabase.from("staff").select("id,email,name,area,is_active"),
+  ]);
+
+  const superRoles = new Set(
+    ((roles ?? []) as { id: string; is_superuser: boolean }[]).filter((r) => r.is_superuser).map((r) => r.id),
+  );
+  const capsByRole = new Map<string, Set<string>>();
+  for (const rc of (caps ?? []) as { role_id: string; capability_key: string }[]) {
+    const set = capsByRole.get(rc.role_id) ?? new Set<string>();
+    set.add(rc.capability_key);
+    capsByRole.set(rc.role_id, set);
+  }
+  const areaScoped = AREA_SCOPED.get(action) ?? true;
+  const byStaff = new Map<string, (string | null)[]>();
+  type Row = { staff_id: string; area: string | null; start_date: string | null; end_date: string | null; revoked_at: string | null; role_id: string };
+  for (const a of (assignments ?? []) as Row[]) {
+    const active = isAssignmentActive({
+      id: "", roleKey: "", roleLabel: "", isSuperuser: false, capabilities: [],
+      area: a.area, startDate: a.start_date, endDate: a.end_date, revokedAt: a.revoked_at,
+    });
+    if (!active) continue;
+    const isSuper = superRoles.has(a.role_id);
+    if (!isSuper && !capsByRole.get(a.role_id)?.has(action)) continue;
+    const grantArea = isSuper ? null : a.area;
+    if (areaScoped && area !== undefined && grantArea !== null && grantArea !== area) continue;
+    const list = byStaff.get(a.staff_id) ?? [];
+    list.push(grantArea);
+    byStaff.set(a.staff_id, list);
+  }
+
+  const out: CapabilityHolder[] = [];
+  for (const s of (staff ?? []) as { id: string; email: string | null; name: string | null; area: string | null; is_active?: boolean }[]) {
+    if (s.is_active === false) continue;
+    const areas = byStaff.get(s.id);
+    if (!areas) continue;
+    out.push({ staffId: s.id, email: (s.email ?? "").toLowerCase(), name: s.name ?? s.email ?? "", area: s.area, areas });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
