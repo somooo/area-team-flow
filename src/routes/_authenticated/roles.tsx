@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -213,8 +213,8 @@ function RolesPanel({ roles, roleCaps, busy, setBusy, reload }: {
           </thead>
           <tbody>
             {CATEGORY_ORDER.map((cat) => (
-              <>
-                <tr key={cat} className="border-t">
+              <Fragment key={cat}>
+                <tr className="border-t">
                   <td colSpan={roles.length + 1} className="py-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
                     {cat}
                   </td>
@@ -238,7 +238,7 @@ function RolesPanel({ roles, roleCaps, busy, setBusy, reload }: {
                     ))}
                   </tr>
                 ))}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>

@@ -71,6 +71,7 @@ function Shell() {
     { to: "/reports", label: "Reports", show: anywhere("reports.view") },
     { to: "/directory", label: "Staff Directory", show: anywhere("directory.view") },
     { to: "/settings", label: "Settings", show: can("settings.manage") || can("roles.manage") },
+    { to: "/roles", label: "Roles", show: can("roles.manage") || anywhere("assignments.manage") },
     { to: "/audit", label: "Audit", show: can("audit.view") },
   ];
 
