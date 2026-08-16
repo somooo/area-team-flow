@@ -6,21 +6,21 @@ export function KadirIcon({ className }: { className?: string }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.75"
+      strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
       aria-hidden
     >
-      {/* Left person */}
-      <circle cx="6" cy="7" r="2.5" />
-      <path d="M3.5 15c0-2.5 1-4.5 2.5-4.5s2.5 2 2.5 4.5" />
       {/* Center person */}
-      <circle cx="12" cy="5" r="2.5" />
-      <path d="M8.5 17c0-3 1.5-5.5 3.5-5.5s3.5 2.5 3.5 5.5" />
+      <circle cx="12" cy="7" r="3" />
+      <path d="M7.5 17.5v-1a4.5 4.5 0 0 1 9 0v1" />
+      {/* Left person */}
+      <circle cx="4.75" cy="9.25" r="2" />
+      <path d="M4 17v-1.5a3.5 3.5 0 0 1 1.4-2.8" />
       {/* Right person */}
-      <circle cx="18" cy="7" r="2.5" />
-      <path d="M15.5 15c0-2.5 1-4.5 2.5-4.5s2.5 2 2.5 4.5" />
+      <circle cx="19.25" cy="9.25" r="2" />
+      <path d="M20 17v-1.5a3.5 3.5 0 0 0-1.4-2.8" />
     </svg>
   );
 }
