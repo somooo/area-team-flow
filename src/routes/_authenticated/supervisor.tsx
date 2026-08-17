@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { notify } from "@/lib/notify.functions";
+import { createNotification } from "@/lib/notifications.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
@@ -500,7 +500,7 @@ function SupervisorPage() {
         ? await supabase.from("shifts").update(body).eq("id", p.existing.id)
         : await supabase.from("shifts").insert(body);
       if (error) { toast.error(error.message); setSaving(false); return; }
-      await notify({ data: { event: "schedule_changed", staff_name: p.staff.name, staff_email: p.staff.email, date: p.date, shift_type: body.shift_type } });
+      
     }
     setPending({});
     setSaving(false);
@@ -511,7 +511,7 @@ function SupervisorPage() {
   const decideLeave = async (r: LeaveReq, status: "Approved" | "Rejected") => {
     const { error } = await supabase.from("leave_requests").update({ status }).eq("id", r.id);
     if (error) { toast.error(error.message); return; }
-    await notify({ data: { event: "request_decided", staff_name: r.staff_name, staff_email: r.staff_email, status, start_date: r.start_date, end_date: r.end_date } });
+    await createNotification({ data: { recipient_email: r.staff_email, title: `Leave ${status.toLowerCase()}`, body: `${r.leave_type} ${r.start_date} → ${r.end_date}`, link: "/dashboard" } });
     toast.success(`Leave ${status.toLowerCase()}`);
     load();
   };
@@ -520,7 +520,7 @@ function SupervisorPage() {
     if (approve) {
       try {
         await applyScheduleChange({ data: { requestId: r.id } });
-        await notify({ data: { event: "change_decided", change_type: r.change_type, status: "Approved", staff_email: r.requester_email, staff_name: r.requester_name } });
+        await createNotification({ data: { recipient_email: r.requester_email, title: "Change request approved", body: r.change_type, link: "/dashboard" } });
         toast.success("Change approved and applied");
       } catch (e) {
         toast.error(String(e));
@@ -528,7 +528,7 @@ function SupervisorPage() {
     } else {
       const { error } = await supabase.from("schedule_change_requests").update({ supervisor_response: "Rejected", status: "Rejected" }).eq("id", r.id);
       if (error) { toast.error(error.message); return; }
-      await notify({ data: { event: "change_decided", change_type: r.change_type, status: "Rejected", staff_email: r.requester_email, staff_name: r.requester_name } });
+      await createNotification({ data: { recipient_email: r.requester_email, title: "Change request rejected", body: r.change_type, link: "/dashboard" } });
       toast.success("Change rejected");
     }
     load();
