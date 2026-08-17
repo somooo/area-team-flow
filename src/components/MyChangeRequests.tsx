@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { notify } from "@/lib/notify.functions";
+
 import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
 
@@ -54,12 +54,12 @@ export function MyChangeRequests({ meEmail, refreshKey }: { meEmail: string; ref
     if (error) { toast.error(error.message); return; }
 
     if (accept) {
-      await notify({ data: { event: "change_pending_supervisor", change_type: r.change_type, requester_name: r.requester_name, staff_email: r.approver_email ?? "", details: r.details } });
+      
       if (r.approver_email) {
         await createNotification({ data: { recipient_email: r.approver_email, title: "Change request needs approval", body: `${r.requester_name} · ${r.change_type}`, link: "/approvals" } });
       }
     } else {
-      await notify({ data: { event: "change_decided", change_type: r.change_type, status: "Rejected", staff_email: r.requester_email, staff_name: r.requester_name } });
+      
       await createNotification({ data: { recipient_email: r.requester_email, title: "Change declined by target", body: r.change_type, link: "/dashboard" } });
     }
     await logAudit({

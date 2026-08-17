@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { notify } from "@/lib/notify.functions";
+
 import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
 import { useCapabilities } from "@/lib/use-can";
@@ -505,7 +505,7 @@ async function createChangeRequest(opts: {
     .select("id")
     .maybeSingle();
   if (error) { toast.error(error.message); return false; }
-  await notify({ data: { event: "change_requested", change_type: opts.changeType, requester_name: opts.me.name, staff_email: opts.targetEmail, staff_name: opts.targetName, details: opts.details } });
+  
   await createNotification({ data: { recipient_email: opts.targetEmail, title: "Schedule change request", body: `${opts.me.name} · ${opts.changeType}`, link: "/dashboard" } });
   await logAudit({
     action: "change_requested", entity_type: "schedule_change_request",
