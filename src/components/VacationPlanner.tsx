@@ -13,7 +13,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { toISODate } from "@/lib/roster";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
-import { notify } from "@/lib/notify.functions";
+
 import { createNotification } from "@/lib/notifications.functions";
 import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
@@ -516,7 +516,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
         details: { start_date: s, end_date: e, blocked_dates: blockedDates, reason: overrideReason.trim(), cap, area_label: capAreaLabel },
       });
     }
-    await notify({ data: { event: "request_submitted", staff_name: me.name, staff_email: me.email, supervisor_email: routeTo, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, leave_type: "Vacation", start_date: s, end_date: e, reason } });
+    
     await createNotification({ data: { recipient_email: routeTo, title: isSupervisorsView ? "Cover + approve vacation" : "Vacation leave request", body: `${me.name}: ${s} → ${e}`, link: "/approvals" } });
     await logAudit({ action: "leave_requested", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, details: { start_date: s, end_date: e, leave_type: "Vacation", covering_supervisor_email: isSupervisorsView ? covering : null } });
     if (isSupervisorsView) {
@@ -552,7 +552,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (error) { toast.error(error.message); return; }
     await logAudit({ action: "leave_dates_adjusted_by_manager", entity_type: "leave_request", entity_id: manageRow.id, area: viewArea, details: { from: [manageRow.start_date, manageRow.end_date], to: [editStart, editEnd], actor_name: me.name, direct_admin_change: true } });
     await createNotification({ data: { recipient_email: manageRow.staff_email, title: "Vacation dates updated", body: `${me.name} set your vacation to ${editStart} → ${editEnd}`, link: "/vacations" } });
-    await notify({ data: { event: "schedule_changed", staff_name: manageRow.staff_name, staff_email: manageRow.staff_email, area: viewArea, start_date: editStart, end_date: editEnd } });
+    
     toast.success("Vacation updated — schedule synced");
     setManageRow(null); setManageDay(null);
     await load(); onDone();
@@ -565,7 +565,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (error) { toast.error(error.message); return; }
     await logAudit({ action: "leave_cancelled_by_manager", entity_type: "leave_request", entity_id: row.id, area: viewArea, details: { start_date: row.start_date, end_date: row.end_date, actor_name: me.name, direct_admin_change: true } });
     await createNotification({ data: { recipient_email: row.staff_email, title: "Vacation cancelled", body: `${me.name} cancelled ${row.start_date} → ${row.end_date}`, link: "/vacations" } });
-    await notify({ data: { event: "schedule_changed", staff_name: row.staff_name, staff_email: row.staff_email, area: viewArea, start_date: row.start_date, end_date: row.end_date } });
+    
     toast.success("Vacation cancelled — schedule reverted");
     setManageRow(null); setManageDay(null);
     await load(); onDone();

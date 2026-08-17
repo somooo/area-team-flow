@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
-import { notify } from "@/lib/notify.functions";
+
 import { createNotification } from "@/lib/notifications.functions";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 import { toast } from "sonner";
@@ -147,7 +147,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
       start_date: start, end_date: end, reason, approver_email: approverEmail,
     });
     if (error) { toast.error(error.message); return; }
-    await notify({ data: { event: "request_submitted", staff_name: me.name, staff_email: me.email, supervisor_email: approverEmail, area: me.area, leave_type: type, start_date: start, end_date: end, reason } });
+    
     await createNotification({ data: { recipient_email: approverEmail, title: `${type} leave request`, body: `${me.name}: ${start} → ${end}`, link: "/approvals" } });
     toast.success("Leave request submitted");
     setOpen(false); setRange(undefined); setReason("");
