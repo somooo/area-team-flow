@@ -155,6 +155,54 @@ export type Database = {
         }
         Relationships: []
       }
+      email_outbox: {
+        Row: {
+          attempts: number
+          body: string
+          created_at: string
+          event_type: string
+          id: string
+          last_error: string | null
+          link: string | null
+          related_id: string | null
+          scheduled_for: string
+          sent_at: string | null
+          status: string
+          subject: string
+          to_email: string
+        }
+        Insert: {
+          attempts?: number
+          body: string
+          created_at?: string
+          event_type: string
+          id?: string
+          last_error?: string | null
+          link?: string | null
+          related_id?: string | null
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: string
+          subject: string
+          to_email: string
+        }
+        Update: {
+          attempts?: number
+          body?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          link?: string | null
+          related_id?: string | null
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          to_email?: string
+        }
+        Relationships: []
+      }
       import_profiles: {
         Row: {
           area: string
@@ -770,6 +818,7 @@ export type Database = {
           delegation_active: boolean
           department: string | null
           email: string | null
+          email_notifications: boolean
           extension: string | null
           first_name: string | null
           id: string
@@ -795,6 +844,7 @@ export type Database = {
           delegation_active?: boolean
           department?: string | null
           email?: string | null
+          email_notifications?: boolean
           extension?: string | null
           first_name?: string | null
           id?: string
@@ -820,6 +870,7 @@ export type Database = {
           delegation_active?: boolean
           department?: string | null
           email?: string | null
+          email_notifications?: boolean
           extension?: string | null
           first_name?: string | null
           id?: string
