@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { logAudit } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications.functions";
+import { enqueueEmail } from "@/lib/email.functions";
 import { useCapabilities } from "@/lib/use-can";
 import { canAnywhere, isAssignmentActive, fetchCapabilityHolders } from "@/lib/capabilities";
 import { NoAccess } from "@/components/NoAccess";
@@ -72,6 +73,7 @@ function ApprovalsPage() {
     
     await logAudit({ action: `leave_${status.toLowerCase()}`, entity_type: "leave_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role, details: { leave_type: r.leave_type } });
     await createNotification({ data: { recipient_email: r.staff_email, title: `Leave ${status.toLowerCase()}`, body: `${r.leave_type} ${r.start_date} → ${r.end_date}`, link: "/dashboard" } });
+    await enqueueEmail({ data: { recipient_email: r.staff_email, subject: "KADIR: your request was updated", body: `Your leave request was ${status.toLowerCase()} — open KADIR.`, link: "/dashboard", event_type: `leave_${status.toLowerCase()}` } });
     toast.success(`Leave ${status.toLowerCase()}`);
     load();
   };
@@ -86,6 +88,7 @@ function ApprovalsPage() {
     if (error) { toast.error(error.message); return; }
     await logAudit({ action: "cover_accepted", entity_type: "leave_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role, details: { start_date: r.start_date, end_date: r.end_date } });
     await createNotification({ data: { recipient_email: adminRow.email, title: "Supervisor vacation — final approval", body: `${r.staff_name}: ${r.start_date} → ${r.end_date}`, link: "/approvals" } });
+    await enqueueEmail({ data: { recipient_email: adminRow.email, subject: "KADIR: a request needs your review", body: "A request needs your final approval — open KADIR.", link: "/approvals", event_type: "supervisor_vacation_needs_admin" } });
     await createNotification({ data: { recipient_email: r.staff_email, title: "Cover accepted", body: "Pending admin approval", link: "/vacations" } });
     toast.success("Cover accepted — sent to admin");
     load();
@@ -111,6 +114,7 @@ function ApprovalsPage() {
         
         await logAudit({ action: "change_approved", entity_type: "schedule_change_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
         await createNotification({ data: { recipient_email: r.requester_email, title: "Change request approved", body: r.change_type, link: "/dashboard" } });
+        await enqueueEmail({ data: { recipient_email: r.requester_email, subject: "KADIR: your request was updated", body: "Your change request was approved — open KADIR.", link: "/dashboard", event_type: "change_approved" } });
       } catch (e) { toast.error(String(e)); return; }
     } else {
       const { error } = await supabase.from("schedule_change_requests").update({ supervisor_response: "Rejected", status: "Rejected" }).eq("id", r.id);
@@ -118,6 +122,7 @@ function ApprovalsPage() {
       
       await logAudit({ action: "change_rejected", entity_type: "schedule_change_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
       await createNotification({ data: { recipient_email: r.requester_email, title: "Change request rejected", body: r.change_type, link: "/dashboard" } });
+      await enqueueEmail({ data: { recipient_email: r.requester_email, subject: "KADIR: your request was updated", body: "Your change request was rejected — open KADIR.", link: "/dashboard", event_type: "change_rejected" } });
     }
     load();
   };
@@ -126,6 +131,7 @@ function ApprovalsPage() {
     if (error) { toast.error(error.message); return; }
     await logAudit({ action: `preschedule_${status.toLowerCase()}`, entity_type: "preschedule_request", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
     await createNotification({ data: { recipient_email: r.requester_email, title: `Pre-schedule ${status.toLowerCase()}`, link: "/preschedule" } });
+    await enqueueEmail({ data: { recipient_email: r.requester_email, subject: "KADIR: your request was updated", body: `Your pre-schedule request was ${status.toLowerCase()} — open KADIR.`, link: "/preschedule", event_type: `preschedule_${status.toLowerCase()}` } });
     toast.success(`Pre-schedule ${status.toLowerCase()}`);
     load();
   };
@@ -135,6 +141,7 @@ function ApprovalsPage() {
     if (error) { toast.error(error.message); return; }
     await logAudit({ action: `tl_report_${status.toLowerCase()}`, entity_type: "team_leader_report", entity_id: r.id, area: r.area, actor_email: me?.staff?.email, actor_role: role });
     await createNotification({ data: { recipient_email: r.reporter_email, title: `Shift report ${status.toLowerCase()}`, body: `${r.shift_date} · ${r.layer}`, link: "/dashboard" } });
+    await enqueueEmail({ data: { recipient_email: r.reporter_email, subject: "KADIR: your report was updated", body: `Your shift report was ${status.toLowerCase()} — open KADIR.`, link: "/dashboard", event_type: `tl_report_${status.toLowerCase()}` } });
     toast.success(`Report ${status.toLowerCase()}`);
     load();
   };

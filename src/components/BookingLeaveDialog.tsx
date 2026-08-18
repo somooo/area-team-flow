@@ -8,6 +8,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
 
 import { createNotification } from "@/lib/notifications.functions";
+import { enqueueEmail } from "@/lib/email.functions";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 import { toast } from "sonner";
 import { toISODate } from "@/lib/roster";
@@ -149,6 +150,7 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
     if (error) { toast.error(error.message); return; }
     
     await createNotification({ data: { recipient_email: approverEmail, title: `${type} leave request`, body: `${me.name}: ${start} → ${end}`, link: "/approvals" } });
+    await enqueueEmail({ data: { recipient_email: approverEmail, subject: "KADIR: a request needs your review", body: "You have a new leave request to review — open KADIR.", link: "/approvals", event_type: "leave_requested" } });
     toast.success("Leave request submitted");
     setOpen(false); setRange(undefined); setReason("");
     onDone();

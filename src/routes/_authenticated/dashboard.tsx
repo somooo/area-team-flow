@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 
 import { createNotification } from "@/lib/notifications.functions";
+import { enqueueEmail } from "@/lib/email.functions";
 import { logAudit } from "@/lib/audit";
 import { useCapabilities } from "@/lib/use-can";
 import { resolveApprover } from "@/lib/approver";
@@ -507,6 +508,7 @@ async function createChangeRequest(opts: {
   if (error) { toast.error(error.message); return false; }
   
   await createNotification({ data: { recipient_email: opts.targetEmail, title: "Schedule change request", body: `${opts.me.name} · ${opts.changeType}`, link: "/dashboard" } });
+  await enqueueEmail({ data: { recipient_email: opts.targetEmail, subject: "KADIR: a request needs your review", body: "Someone sent you a request — open KADIR to respond.", link: "/dashboard", event_type: "change_requested" } });
   await logAudit({
     action: "change_requested", entity_type: "schedule_change_request",
     entity_id: inserted?.id ?? null, area: opts.me.area,
