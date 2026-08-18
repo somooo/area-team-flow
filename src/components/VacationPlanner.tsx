@@ -15,6 +15,7 @@ import { toISODate } from "@/lib/roster";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 
 import { createNotification } from "@/lib/notifications.functions";
+import { enqueueEmail } from "@/lib/email.functions";
 import { logAudit } from "@/lib/audit";
 import { resolveApprover } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
@@ -518,6 +519,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     }
     
     await createNotification({ data: { recipient_email: routeTo, title: isSupervisorsView ? "Cover + approve vacation" : "Vacation leave request", body: `${me.name}: ${s} → ${e}`, link: "/approvals" } });
+    await enqueueEmail({ data: { recipient_email: routeTo, subject: "KADIR: a request needs your review", body: "You have a new vacation request to review — open KADIR.", link: "/approvals", event_type: "vacation_requested" } });
     await logAudit({ action: "leave_requested", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: isSupervisorsView ? SUPERVISORS_AREA : me.area, details: { start_date: s, end_date: e, leave_type: "Vacation", covering_supervisor_email: isSupervisorsView ? covering : null } });
     if (isSupervisorsView) {
       await logAudit({ action: "cover_nominated", entity_type: "leave_request", entity_id: inserted?.id ?? null, area: SUPERVISORS_AREA, details: { covering_supervisor_email: covering, start_date: s, end_date: e } });
@@ -535,6 +537,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     await logAudit({ action: "leave_cancelled_by_requester", entity_type: "leave_request", entity_id: row.id, area: viewArea, details: { start_date: row.start_date, end_date: row.end_date } });
     if (row.approver_email) {
       await createNotification({ data: { recipient_email: row.approver_email, title: "Vacation request cancelled", body: `${me.name} cancelled ${row.start_date} → ${row.end_date}`, link: "/approvals" } });
+      await enqueueEmail({ data: { recipient_email: row.approver_email, subject: "KADIR: a request was cancelled", body: "A vacation request you were reviewing was cancelled — open KADIR.", link: "/approvals", event_type: "vacation_cancelled_by_requester" } });
     }
     toast.success("Request cancelled");
     setDetail(null);
@@ -552,6 +555,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (error) { toast.error(error.message); return; }
     await logAudit({ action: "leave_dates_adjusted_by_manager", entity_type: "leave_request", entity_id: manageRow.id, area: viewArea, details: { from: [manageRow.start_date, manageRow.end_date], to: [editStart, editEnd], actor_name: me.name, direct_admin_change: true } });
     await createNotification({ data: { recipient_email: manageRow.staff_email, title: "Vacation dates updated", body: `${me.name} set your vacation to ${editStart} → ${editEnd}`, link: "/vacations" } });
+    await enqueueEmail({ data: { recipient_email: manageRow.staff_email, subject: "KADIR: your vacation was updated", body: "Your vacation record was updated — open KADIR to see the details.", link: "/vacations", event_type: "vacation_dates_changed" } });
     
     toast.success("Vacation updated — schedule synced");
     setManageRow(null); setManageDay(null);
@@ -565,6 +569,7 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
     if (error) { toast.error(error.message); return; }
     await logAudit({ action: "leave_cancelled_by_manager", entity_type: "leave_request", entity_id: row.id, area: viewArea, details: { start_date: row.start_date, end_date: row.end_date, actor_name: me.name, direct_admin_change: true } });
     await createNotification({ data: { recipient_email: row.staff_email, title: "Vacation cancelled", body: `${me.name} cancelled ${row.start_date} → ${row.end_date}`, link: "/vacations" } });
+    await enqueueEmail({ data: { recipient_email: row.staff_email, subject: "KADIR: your vacation was updated", body: "Your vacation record was updated — open KADIR to see the details.", link: "/vacations", event_type: "vacation_cancelled_by_manager" } });
     
     toast.success("Vacation cancelled — schedule reverted");
     setManageRow(null); setManageDay(null);
