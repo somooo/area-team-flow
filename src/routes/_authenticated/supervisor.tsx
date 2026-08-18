@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { createNotification } from "@/lib/notifications.functions";
+import { enqueueEmail } from "@/lib/email.functions";
 import { applyScheduleChange } from "@/lib/schedule-change.functions";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { exportExcel } from "@/lib/schedule-export";
@@ -512,6 +513,7 @@ function SupervisorPage() {
     const { error } = await supabase.from("leave_requests").update({ status }).eq("id", r.id);
     if (error) { toast.error(error.message); return; }
     await createNotification({ data: { recipient_email: r.staff_email, title: `Leave ${status.toLowerCase()}`, body: `${r.leave_type} ${r.start_date} → ${r.end_date}`, link: "/dashboard" } });
+    await enqueueEmail({ data: { recipient_email: r.staff_email, subject: "KADIR: your request was updated", body: `Your leave request was ${status.toLowerCase()} — open KADIR.`, link: "/dashboard", event_type: `leave_${status.toLowerCase()}` } });
     toast.success(`Leave ${status.toLowerCase()}`);
     load();
   };
@@ -521,6 +523,7 @@ function SupervisorPage() {
       try {
         await applyScheduleChange({ data: { requestId: r.id } });
         await createNotification({ data: { recipient_email: r.requester_email, title: "Change request approved", body: r.change_type, link: "/dashboard" } });
+        await enqueueEmail({ data: { recipient_email: r.requester_email, subject: "KADIR: your request was updated", body: "Your change request was approved — open KADIR.", link: "/dashboard", event_type: "change_approved" } });
         toast.success("Change approved and applied");
       } catch (e) {
         toast.error(String(e));
@@ -529,6 +532,7 @@ function SupervisorPage() {
       const { error } = await supabase.from("schedule_change_requests").update({ supervisor_response: "Rejected", status: "Rejected" }).eq("id", r.id);
       if (error) { toast.error(error.message); return; }
       await createNotification({ data: { recipient_email: r.requester_email, title: "Change request rejected", body: r.change_type, link: "/dashboard" } });
+      await enqueueEmail({ data: { recipient_email: r.requester_email, subject: "KADIR: your request was updated", body: "Your change request was rejected — open KADIR.", link: "/dashboard", event_type: "change_rejected" } });
       toast.success("Change rejected");
     }
     load();
