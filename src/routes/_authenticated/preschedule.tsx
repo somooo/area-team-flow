@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 import { resolveApprover } from "@/lib/approver";
 import { createNotification } from "@/lib/notifications.functions";
+import { enqueueEmail } from "@/lib/email.functions";
 import { logAudit } from "@/lib/audit";
 import { toISODate } from "@/lib/roster";
 
@@ -145,6 +146,7 @@ function PreschedulePage() {
     if (error) { toast.error(error.message); return false; }
     if (approver) {
       await createNotification({ data: { recipient_email: approver, title: label, body: `${meStaff.name} · ${meStaff.area}`, link: "/approvals" } });
+      await enqueueEmail({ data: { recipient_email: approver, subject: "KADIR: a request needs your review", body: "You have a new pre-schedule request to review — open KADIR.", link: "/approvals", event_type: "preschedule_requested" } });
     }
     await logAudit({
       action: "preschedule_requested", entity_type: "preschedule_request",
