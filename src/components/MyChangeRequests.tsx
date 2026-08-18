@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 import { createNotification } from "@/lib/notifications.functions";
+import { enqueueEmail } from "@/lib/email.functions";
 import { logAudit } from "@/lib/audit";
 
 export type ChangeReq = {
@@ -57,10 +58,12 @@ export function MyChangeRequests({ meEmail, refreshKey }: { meEmail: string; ref
       
       if (r.approver_email) {
         await createNotification({ data: { recipient_email: r.approver_email, title: "Change request needs approval", body: `${r.requester_name} · ${r.change_type}`, link: "/approvals" } });
+        await enqueueEmail({ data: { recipient_email: r.approver_email, subject: "KADIR: a request needs your review", body: "A change request needs your approval — open KADIR.", link: "/approvals", event_type: "change_needs_supervisor" } });
       }
     } else {
       
       await createNotification({ data: { recipient_email: r.requester_email, title: "Change declined by target", body: r.change_type, link: "/dashboard" } });
+      await enqueueEmail({ data: { recipient_email: r.requester_email, subject: "KADIR: your request was updated", body: "Your change request was declined — open KADIR.", link: "/dashboard", event_type: "change_declined_by_target" } });
     }
     await logAudit({
       action: accept ? "change_accepted_by_target" : "change_declined_by_target",
