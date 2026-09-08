@@ -23,6 +23,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
 import { Route as ApiPublicAutoApproveRouteImport } from './routes/api/public/auto-approve'
+import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -94,6 +95,12 @@ const ApiPublicAutoApproveRoute = ApiPublicAutoApproveRouteImport.update({
   path: '/api/public/auto-approve',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LovableEmailTransactionalPreviewRoute =
+  LovableEmailTransactionalPreviewRouteImport.update({
+    id: '/lovable/email/transactional/preview',
+    path: '/lovable/email/transactional/preview',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -109,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/supervisor': typeof AuthenticatedSupervisorRoute
   '/vacations': typeof AuthenticatedVacationsRoute
   '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -124,6 +132,7 @@ export interface FileRoutesByTo {
   '/vacations': typeof AuthenticatedVacationsRoute
   '/': typeof AuthenticatedIndexRoute
   '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -141,6 +150,7 @@ export interface FileRoutesById {
   '/_authenticated/vacations': typeof AuthenticatedVacationsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/api/public/auto-approve': typeof ApiPublicAutoApproveRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/supervisor'
     | '/vacations'
     | '/api/public/auto-approve'
+    | '/lovable/email/transactional/preview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/vacations'
     | '/'
     | '/api/public/auto-approve'
+    | '/lovable/email/transactional/preview'
   id:
     | '__root__'
     | '/_authenticated'
@@ -189,12 +201,14 @@ export interface FileRouteTypes {
     | '/_authenticated/vacations'
     | '/_authenticated/'
     | '/api/public/auto-approve'
+    | '/lovable/email/transactional/preview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicAutoApproveRoute: typeof ApiPublicAutoApproveRoute
+  LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -297,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAutoApproveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lovable/email/transactional/preview': {
+      id: '/lovable/email/transactional/preview'
+      path: '/lovable/email/transactional/preview'
+      fullPath: '/lovable/email/transactional/preview'
+      preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -335,6 +356,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicAutoApproveRoute: ApiPublicAutoApproveRoute,
+  LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
