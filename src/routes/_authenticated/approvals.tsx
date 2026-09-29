@@ -187,7 +187,7 @@ function ApprovalsPage() {
           {leaves.map(l => (
             <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-md p-3">
               <div>
-                <div className="font-medium">{l.staff_name} · {l.leave_type} <span className="text-xs text-muted-foreground">({l.area})</span></div>
+                <div className="font-medium">{l.staff_name} · {l.leave_type} <span className="text-xs text-muted-foreground">({l.area})</span><SlaBadge deadline={l.sla_deadline_at} /></div>
                 <div className="text-xs text-muted-foreground">
                   {l.start_date} → {l.end_date}{l.reason ? ` · ${l.reason}` : ""}
                   {l.stage === "covering" && " · Pending cover"}
@@ -261,7 +261,7 @@ function ApprovalsPage() {
           {pre.map(r => (
             <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-md p-3">
               <div>
-                <div className="font-medium">{r.requester_name} · {r.request_type} <span className="text-xs text-muted-foreground">({r.area})</span></div>
+                <div className="font-medium">{r.requester_name} · {r.request_type} <span className="text-xs text-muted-foreground">({r.area})</span><SlaBadge deadline={r.sla_deadline_at} /></div>
                 <div className="text-xs text-muted-foreground">Month {r.target_month.slice(0, 7)} · dates: {r.requested_dates.join(", ") || "—"} · {r.details}</div>
               </div>
               <div className="flex gap-2">
@@ -280,7 +280,7 @@ function ApprovalsPage() {
           {changes.map(c => (
             <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-md p-3">
               <div>
-                <div className="font-medium">{c.requester_name} → {c.target_staff_name} · {c.change_type} <span className="text-xs text-muted-foreground">({c.area})</span></div>
+                <div className="font-medium">{c.requester_name} → {c.target_staff_name} · {c.change_type} <span className="text-xs text-muted-foreground">({c.area})</span><SlaBadge deadline={c.sla_deadline_at} /></div>
                 <div className="text-xs text-muted-foreground">{c.details}</div>
               </div>
               <div className="flex gap-2">
