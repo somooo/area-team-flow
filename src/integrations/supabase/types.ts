@@ -253,6 +253,7 @@ export type Database = {
           over_cap_override: boolean
           over_cap_reason: string | null
           reason: string | null
+          sla_deadline_at: string | null
           staff_email: string
           staff_id: string | null
           staff_name: string
@@ -276,6 +277,7 @@ export type Database = {
           over_cap_override?: boolean
           over_cap_reason?: string | null
           reason?: string | null
+          sla_deadline_at?: string | null
           staff_email: string
           staff_id?: string | null
           staff_name: string
@@ -299,6 +301,7 @@ export type Database = {
           over_cap_override?: boolean
           over_cap_reason?: string | null
           reason?: string | null
+          sla_deadline_at?: string | null
           staff_email?: string
           staff_id?: string | null
           staff_name?: string
@@ -368,6 +371,7 @@ export type Database = {
           requested_dates: string[]
           requester_email: string
           requester_name: string
+          sla_deadline_at: string | null
           staff_id: string | null
           status: string
           swap_with_email: string | null
@@ -389,6 +393,7 @@ export type Database = {
           requested_dates?: string[]
           requester_email: string
           requester_name: string
+          sla_deadline_at?: string | null
           staff_id?: string | null
           status?: string
           swap_with_email?: string | null
@@ -410,6 +415,7 @@ export type Database = {
           requested_dates?: string[]
           requester_email?: string
           requester_name?: string
+          sla_deadline_at?: string | null
           staff_id?: string | null
           status?: string
           swap_with_email?: string | null
@@ -610,6 +616,7 @@ export type Database = {
           requester_email: string
           requester_name: string
           requester_staff_id: string | null
+          sla_deadline_at: string | null
           source_shift_id: string
           staff_response: Database["public"]["Enums"]["staff_response"]
           status: Database["public"]["Enums"]["change_status"]
@@ -630,6 +637,7 @@ export type Database = {
           requester_email: string
           requester_name: string
           requester_staff_id?: string | null
+          sla_deadline_at?: string | null
           source_shift_id: string
           staff_response?: Database["public"]["Enums"]["staff_response"]
           status?: Database["public"]["Enums"]["change_status"]
@@ -650,6 +658,7 @@ export type Database = {
           requester_email?: string
           requester_name?: string
           requester_staff_id?: string | null
+          sla_deadline_at?: string | null
           source_shift_id?: string
           staff_response?: Database["public"]["Enums"]["staff_response"]
           status?: Database["public"]["Enums"]["change_status"]
@@ -1253,6 +1262,7 @@ export type Database = {
       is_supervisor_of: { Args: { _area: string }; Returns: boolean }
       my_area: { Args: never; Returns: string }
       my_role: { Args: never; Returns: Database["public"]["Enums"]["app_role"] }
+      resolve_approver: { Args: { _area?: string }; Returns: string }
       revert_request_shifts: {
         Args: { _origin: string; _req: string }
         Returns: undefined
