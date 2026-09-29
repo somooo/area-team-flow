@@ -325,11 +325,8 @@ function DirectoryPage() {
       }
 
       const hire = parseHireDate(cell(v, "Date of Hire", "Hire Date", "Date Of Hire"));
-      let supervisorEmail = text(v, "Supervisor Email");
       const supervisorName = text(v, "Supervisor");
-      if (!supervisorEmail || isFormula(supervisorEmail)) {
-        supervisorEmail = supervisorName ? nameToEmail.get(supervisorName.trim().toLowerCase()) ?? "" : "";
-      }
+
 
       const values: Record<string, unknown> = {
         name: name || existing?.name || "",
