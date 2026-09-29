@@ -17,7 +17,7 @@ import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSystemRules, ruleNumber } from "@/lib/system-rules";
-import { resolveApprover } from "@/lib/approver";
+import { resolveApprover, slaDeadline } from "@/lib/approver";
 import { createNotification } from "@/lib/notifications.functions";
 import { enqueueEmail } from "@/lib/email.functions";
 import { logAudit } from "@/lib/audit";
@@ -141,6 +141,8 @@ function PreschedulePage() {
       requester_email: meStaff.email, requester_name: meStaff.name, area: meStaff.area!,
       staff_id: meStaff.id, target_month: `${targetMonth}-01`,
       approver_email: approver, auto_approve_at: autoApprove.toISOString(),
+      sla_deadline_at: slaDeadline("preschedule"),
+
       ...payload,
     }).select("id").maybeSingle();
     if (error) { toast.error(error.message); return false; }

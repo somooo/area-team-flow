@@ -505,6 +505,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       stage: isSupervisorsView ? "covering" : null,
       over_cap_override: isOverride,
       over_cap_reason: isOverride ? overrideReason.trim() : null,
+      sla_deadline_at: slaDeadline("leave"),
+
     }).select("id").maybeSingle();
     setBusy(false);
     if (error) { toast.error(error.message); return; }
