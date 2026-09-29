@@ -17,7 +17,7 @@ import { useSystemRules, ruleNumber } from "@/lib/system-rules";
 import { createNotification } from "@/lib/notifications.functions";
 import { enqueueEmail } from "@/lib/email.functions";
 import { logAudit } from "@/lib/audit";
-import { resolveApprover } from "@/lib/approver";
+import { resolveApprover, slaDeadline } from "@/lib/approver";
 import { countVacationDays, isOfficeHoursRole } from "@/lib/hours-model";
 import { useCapabilities } from "@/lib/use-can";
 import { canAnywhere, fetchCapabilityHolders } from "@/lib/capabilities";
@@ -505,6 +505,8 @@ export function VacationPlanner({ me, onDone }: { me: PlannerStaff; onDone: () =
       stage: isSupervisorsView ? "covering" : null,
       over_cap_override: isOverride,
       over_cap_reason: isOverride ? overrideReason.trim() : null,
+      sla_deadline_at: slaDeadline("leave"),
+
     }).select("id").maybeSingle();
     setBusy(false);
     if (error) { toast.error(error.message); return; }

@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { toISODate } from "@/lib/roster";
 import { useCapabilities } from "@/lib/use-can";
 import { canAnywhere, fetchCapabilityHolders } from "@/lib/capabilities";
+import { resolveApprover, slaDeadline } from "@/lib/approver";
+
 import { CalendarDays } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
@@ -112,18 +114,13 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
         );
       });
       setResolvedApprover(approver);
-    } else if (me.supervisor_email) {
-      supabase
-        .from("staff")
-        .select("email,delegated_to_email,delegation_active,name")
-        .ilike("email", me.supervisor_email)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data?.delegation_active && data.delegated_to_email) setResolvedApprover(data.delegated_to_email);
-          else setResolvedApprover(data?.email ?? me.supervisor_email!);
-        });
+    } else {
+      // Routing is resolved centrally so a missing directory supervisor can never
+      // strand a request: area approver -> all-areas approver -> admin.
+      void resolveApprover(me).then((email) => setResolvedApprover(email ?? ""));
     }
   }, [active, me, approver, picksOwnApprover]);
+
 
   const days = useMemo(() => {
     if (!range?.from || !range?.to) return 0;
@@ -146,7 +143,9 @@ export function BookingLeaveDialog({ me, onDone, inline = false, allowSick = fal
       // `area` is derived server-side from the staff directory record.
       staff_email: me.email.toLowerCase(), staff_name: me.name, leave_type: type, staff_id: me.id,
       start_date: start, end_date: end, reason, approver_email: approverEmail,
+      sla_deadline_at: slaDeadline("leave"),
     });
+
     if (error) { toast.error(error.message); return; }
     
     await createNotification({ data: { recipient_email: approverEmail, title: `${type} leave request`, body: `${me.name}: ${start} → ${end}`, link: "/approvals" } });

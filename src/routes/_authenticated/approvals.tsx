@@ -16,17 +16,36 @@ import { canAnywhere, isAssignmentActive, fetchCapabilityHolders } from "@/lib/c
 import { NoAccess } from "@/components/NoAccess";
 import { VacationChangeApprovals } from "@/components/VacationChangeApprovals";
 import { detectCoverConflicts, type CoverConflict } from "@/lib/cover";
+import { slaState } from "@/lib/approver";
+
 
 export const Route = createFileRoute("/_authenticated/approvals")({
   head: () => ({ meta: [{ title: "Approvals — KADIR Staff Management" }] }),
   component: ApprovalsPage,
 });
 
-type Leave = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null; stage: string | null; covering_supervisor_email: string | null; cover_decline_reason: string | null };
-type Change = { id: string; requester_email: string; requester_name: string; area: string; change_type: string; target_staff_name: string; details: string | null; status: string };
-type Pre = { id: string; requester_email: string; requester_name: string; area: string; request_type: string; target_month: string; requested_dates: string[]; details: string | null; status: string };
+type Leave = { id: string; staff_email: string; staff_name: string; area: string; leave_type: string; start_date: string; end_date: string; reason: string | null; status: string; approver_email: string | null; stage: string | null; covering_supervisor_email: string | null; cover_decline_reason: string | null; sla_deadline_at: string | null };
+type Change = { id: string; requester_email: string; requester_name: string; area: string; change_type: string; target_staff_name: string; details: string | null; status: string; sla_deadline_at: string | null };
+type Pre = { id: string; requester_email: string; requester_name: string; area: string; request_type: string; target_month: string; requested_dates: string[]; details: string | null; status: string; sla_deadline_at: string | null };
 type SickCall = { staff_name: string; staff_code: string; covered_by: string; coverage_type: string };
 type TlReport = { id: string; reporter_name: string; reporter_email: string; area: string; layer: string; shift_date: string; sick_calls: SickCall[]; comment: string | null; status: string };
+
+/** Response-time indicator so nothing sits unanswered. */
+function SlaBadge({ deadline }: { deadline: string | null | undefined }) {
+  const s = slaState(deadline);
+  if (!s) return null;
+  return <span className={`ml-2 rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.className}`}>{s.label}</span>;
+}
+
+/** Overdue first, then soonest deadline, then newest. */
+function bySla<T extends { sla_deadline_at: string | null; created_at?: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const A = a.sla_deadline_at ? new Date(a.sla_deadline_at).getTime() : Number.MAX_SAFE_INTEGER;
+    const B = b.sla_deadline_at ? new Date(b.sla_deadline_at).getTime() : Number.MAX_SAFE_INTEGER;
+    return A - B;
+  });
+}
+
 
 function ApprovalsPage() {
   const { me } = useMe();
@@ -53,11 +72,12 @@ function ApprovalsPage() {
       supabase.from("preschedule_requests").select("*").eq("status", "Pending").order("created_at", { ascending: false }),
       supabase.from("team_leader_reports").select("*").eq("status", "Pending").order("shift_date", { ascending: false }),
     ]);
-    const leaveRows = (lv as Leave[]) ?? [];
+    const leaveRows = bySla((lv as Leave[]) ?? []);
     setLeaves(leaveRows);
     setCoverConflicts(await detectCoverConflicts(leaveRows));
-    setChanges((ch as Change[]) ?? []);
-    setPre((pr as Pre[]) ?? []);
+    setChanges(bySla((ch as Change[]) ?? []));
+    setPre(bySla((pr as Pre[]) ?? []));
+
     setReports((tl as unknown as TlReport[]) ?? []);
   };
   useEffect(() => { void load(); }, [me?.staff?.email]);
@@ -167,7 +187,7 @@ function ApprovalsPage() {
           {leaves.map(l => (
             <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-md p-3">
               <div>
-                <div className="font-medium">{l.staff_name} · {l.leave_type} <span className="text-xs text-muted-foreground">({l.area})</span></div>
+                <div className="font-medium">{l.staff_name} · {l.leave_type} <span className="text-xs text-muted-foreground">({l.area})</span><SlaBadge deadline={l.sla_deadline_at} /></div>
                 <div className="text-xs text-muted-foreground">
                   {l.start_date} → {l.end_date}{l.reason ? ` · ${l.reason}` : ""}
                   {l.stage === "covering" && " · Pending cover"}
@@ -241,7 +261,7 @@ function ApprovalsPage() {
           {pre.map(r => (
             <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-md p-3">
               <div>
-                <div className="font-medium">{r.requester_name} · {r.request_type} <span className="text-xs text-muted-foreground">({r.area})</span></div>
+                <div className="font-medium">{r.requester_name} · {r.request_type} <span className="text-xs text-muted-foreground">({r.area})</span><SlaBadge deadline={r.sla_deadline_at} /></div>
                 <div className="text-xs text-muted-foreground">Month {r.target_month.slice(0, 7)} · dates: {r.requested_dates.join(", ") || "—"} · {r.details}</div>
               </div>
               <div className="flex gap-2">
@@ -260,7 +280,7 @@ function ApprovalsPage() {
           {changes.map(c => (
             <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-md p-3">
               <div>
-                <div className="font-medium">{c.requester_name} → {c.target_staff_name} · {c.change_type} <span className="text-xs text-muted-foreground">({c.area})</span></div>
+                <div className="font-medium">{c.requester_name} → {c.target_staff_name} · {c.change_type} <span className="text-xs text-muted-foreground">({c.area})</span><SlaBadge deadline={c.sla_deadline_at} /></div>
                 <div className="text-xs text-muted-foreground">{c.details}</div>
               </div>
               <div className="flex gap-2">

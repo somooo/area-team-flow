@@ -14,7 +14,7 @@ import { createNotification } from "@/lib/notifications.functions";
 import { enqueueEmail } from "@/lib/email.functions";
 import { logAudit } from "@/lib/audit";
 import { useCapabilities } from "@/lib/use-can";
-import { resolveApprover } from "@/lib/approver";
+import { resolveApprover, slaDeadline } from "@/lib/approver";
 import { MonthGrid, type StaffLite } from "@/components/MonthGrid";
 import { MyChangeRequests } from "@/components/MyChangeRequests";
 import { ReferenceTable } from "@/components/ReferenceTable";
@@ -502,6 +502,8 @@ async function createChangeRequest(opts: {
       target_shift_id: opts.targetShiftId,
       details: opts.details,
       approver_email: approver,
+      sla_deadline_at: slaDeadline("change"),
+
     })
     .select("id")
     .maybeSingle();

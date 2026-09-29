@@ -48,12 +48,14 @@ const STATUSES = ["Active", "Inactive"];
 
 type CustomCol = { id: string; key: string; label: string; sort_order: number };
 
+type AccessRow = { staff_id: string; area: string | null; end_date: string | null; roles: { label: string; key: string } | null };
+
 type Row = {
   id: string;
   name: string; first_name: string | null; last_name: string | null;
   position: string | null; badge_id: string | null; date_of_hire: string | null;
   email: string | null; assigned_to: string | null; status: string;
-  supervisor: string | null; supervisor_email: string | null;
+  supervisor: string | null;
   extension: string | null; notes: string | null;
   area: string | null;
   shift_base_override: number | null;
@@ -78,13 +80,12 @@ const BASE_COLUMNS: ColDef[] = [
   { key: "assigned_to", label: "Assigned to", type: "select", options: ASSIGNED },
   { key: "status", label: "Status", type: "select", options: STATUSES },
   { key: "supervisor", label: "Supervisor", type: "text" },
-  { key: "supervisor_email", label: "Supervisor Email", type: "text" },
   { key: "extension", label: "Extension", type: "text" },
   { key: "notes", label: "Notes", type: "text" },
   { key: "shift_base_override", label: "Shift base (SANG = 14)", type: "text" },
 ];
 
-const SELECT_COLS = "id,name,first_name,last_name,position,badge_id,date_of_hire,email,assigned_to,status,supervisor,supervisor_email,extension,notes,area,shift_base_override,custom_fields";
+const SELECT_COLS = "id,name,first_name,last_name,position,badge_id,date_of_hire,email,assigned_to,status,supervisor,extension,notes,area,shift_base_override,custom_fields";
 
 type UpsertPayload = { existingId?: string; values: Record<string, unknown>; badge: string };
 
@@ -95,6 +96,7 @@ function DirectoryPage() {
   const { can, loading: capsLoading } = useCapabilities();
   const [rows, setRows] = useState<Row[]>([]);
   const [customCols, setCustomCols] = useState<CustomCol[]>([]);
+  const [access, setAccess] = useState<Record<string, string[]>>({});
   const [search, setSearch] = useState("");
   const [fPosition, setFPosition] = useState("");
   const [fAssigned, setFAssigned] = useState("");
@@ -114,12 +116,26 @@ function DirectoryPage() {
   const allowed = can("directory.view") || admin;
 
   const load = useCallback(async () => {
-    const [{ data: st }, { data: cc }] = await Promise.all([
+    const [{ data: st }, { data: cc }, { data: ra }] = await Promise.all([
       supabase.from("staff").select(SELECT_COLS).order("name"),
       supabase.from("staff_custom_columns").select("*").order("sort_order"),
+      supabase
+        .from("role_assignments")
+        .select("staff_id,area,end_date,roles(label,key)")
+        .is("revoked_at", null),
     ]);
     setRows(((st ?? []) as unknown as Row[]).map((r) => ({ ...r, custom_fields: (r.custom_fields ?? {}) as Record<string, string> })));
     setCustomCols((cc as CustomCol[]) ?? []);
+    // Access shown in the Directory is the live grant, never a typed-in job title.
+    const today = new Date().toISOString().slice(0, 10);
+    const map: Record<string, string[]> = {};
+    for (const a of (ra ?? []) as unknown as AccessRow[]) {
+      if (a.end_date && a.end_date < today) continue;
+      const label = a.roles?.label ?? "";
+      if (!label || a.roles?.key === "staff") continue;
+      (map[a.staff_id] ??= []).push(a.area ? `${label} · ${a.area}` : label);
+    }
+    setAccess(map);
   }, []);
   useEffect(() => { if (allowed) void load(); }, [allowed, load]);
 
@@ -309,11 +325,8 @@ function DirectoryPage() {
       }
 
       const hire = parseHireDate(cell(v, "Date of Hire", "Hire Date", "Date Of Hire"));
-      let supervisorEmail = text(v, "Supervisor Email");
       const supervisorName = text(v, "Supervisor");
-      if (!supervisorEmail || isFormula(supervisorEmail)) {
-        supervisorEmail = supervisorName ? nameToEmail.get(supervisorName.trim().toLowerCase()) ?? "" : "";
-      }
+
 
       const values: Record<string, unknown> = {
         name: name || existing?.name || "",
@@ -325,7 +338,7 @@ function DirectoryPage() {
         assigned_to: text(v, "Assigned to", "Assigned To") || null,
         status: text(v, "Status") || "Active",
         supervisor: supervisorName || null,
-        supervisor_email: supervisorEmail || null,
+        supervisor_email: null,
         extension: text(v, "Extension") || null,
         notes: text(v, "Notes") || null,
       };
@@ -524,6 +537,9 @@ function DirectoryPage() {
                             {c.key === "name" && prot && (
                               <Badge variant="outline" className="mr-1 text-[10px]">Test</Badge>
                             )}
+                            {c.key === "name" && (access[r.id] ?? []).map((a) => (
+                              <Badge key={a} variant="secondary" className="mr-1 whitespace-nowrap text-[10px]">{a}</Badge>
+                            ))}
                           </div>
                         </td>
                       ))}
