@@ -72,11 +72,12 @@ function ApprovalsPage() {
       supabase.from("preschedule_requests").select("*").eq("status", "Pending").order("created_at", { ascending: false }),
       supabase.from("team_leader_reports").select("*").eq("status", "Pending").order("shift_date", { ascending: false }),
     ]);
-    const leaveRows = (lv as Leave[]) ?? [];
+    const leaveRows = bySla((lv as Leave[]) ?? []);
     setLeaves(leaveRows);
     setCoverConflicts(await detectCoverConflicts(leaveRows));
-    setChanges((ch as Change[]) ?? []);
-    setPre((pr as Pre[]) ?? []);
+    setChanges(bySla((ch as Change[]) ?? []));
+    setPre(bySla((pr as Pre[]) ?? []));
+
     setReports((tl as unknown as TlReport[]) ?? []);
   };
   useEffect(() => { void load(); }, [me?.staff?.email]);
