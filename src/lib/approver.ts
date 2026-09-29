@@ -17,12 +17,12 @@ export type ApproverInput = {
  * The requester is never their own approver.
  */
 export async function resolveApprover(me: ApproverInput): Promise<string | null> {
-  const { data, error } = await supabase.rpc("resolve_approver", { _area: me.area ?? null });
+  const { data, error } = await supabase.rpc("resolve_approver", { _area: me.area ?? undefined });
   if (error) return null;
   const approver = (data as string | null)?.toLowerCase() ?? null;
   if (approver && approver === me.email?.toLowerCase()) {
     // Self-approval is not a route: fall back to an all-areas approver / admin.
-    const { data: alt } = await supabase.rpc("resolve_approver", { _area: null });
+    const { data: alt } = await supabase.rpc("resolve_approver", { _area: undefined });
     const altEmail = (alt as string | null)?.toLowerCase() ?? null;
     return altEmail && altEmail !== approver ? altEmail : approver;
   }
