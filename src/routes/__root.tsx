@@ -102,6 +102,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "author", content: "Bsmah Alfayez" },
+      { name: "creator", content: "Bsmah Alfayez" },
+      { name: "designer", content: "Bsmah Alfayez" },
+      { name: "copyright", content: "© 2026 Bsmah Alfayez. All rights reserved." },
       { title: "KADIR — Staff Management" },
       { name: "description", content: "KADIR: hospital staff scheduling, leave, and shift-change management in one counted roster." },
       { property: "og:title", content: "KADIR — Staff Management" },

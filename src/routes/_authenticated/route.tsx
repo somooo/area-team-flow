@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { KadirLogo } from "@/components/KadirLogo";
+import { AppSignature } from "@/components/AppSignature";
 import { useMe } from "@/lib/use-me";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { useCapabilities } from "@/lib/use-can";
@@ -124,6 +125,14 @@ function Shell() {
         )}
         <Outlet />
       </main>
+      <footer className="mt-10 border-t bg-card">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-4 py-5">
+          <AppSignature />
+          <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            © {new Date().getFullYear()} Kadir · All rights reserved
+          </span>
+        </div>
+      </footer>
     </div>
   );
 }
