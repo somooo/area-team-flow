@@ -22,9 +22,17 @@ import {
   explain,
   isAssignmentActive,
   loadActor,
+  canServer,
 } from "@/lib/capabilities";
 
 export const Route = createFileRoute("/_authenticated/roles")({
+  // Same gate as the nav link: only people who can manage roles or assignments get in.
+  beforeLoad: async () => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user?.email) throw redirect({ to: "/auth" });
+    const ok = (await canServer("roles.manage")) || (await canServer("assignments.manage"));
+    if (!ok) throw redirect({ to: "/dashboard" });
+  },
   head: () => ({
     meta: [
       { title: "Roles & permissions — KADIR Staff Management" },
