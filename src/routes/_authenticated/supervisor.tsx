@@ -777,16 +777,19 @@ function SupervisorPage() {
                   {missingPeople.length > 0 && (
                     <div className="rounded-md border p-2 space-y-2">
                       <p className="font-medium">
-                        {missingPeople.length} badge{missingPeople.length === 1 ? "" : "s"} not in the directory — review and add them there first
+                        {missingPeople.length} badge{missingPeople.length === 1 ? "" : "s"} not in the directory
+                        {admin ? " — review and add them there first" : " — ask an admin to add them to the Staff Directory"}
                       </p>
                       <ul className="text-muted-foreground">
                         {missingPeople.map((m) => (
                           <li key={m.badge}>{m.badge} · {m.name}</li>
                         ))}
                       </ul>
-                      <Button size="sm" variant="outline" disabled={addingMissing} onClick={() => void addMissingToDirectory()}>
-                        {addingMissing ? "Adding…" : `Add ${missingPeople.length} staff to directory`}
-                      </Button>
+                      {admin && (
+                        <Button size="sm" variant="outline" disabled={addingMissing} onClick={() => void addMissingToDirectory()}>
+                          {addingMissing ? "Adding…" : `Add ${missingPeople.length} staff to directory`}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
