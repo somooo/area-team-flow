@@ -1259,6 +1259,7 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_area_manager_of: { Args: { _area: string }; Returns: boolean }
+      is_roster_member: { Args: never; Returns: boolean }
       is_supervisor_of: { Args: { _area: string }; Returns: boolean }
       my_area: { Args: never; Returns: string }
       my_role: { Args: never; Returns: Database["public"]["Enums"]["app_role"] }
