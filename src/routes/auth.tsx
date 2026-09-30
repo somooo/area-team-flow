@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KadirIconTile, KadirArabic } from "@/components/KadirLogo";
+import { AppSignature } from "@/components/AppSignature";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -56,6 +57,9 @@ function AuthPage() {
           <p className="text-xs text-muted-foreground text-center">
             Access is granted to hospital staff on the roster only.
           </p>
+          <div className="flex justify-center border-t border-bone/10 pt-3">
+            <AppSignature tone="dark" />
+          </div>
         </CardContent>
       </Card>
     </div>
