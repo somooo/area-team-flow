@@ -24,7 +24,7 @@ interface RequestNotificationProps {
  * leave types, or medical details — recipients open the app for specifics.
  */
 function RequestNotification({
-  heading = "Shift & Leave Manager",
+  heading = "KADIR",
   message = "You have a new update waiting for you.",
   link,
 }: RequestNotificationProps) {
