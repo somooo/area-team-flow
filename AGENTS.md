@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Render the supplied KADIR logo through the shared `KadirLogo` component on staff and sign-in views so brand sizing and artwork stay consistent.
