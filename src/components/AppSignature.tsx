@@ -7,7 +7,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { KadirIconTile, KadirArabic } from "@/components/KadirLogo";
+import { KadirLogo } from "@/components/KadirLogo";
 import bfMonogram from "@/assets/bf-monogram.png.asset.json";
 
 const OWNER = "Bsmah Alfayez";
@@ -74,18 +74,7 @@ export function AppSignature({
 
         <div className="space-y-6">
           <div className="flex items-center justify-between gap-4 border-b pb-5">
-            <div className="flex items-center gap-3">
-              <KadirIconTile className="h-12 w-12" iconClassName="h-6 w-6" />
-              <div className="leading-none">
-                <div className="font-display text-xl font-bold uppercase tracking-[0.3em]">
-                  Kadir
-                </div>
-                <div className="mt-1.5 text-[10px] uppercase tracking-[0.26em] text-bronze">
-                  Staff Management
-                </div>
-              </div>
-            </div>
-            <KadirArabic className="text-3xl" />
+            <KadirLogo size="sm" />
           </div>
 
           <div className="flex items-center gap-4">

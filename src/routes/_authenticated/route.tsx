@@ -48,7 +48,7 @@ function Shell() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="max-w-md text-center space-y-4">
-          <KadirLogo size="lg" className="justify-center" />
+          <KadirLogo size="lg" className="mx-auto" />
           <h1 className="font-display text-2xl uppercase tracking-[0.12em]">No access yet</h1>
           <p className="text-muted-foreground">
             Your Google account <strong>{me.authEmail}</strong> isn't on the staff roster.
@@ -79,7 +79,7 @@ function Shell() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="max-w-6xl mx-auto px-4 py-3">
+        <div className="max-w-6xl mx-auto px-4 py-2">
           {/* Top row: logo, user info, sign out, notifications */}
           <div className="flex items-center justify-between gap-4">
             <KadirLogo size="md" />
